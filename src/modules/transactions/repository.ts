@@ -1,7 +1,13 @@
 import { prisma } from "@/lib/db/client";
 import { Prisma, type Category } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
-import type { TransactionWithTags, TransactionSort, Transaction } from "./types";
+import type {
+  TransactionWithTags,
+  TransactionSort,
+  Transaction,
+  RecentTransactionRow,
+  InstallmentPurchaseRow,
+} from "./types";
 
 export type CreateTransactionData = {
   description: string;
@@ -21,12 +27,19 @@ export type UpdateTransactionData = Partial<Omit<CreateTransactionData, "tagIds"
 };
 
 export type TransactionListFilter = {
+  search?: string;
   type?: TransactionType;
   categoryId?: string;
   accountId?: string;
   cardId?: string;
   tagId?: string;
   isPaid?: boolean;
+  /**
+   * `type=TRANSFER` nunca é persistido (docs/20-TRANSACTIONS.md,
+   * "Transferência") — as 2 pernas nascem EXPENSE/INCOME com `transferId`
+   * preenchido. Filtro "Transferência" na UI usa este campo em vez de `type`.
+   */
+  isTransfer?: boolean;
   dateFrom?: Date;
   dateTo?: Date;
   amountMin?: string;
@@ -146,11 +159,14 @@ function buildWhere(userId: string, filters: TransactionListFilter): Prisma.Tran
   return {
     userId,
     deletedAt: null,
+    ...(filters.search && { description: { contains: filters.search, mode: "insensitive" } }),
     ...(filters.type && { type: filters.type }),
     ...(filters.categoryId && { categoryId: filters.categoryId }),
     ...(filters.accountId && { accountId: filters.accountId }),
     ...(filters.cardId && { cardId: filters.cardId }),
     ...(filters.isPaid !== undefined && { isPaid: filters.isPaid }),
+    ...(filters.isTransfer === true && { transferId: { not: null } }),
+    ...(filters.isTransfer === false && { transferId: null }),
     ...(filters.tagId && { transactionTags: { some: { tagId: filters.tagId } } }),
     ...((filters.dateFrom || filters.dateTo) && {
       date: {
@@ -211,19 +227,23 @@ async function findMostRecentByType(
 
 /**
  * Soma de Transactions por tipo numa janela de datas — insumo dos KPIs
- * mensais (ver service.ts `monthlyExpenseTotal`/`monthlyIncomeTotal`).
- * Exclui pernas de transferência (`transferId: null`) e considera só pagas.
+ * mensais (ver service.ts `monthlyExpenseTotal`/`monthlyIncomeTotal`/
+ * `monthlyUnpaidExpenseTotal`). Exclui pernas de transferência
+ * (`transferId: null`). `isPaid` default `true` (regra dos KPIs de
+ * receita/despesa); `monthlyUnpaidExpenseTotal` passa `false` pro bloco
+ * "Previsto / A Pagar" (docs/11-DASHBOARD.md).
  */
 async function sumAmountByTypeInRange(
   userId: string,
   type: TransactionType,
   range: { gte: Date; lt: Date },
+  isPaid = true,
 ): Promise<Prisma.Decimal> {
   const result = await prisma.transaction.aggregate({
     where: {
       userId,
       deletedAt: null,
-      isPaid: true,
+      isPaid,
       type,
       transferId: null,
       date: { gte: range.gte, lt: range.lt },
@@ -266,6 +286,100 @@ async function findCategoryNamesByIds(ids: string[]): Promise<Map<string, string
   return new Map(categories.map((category) => [category.id, category.name]));
 }
 
+/**
+ * `installmentsCount` de um conjunto de `InstallmentPurchase` — insumo do
+ * badge "N/total" na listagem de Transactions (docs/23-INSTALLMENTS.md,
+ * "Regra de UX Principal"). Escopado por `userId` (isolamento, docs/10-AUTH.md).
+ */
+async function findInstallmentTotalsByIds(userId: string, ids: string[]): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+
+  const purchases = await prisma.installmentPurchase.findMany({
+    where: { id: { in: ids }, userId },
+    select: { id: true, installmentsCount: true },
+  });
+
+  return new Map(purchases.map((purchase) => [purchase.id, purchase.installmentsCount]));
+}
+
+/**
+ * Preview do Dashboard (docs/11-DASHBOARD.md, "Últimas Transações") — resolve
+ * nome de categoria/conta/cartão e dados de parcelamento direto no `select`,
+ * sem N+1. Não reaproveita `TAG_INCLUDE`/`list`: essa tela não precisa de
+ * tags, mas precisa de nomes já resolvidos (não só ids).
+ */
+async function listRecentForDashboard(userId: string, limit: number): Promise<RecentTransactionRow[]> {
+  const rows = await prisma.transaction.findMany({
+    where: { userId, deletedAt: null },
+    orderBy: { date: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      description: true,
+      type: true,
+      amount: true,
+      date: true,
+      isPaid: true,
+      transferId: true,
+      installmentNumber: true,
+      category: { select: { name: true } },
+      account: { select: { name: true } },
+      card: { select: { name: true } },
+      installmentPurchase: { select: { installmentsCount: true } },
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    description: row.description,
+    type: row.type,
+    amount: row.amount,
+    date: row.date,
+    isPaid: row.isPaid,
+    transferId: row.transferId,
+    categoryName: row.category?.name ?? null,
+    accountName: row.account?.name ?? null,
+    cardName: row.card?.name ?? null,
+    installmentNumber: row.installmentNumber,
+    installmentsCount: row.installmentPurchase?.installmentsCount ?? null,
+  }));
+}
+
+/**
+ * Compras parceladas do usuário + parcelas (`Transaction`) não deletadas +
+ * nome do cartão — insumo do progresso derivado (ver service.ts
+ * `listActiveInstallmentPurchases`, docs/23-INSTALLMENTS.md "Valores
+ * Derivados"). Sem agregação aqui: a derivação (paga/restante) depende de
+ * "hoje", que é regra do service, não do acesso a dados.
+ */
+async function listInstallmentPurchasesWithTransactions(userId: string): Promise<InstallmentPurchaseRow[]> {
+  const purchases = await prisma.installmentPurchase.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      description: true,
+      totalAmount: true,
+      installmentsCount: true,
+      card: { select: { name: true } },
+      transactions: {
+        where: { deletedAt: null },
+        select: { amount: true, date: true },
+        orderBy: { date: "asc" },
+      },
+    },
+  });
+
+  return purchases.map((purchase) => ({
+    id: purchase.id,
+    description: purchase.description,
+    totalAmount: purchase.totalAmount,
+    installmentsCount: purchase.installmentsCount,
+    cardName: purchase.card.name,
+    transactions: purchase.transactions,
+  }));
+}
+
 export const transactionRepository = {
   findById,
   findDeletedById,
@@ -278,4 +392,7 @@ export const transactionRepository = {
   sumAmountByTypeInRange,
   groupExpensesByCategoryInRange,
   findCategoryNamesByIds,
+  findInstallmentTotalsByIds,
+  listRecentForDashboard,
+  listInstallmentPurchasesWithTransactions,
 };

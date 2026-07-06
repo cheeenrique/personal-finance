@@ -1,4 +1,5 @@
-import { parseInSaoPaulo } from "@/lib/date/timezone";
+import { toZonedTime } from "date-fns-tz";
+import { TIMEZONE, parseInSaoPaulo } from "@/lib/date/timezone";
 import { calendarPartsSP, weekdaySP, daysInMonthSP } from "@/lib/date/calendar-sp";
 
 /**
@@ -90,6 +91,22 @@ export function weekEndsMonth(window: WeekWindow): { year: number; month: number
   const lastInstant = addCalendarDaysSP(window.lt, -1);
   const { year, month, day } = calendarPartsSP(lastInstant);
   return day === daysInMonthSP(year, month) ? { year, month } : null;
+}
+
+/**
+ * Janela de EXIBIÇÃO do box "Resumo Semanal" no Dashboard
+ * (docs/11-DASHBOARD.md, docs/29-ALERTS.md "Janela de exibição"): domingo
+ * 00:00 → segunda-feira 14:00 (America/Sao_Paulo), ~30h após a geração do
+ * cron (domingo 08:00). Distinta da janela de DADOS do resumo
+ * (`getClosedWeekWindow`, domingo-sábado da semana que fechou) — esta é só
+ * sobre QUANDO o box aparece na tela, não sobre o período que ele resume.
+ */
+export function isWeeklySummaryWindowOpen(refDate: Date): boolean {
+  const weekday = weekdaySP(refDate);
+  if (weekday === 0) return true; // domingo inteiro
+  if (weekday !== 1) return false; // só domingo ou segunda contam
+
+  return toZonedTime(refDate, TIMEZONE).getHours() < 14;
 }
 
 /**

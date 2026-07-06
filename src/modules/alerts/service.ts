@@ -1,6 +1,8 @@
-import { generateWeeklySummary } from "./weekly-summary";
+import { AlertType } from "@/generated/prisma/enums";
+import { generateWeeklySummary, type WeeklySummaryPayload } from "./weekly-summary";
 import { detectAnomalies } from "./anomaly";
 import { detectGreen } from "./green";
+import { isWeeklySummaryWindowOpen } from "./week";
 import { alertRepository, type AlertListFilter } from "./repository";
 import { AlertNotFoundError } from "./errors";
 import type { Alert, WeeklyRunResult, CronRunSummary } from "./types";
@@ -63,10 +65,29 @@ async function listActiveForDashboard(userId: string): Promise<Alert[]> {
   return alertRepository.listActiveForDashboard(userId);
 }
 
+/**
+ * Payload do WEEKLY_SUMMARY mais recente, só dentro da janela de exibição do
+ * box (docs/11-DASHBOARD.md, docs/29-ALERTS.md "Janela de exibição"). Fora
+ * da janela, ou sem alerta ainda gerado (cron não rodou), retorna `null` — o
+ * Dashboard simplesmente não renderiza o box (não é um erro).
+ */
+async function getWeeklySummaryForDashboard(
+  userId: string,
+  refDate: Date = new Date(),
+): Promise<WeeklySummaryPayload | null> {
+  if (!isWeeklySummaryWindowOpen(refDate)) return null;
+
+  const [latest] = await alertRepository.list(userId, { type: AlertType.WEEKLY_SUMMARY });
+  if (!latest) return null;
+
+  return latest.payload as unknown as WeeklySummaryPayload;
+}
+
 export const alertService = {
   runWeekly,
   runWeeklyForAllUsers,
   listAlerts,
   markRead,
   listActiveForDashboard,
+  getWeeklySummaryForDashboard,
 };

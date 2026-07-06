@@ -38,3 +38,52 @@ export type InstallmentPurchaseResult = {
   installmentPurchaseId: string;
   transactions: TransactionWithTags[];
 };
+
+/**
+ * `TransactionWithTags` com `amount` já convertido pra string — forma que
+ * cruza a fronteira Server Action → Client Component (docs/03-DATABASE.md,
+ * "Parse/format só na borda (UI)"). `Prisma.Decimal` é uma instância de
+ * classe (decimal.js) e não sobrevive à serialização de Server Actions do
+ * Next.js sem essa conversão explícita.
+ */
+export type ClientTransaction = Omit<TransactionWithTags, "amount"> & { amount: string };
+
+/** Linha do preview "Últimas Transações" do Dashboard — nomes já resolvidos (docs/11-DASHBOARD.md). */
+export type RecentTransactionRow = {
+  id: string;
+  description: string;
+  type: TransactionType;
+  amount: Money;
+  date: Date;
+  isPaid: boolean;
+  /** Não-nulo ⇒ é uma perna de transferência — exibida como badge "Transferência", nunca como INCOME/EXPENSE cru (docs/06-SCREENS.md). */
+  transferId: string | null;
+  categoryName: string | null;
+  accountName: string | null;
+  cardName: string | null;
+  installmentNumber: number | null;
+  installmentsCount: number | null;
+};
+
+/** Compra parcelada + parcelas cruas (pré-derivação) — insumo de `listActiveInstallmentPurchases`. */
+export type InstallmentPurchaseRow = {
+  id: string;
+  description: string;
+  totalAmount: Money;
+  installmentsCount: number;
+  cardName: string;
+  transactions: Array<{ amount: Money; date: Date }>;
+};
+
+/** Compra parcelada ATIVA (parcelas restantes > 0) + progresso derivado (docs/23-INSTALLMENTS.md, "Visual no Dashboard"). */
+export type ActiveInstallmentPurchase = {
+  id: string;
+  description: string;
+  cardName: string;
+  totalAmount: Money;
+  installmentsCount: number;
+  paidCount: number;
+  paidAmount: Money;
+  remainingAmount: Money;
+  nextDueDate: Date | null;
+};

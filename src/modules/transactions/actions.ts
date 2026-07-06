@@ -14,6 +14,7 @@ import { TransactionDomainError } from "./errors";
 import type {
   ActionResult,
   Category,
+  ClientTransaction,
   InstallmentPurchaseResult,
   PaginatedResult,
   TransactionWithTags,
@@ -47,6 +48,11 @@ function toActionError(error: unknown): { success: false; error: { code: string;
 function revalidateTransactionRoutes(): void {
   revalidatePath(TRANSACTIONS_PATH);
   revalidatePath(DASHBOARD_PATH);
+}
+
+/** `Prisma.Decimal` → `string` na borda (ver types.ts `ClientTransaction`). */
+function toClientTransaction(transaction: TransactionWithTags): ClientTransaction {
+  return { ...transaction, amount: transaction.amount.toString() };
 }
 
 export async function createTransactionAction(input: unknown): Promise<ActionResult<TransactionWithTags>> {
@@ -124,7 +130,7 @@ export async function undoDeleteTransactionAction(
 
 export async function listTransactionsAction(
   input: unknown,
-): Promise<ActionResult<PaginatedResult<TransactionWithTags>>> {
+): Promise<ActionResult<PaginatedResult<ClientTransaction>>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
@@ -138,7 +144,22 @@ export async function listTransactionsAction(
 
   try {
     const result = await transactionService.list(userId, parsed.data);
-    return { success: true, data: result };
+    return { success: true, data: { ...result, items: result.items.map(toClientTransaction) } };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** `installmentsCount` por `installmentPurchaseId` — insumo do badge "N/total" (docs/23-INSTALLMENTS.md). */
+export async function getInstallmentTotalsAction(
+  installmentPurchaseIds: string[],
+): Promise<ActionResult<Record<string, number>>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  try {
+    const totals = await transactionService.installmentTotals(userId, installmentPurchaseIds);
+    return { success: true, data: Object.fromEntries(totals) };
   } catch (error) {
     return toActionError(error);
   }

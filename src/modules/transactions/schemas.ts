@@ -74,6 +74,8 @@ export const updateTransactionSchema = z
   });
 
 export const listFilterSchema = z.object({
+  /** Busca por descrição (`contains`, case-insensitive) — docs/20-TRANSACTIONS.md, "Filtros". */
+  search: z.string().trim().min(1).max(255).optional(),
   type: z.enum(ALL_TRANSACTION_TYPE_VALUES).optional(),
   categoryId: z.string().trim().min(1).optional(),
   accountId: z.string().trim().min(1).optional(),
@@ -82,6 +84,12 @@ export const listFilterSchema = z.object({
   dateTo: dateInputSchema.optional(),
   tagId: z.string().trim().min(1).optional(),
   isPaid: z.boolean().optional(),
+  /**
+   * `type=TRANSFER` nunca é persistido (docs/20-TRANSACTIONS.md, "Transferência")
+   * — as 2 pernas nascem EXPENSE/INCOME com `transferId` preenchido. Filtro
+   * "Transferência" na UI usa este campo em vez de `type`.
+   */
+  isTransfer: z.boolean().optional(),
   amountMin: decimalStringSchema.optional(),
   amountMax: decimalStringSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),

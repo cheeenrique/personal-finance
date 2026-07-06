@@ -8,7 +8,8 @@ const TOP_CATEGORIES_LIMIT = 3;
 
 type TopCategory = { categoryId: string; categoryName: string; total: string };
 
-type WeeklySummaryPayload = {
+/** Formato do `payload` JSON do Alert `WEEKLY_SUMMARY` — reaproveitado pelo box do Dashboard (ver service.ts `getWeeklySummaryForDashboard`). */
+export type WeeklySummaryPayload = {
   weekKey: string;
   weekStart: string;
   weekEnd: string;

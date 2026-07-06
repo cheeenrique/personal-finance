@@ -1,3 +1,4 @@
+import { Prisma } from "@/generated/prisma/client";
 import { TransactionType, CategoryType } from "@/generated/prisma/enums";
 import { parseInSaoPaulo } from "@/lib/date/timezone";
 import { transactionRepository } from "./repository";
@@ -13,10 +14,12 @@ import {
 } from "./errors";
 import type { CreateTransactionInput, UpdateTransactionInput, ListFilterInput } from "./schemas";
 import type {
+  ActiveInstallmentPurchase,
   Category,
   CategoryExpenseTotal,
   Money,
   PaginatedResult,
+  RecentTransactionRow,
   TransactionWithTags,
 } from "./types";
 
@@ -205,6 +208,16 @@ async function monthlyIncomeTotal(userId: string, year: number, month: number): 
   return transactionRepository.sumAmountByTypeInRange(userId, TransactionType.INCOME, range);
 }
 
+/**
+ * "Previsto / A Pagar" (docs/11-DASHBOARD.md): despesas do mês ainda não
+ * pagas (`isPaid=false`). Bloco separado de `monthlyExpenseTotal` — não soma
+ * com ele, nunca impacta saldo/despesa até a despesa ser marcada como paga.
+ */
+async function monthlyUnpaidExpenseTotal(userId: string, year: number, month: number): Promise<Money> {
+  const range = monthWindowUtc(year, month);
+  return transactionRepository.sumAmountByTypeInRange(userId, TransactionType.EXPENSE, range, false);
+}
+
 async function expensesByCategory(
   userId: string,
   year: number,
@@ -228,6 +241,54 @@ async function expensesByCategory(
     .sort((a, b) => b.total.comparedTo(a.total));
 }
 
+/** N transações mais recentes (nomes já resolvidos) — preview do Dashboard (docs/11-DASHBOARD.md, "Últimas Transações"). */
+async function listRecentForDashboard(userId: string, limit: number): Promise<RecentTransactionRow[]> {
+  return transactionRepository.listRecentForDashboard(userId, limit);
+}
+
+/**
+ * Compras parceladas ATIVAS (parcelas restantes > 0) + progresso derivado —
+ * nada persistido além de `InstallmentPurchase`/`Transaction`
+ * (docs/23-INSTALLMENTS.md, "Valores Derivados"). Uma parcela é "paga"
+ * quando sua data de vencimento já passou (`date <= agora`) — mesma regra de
+ * compra confirmada no cartão, não existe pagamento manual de parcela
+ * individual.
+ */
+async function listActiveInstallmentPurchases(
+  userId: string,
+  refDate: Date = new Date(),
+): Promise<ActiveInstallmentPurchase[]> {
+  const purchases = await transactionRepository.listInstallmentPurchasesWithTransactions(userId);
+
+  return purchases
+    .map((purchase) => {
+      const paid = purchase.transactions.filter((transaction) => transaction.date.getTime() <= refDate.getTime());
+      const upcoming = purchase.transactions.filter(
+        (transaction) => transaction.date.getTime() > refDate.getTime(),
+      );
+      const paidAmount = paid.reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
+
+      return {
+        id: purchase.id,
+        description: purchase.description,
+        cardName: purchase.cardName,
+        totalAmount: purchase.totalAmount,
+        installmentsCount: purchase.installmentsCount,
+        paidCount: paid.length,
+        paidAmount,
+        remainingAmount: purchase.totalAmount.minus(paidAmount),
+        nextDueDate: upcoming[0]?.date ?? null,
+      };
+    })
+    .filter((purchase) => purchase.paidCount < purchase.installmentsCount);
+}
+
+/** `installmentsCount` por `installmentPurchaseId` — insumo do badge "N/total" na listagem (ver actions.ts `getInstallmentTotalsAction`). */
+async function installmentTotals(userId: string, installmentPurchaseIds: string[]): Promise<Map<string, number>> {
+  const uniqueIds = [...new Set(installmentPurchaseIds)];
+  return transactionRepository.findInstallmentTotalsByIds(userId, uniqueIds);
+}
+
 export const transactionService = {
   createTransaction,
   updateTransaction,
@@ -237,5 +298,9 @@ export const transactionService = {
   lastUsedCategory,
   monthlyExpenseTotal,
   monthlyIncomeTotal,
+  monthlyUnpaidExpenseTotal,
   expensesByCategory,
+  listRecentForDashboard,
+  listActiveInstallmentPurchases,
+  installmentTotals,
 };
