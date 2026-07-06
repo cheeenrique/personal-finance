@@ -46,15 +46,18 @@ Ver `03-DATABASE.md` para o schema completo.
 
 Duas opções viáveis; escolha feita no deploy.
 
-## Vercel
+## Vercel Hobby (recomendado, $0/mês)
 
 * app + Vercel Cron (chama `/api/cron/weekly-summary` protegido por secret)
-* Neon / Supabase (Postgres)
+* Neon (Postgres) — free tier
+* Webhook do Telegram é event-driven (um POST por mensagem) — serverless cobre sem processo always-on
+* Cron é só semanal — cabe no limite do Vercel Hobby (aceita cron com frequência ≥ diária)
+* Ressalva: cold start do Neon free após período ocioso (~1s) — aceitável pro volume de 2 usuários
 
-## Railway (recomendado)
+## Railway (opção paga, ~$5/mês)
 
 * app + Postgres nativo + cron nativo + webhook long-running
-* Recomendado pela simplicidade (tudo junto no mesmo provider)
+* Vale a pena só se cold start incomodar (sem cold start, tudo always-on no mesmo provider)
 
 Sem Redis. Sem camada de cache dedicada — cálculos direto no Postgres; se necessário, `unstable_cache`/`revalidate` do Next no request.
 
@@ -106,7 +109,7 @@ PostgreSQL
 
 # Backup e Migrations
 
-* Backup: PITR do provider (Neon/Supabase/Railway) + `pg_dump` manual periódico.
+* Backup: PITR do provider (Neon/Supabase/Railway) + `pg_dump` manual periódico. PITR do Neon free tier é curto (poucos dias) — `pg_dump` periódico é o backup de longo prazo.
 * Migrations: `prisma migrate`.
 
 Ver `03-DATABASE.md` para detalhes.

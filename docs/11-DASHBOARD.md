@@ -61,7 +61,9 @@ Ver `29-ALERTS.md` para as regras completas de geração (cron, baseline, thresh
 
 ## Box Resumo Semanal
 
-Gerado automaticamente todo domingo à noite (janela segunda 00:00 → domingo 23:59, `America/Sao_Paulo`).
+Gerado todo domingo de manhã (08:00 America/Sao_Paulo). Janela de referência: domingo 00:00 → sábado 23:59 (America/Sao_Paulo).
+
+O box fica visível do domingo de manhã (quando é gerado) até segunda-feira 14:00 (America/Sao_Paulo); fora dessa janela, some até o próximo domingo (ver `29-ALERTS.md`).
 
 ```text
 📊 Resumo da semana (30/06 a 06/07)

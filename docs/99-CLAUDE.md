@@ -195,8 +195,8 @@ Sem tabela `Installment` separada — parcela é Transaction (`installmentPurcha
 
 # Estratégia de Deploy
 
-* Vercel (app + Vercel Cron) + Neon/Supabase (Postgres), OU
-* Railway (app + Postgres nativo + cron nativo) — recomendado pela simplicidade
+* Vercel (app + Vercel Cron) + Neon/Supabase (Postgres) — recomendado, $0/mês (Hobby), OU
+* Railway (app + Postgres nativo + cron nativo) — opção paga (~$5/mês), sem cold start
 * Sem Redis, sem camada de cache dedicada
 
 ---

@@ -89,7 +89,7 @@ Sinal positivo (economia, orçamento respeitado, saldo acima da média). Severit
 ## Janela de Tempo
 
 ```text
-Segunda 00:00 → Domingo 23:59
+Domingo 00:00 → Sábado 23:59
 Timezone: America/Sao_Paulo
 ```
 
@@ -111,7 +111,7 @@ Semana sempre fechada (não é a semana corrente, é a que acabou de terminar).
 
 ## Geração
 
-Cron rodando domingo à noite, chamando:
+Cron rodando domingo de manhã (08:00 America/Sao_Paulo), chamando:
 
 ```text
 /api/cron/weekly-summary
@@ -123,6 +123,19 @@ Cron rodando domingo à noite, chamando:
 
 * box no topo do Dashboard
 * opcional: mesma mensagem enviada por Telegram
+
+---
+
+## Janela de exibição
+
+O box "Resumo Semanal" fica visível do domingo de manhã (quando é gerado) até segunda-feira 14:00 (`America/Sao_Paulo`) — cerca de 30h de janela.
+
+```text
+visível enquanto: agora < segunda-feira 14:00 seguinte à geração
+fora disso: box some até o próximo domingo
+```
+
+Regra vale só pro box de resumo semanal (`WEEKLY_SUMMARY`). Alertas de anomalia e verde são independentes: persistem até serem lidos (`readAt`), não seguem essa janela.
 
 ---
 
@@ -258,10 +271,10 @@ Route Handler — exceção documentada em `99-CLAUDE.md`: Server Actions são o
 **Vercel:**
 
 ```text
-vercel.json → crons: [{ path: "/api/cron/weekly-summary", schedule: "0 23 * * 0" }]
+vercel.json → crons: [{ path: "/api/cron/weekly-summary", schedule: "0 11 * * 0" }]
 ```
 
-Domingo às 23h (horário do servidor — ajustar schedule para bater com o fim do dia em America/Sao_Paulo).
+Domingo 08:00 America/Sao_Paulo = 11:00 UTC (Vercel Cron roda em UTC).
 
 **Railway:**
 
