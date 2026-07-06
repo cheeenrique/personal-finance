@@ -149,6 +149,38 @@
     @apply font-sans;
   }
 
+  /*
+   * Cursor global pra todo elemento clicável. O Preflight do Tailwind zera
+   * `cursor` de `<button>` pra `default` (não `pointer`) — já causou bug real
+   * (ver `IconActionButton`, que precisou de `cursor-pointer` explícito).
+   * Em vez de repetir isso componente a componente, cobre aqui de uma vez:
+   * elementos nativos (`button`, `a[href]`, `select`, `label[for]`) + todo
+   * `role` que os primitivos do projeto (`@base-ui/react` Tabs/Menu/Checkbox/
+   * Switch, `cmdk` Command) de fato usam. Esses primitivos são não-nativos
+   * (`span`/`div` com `role`), então o estado desabilitado vem de
+   * `aria-disabled="true"`, não do pseudo `:disabled` (que só existe pra
+   * elementos de formulário nativos).
+   */
+  button:not(:disabled),
+  a[href],
+  select,
+  label[for],
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  [role="menuitemcheckbox"]:not([aria-disabled="true"]),
+  [role="menuitemradio"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="checkbox"]:not([aria-disabled="true"]),
+  [role="switch"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
   /* design/PERSONAL_FINANCE_DS_HANDOFF.md, "Prefers Reduced Motion". */
   @media (prefers-reduced-motion: reduce) {
     *,
