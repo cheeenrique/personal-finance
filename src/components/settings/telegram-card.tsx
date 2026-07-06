@@ -1,13 +1,21 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Copy, Link2, Loader2, Unlink } from "lucide-react";
+import { CircleHelp, Copy, Link2, Loader2, Unlink } from "lucide-react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { TelegramHelpModal } from "@/components/settings/telegram-help-modal";
 import {
   generateTelegramLinkCodeAction,
   getSettingsAction,
@@ -49,6 +57,7 @@ export function TelegramCard({ chatId, pendingCode }: TelegramCardProps) {
   const [linkedChatId, setLinkedChatId] = useState(chatId);
   const [code, setCode] = useState<TelegramLinkCode | null>(pendingCode);
   const [isUnlinkOpen, setUnlinkOpen] = useState(false);
+  const [isHelpOpen, setHelpOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const isLinked = Boolean(linkedChatId);
@@ -78,7 +87,9 @@ export function TelegramCard({ chatId, pendingCode }: TelegramCardProps) {
   }
 
   // Polling curto: detecta automaticamente quando o vínculo é confirmado
-  // pelo bot, sem exigir reload manual da tela.
+  // pelo bot, sem exigir reload manual da tela. Sem UI de loading própria e
+  // só chama `setState` nas 2 transições reais (vinculou / código expirou) —
+  // um poll "sem novidade" não re-renderiza nada, então a tela não pisca.
   useEffect(() => {
     if (!code || isLinked) return;
 
@@ -107,19 +118,42 @@ export function TelegramCard({ chatId, pendingCode }: TelegramCardProps) {
       <CardHeader>
         <CardTitle>Telegram</CardTitle>
         <CardDescription>Vincule seu Telegram pessoal para lançar gastos e receber alertas.</CardDescription>
+        <CardAction>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setHelpOpen(true)}
+            aria-label="Como vincular o Telegram"
+          >
+            <CircleHelp className="size-4" aria-hidden="true" />
+          </Button>
+        </CardAction>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Status: label bold + subtítulo muted — mesma linguagem visual de `PreferenceRow`
+            (preferences-card.tsx). chat_id fica em mono (dado numérico, docs/04-DESIGN_SYSTEM.md
+            "Tipografia": número sempre em mono, nunca em Nunito). */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-foreground">Status</p>
+            <p className="text-[13px] font-medium text-muted-foreground">
+              {isLinked ? (
+                <>
+                  Vinculado ao <span className="font-mono text-foreground">chat_id {linkedChatId}</span>.
+                </>
+              ) : (
+                "Vincule seu Telegram pessoal para lançar gastos e receber alertas."
+              )}
+            </p>
+          </div>
           <Badge
             variant={isLinked ? "outline" : "secondary"}
-            className={cn(isLinked && "border-success/30 bg-success/16 text-success")}
+            className={cn("shrink-0", isLinked && "border-success/30 bg-success/16 text-success")}
           >
             {isLinked ? "Vinculado" : "Não vinculado"}
           </Badge>
-          {isLinked && (
-            <span className="font-mono text-xs font-medium text-muted-foreground">chat_id: {linkedChatId}</span>
-          )}
         </div>
 
         {isLinked && (
@@ -135,20 +169,15 @@ export function TelegramCard({ chatId, pendingCode }: TelegramCardProps) {
         )}
 
         {!isLinked && !code && (
-          <div className="flex flex-col gap-3">
-            <p className="text-[13px] font-medium text-muted-foreground">
-              Vincule seu Telegram pessoal para lançar gastos e receber alertas direto pelo bot.
-            </p>
-            <Button type="button" className="w-fit" onClick={handleGenerateCode} disabled={isPending}>
-              {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-              <Link2 className="size-4" aria-hidden="true" />
-              Vincular Telegram
-            </Button>
-          </div>
+          <Button type="button" className="w-fit" onClick={handleGenerateCode} disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            <Link2 className="size-4" aria-hidden="true" />
+            Vincular Telegram
+          </Button>
         )}
 
         {!isLinked && code && (
-          <div className="flex flex-col gap-3 rounded-lg bg-secondary/60 p-3">
+          <div className="flex flex-col gap-3 rounded-lg bg-secondary/60 p-4">
             <div className="flex items-center justify-between gap-2">
               <span className="font-mono text-2xl font-bold tracking-[0.3em] text-foreground">{code.code}</span>
               <Button type="button" variant="ghost" size="icon" onClick={handleCopyCode} aria-label="Copiar código">
@@ -174,7 +203,7 @@ export function TelegramCard({ chatId, pendingCode }: TelegramCardProps) {
           </div>
         )}
 
-        <div className="flex flex-col gap-2.5 opacity-60">
+        <div className="flex flex-col gap-2.5 border-t border-border pt-4 opacity-60">
           <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
             Preferências de envio (em breve)
           </p>
@@ -199,6 +228,8 @@ export function TelegramCard({ chatId, pendingCode }: TelegramCardProps) {
         confirmLabel="Desvincular"
         onConfirm={handleUnlink}
       />
+
+      <TelegramHelpModal open={isHelpOpen} onOpenChange={setHelpOpen} />
     </Card>
   );
 }
