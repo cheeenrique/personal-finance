@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import { createCategoryAction, updateCategoryAction } from "@/modules/categories/actions";
 import { CategoryType } from "@/generated/prisma/enums";
 import type { Category } from "@/modules/categories/types";
@@ -63,6 +66,7 @@ export function CategoryFormModal({
   const [color, setColor] = useState<string>(CATEGORY_TYPE_DEFAULT_COLOR[defaultType]);
   const [icon, setIcon] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   /**
@@ -74,6 +78,7 @@ export function CategoryFormModal({
     setWasOpen(open);
     if (open) {
       setFormError(null);
+      setFieldErrors({});
       setName(category?.name ?? "");
       setType(category?.type ?? defaultType);
       setParentId(category?.parentId ?? null);
@@ -91,6 +96,12 @@ export function CategoryFormModal({
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setFormError(null);
+
+    const errors: Record<string, string> = {};
+    if (isBlank(name)) errors.name = "Nome é obrigatório.";
+    if (!isEditing && !type) errors.type = "Selecione um tipo.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     startTransition(async () => {
       const result = isEditing
@@ -121,21 +132,27 @@ export function CategoryFormModal({
       description="Categorias organizam as transações e alimentam relatórios e gráficos."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="category-name">Nome</Label>
+        <FormField label="Nome" htmlFor="category-name" required error={fieldErrors.name}>
           <Input
             id="category-name"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setName(event.target.value);
+              clearFieldError("name");
+            }}
             placeholder="Ex.: Mercado, Streaming…"
-            required
+            aria-invalid={Boolean(fieldErrors.name)}
             autoFocus
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="category-type">Tipo</Label>
+        <FormField
+          label="Tipo"
+          htmlFor="category-type"
+          required={!isEditing}
+          error={fieldErrors.type}
+        >
           {isEditing ? (
             <p id="category-type" className="text-sm font-medium text-muted-foreground">
               {CATEGORY_TYPE_LABELS[type]} — tipo não pode ser alterado após a criação.
@@ -154,13 +171,15 @@ export function CategoryFormModal({
                     ? CATEGORY_TYPE_DEFAULT_COLOR[nextType]
                     : current,
                 );
+                clearFieldError("type");
               }}
               placeholder="Selecione o tipo"
               disabled={isPending}
+              aria-invalid={Boolean(fieldErrors.type)}
               className="w-full"
             />
           )}
-        </div>
+        </FormField>
 
         <div className="flex flex-col gap-1.5">
           <Label>Categoria pai (opcional)</Label>

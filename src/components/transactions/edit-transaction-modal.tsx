@@ -12,6 +12,9 @@ import { Switch } from "@/components/ui/switch";
 import { CurrencyInput } from "@/components/forms/currency-input";
 import { DateField } from "@/components/forms/date-field";
 import { EntitySelect } from "@/components/forms/entity-select";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import { TagMultiSelect } from "./tag-multi-select";
 import type { TransactionsReferenceData } from "./use-transactions-reference-data";
 import { updateTransactionAction } from "@/modules/transactions/actions";
@@ -56,6 +59,7 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
   const [isPaid, setIsPaid] = useState(true);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   /**
@@ -80,6 +84,7 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
       setIsPaid(transaction.isPaid);
       setTagIds(transaction.transactionTags.map((tag) => tag.tagId));
       setFormError(null);
+      setFieldErrors({});
     }
   }
 
@@ -92,14 +97,13 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
     if (!transaction) return;
     setFormError(null);
 
-    if (!isCardPayment && !categoryId) {
-      setFormError("Selecione uma categoria.");
-      return;
-    }
-    if (!origin) {
-      setFormError("Selecione a conta ou cartão de origem.");
-      return;
-    }
+    const errors: Record<string, string> = {};
+    if (isBlank(amount)) errors.amount = "Informe um valor.";
+    if (isBlank(description)) errors.description = "Descrição é obrigatória.";
+    if (!isCardPayment && !categoryId) errors.categoryId = "Selecione uma categoria.";
+    if (!origin) errors.origin = "Selecione a conta ou cartão de origem.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0 || !origin) return;
 
     const [originKind, originId] = origin.split(":") as ["account" | "card", string];
 
@@ -161,45 +165,63 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
           </div>
         )}
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="edit-tx-amount">Valor</Label>
-          <CurrencyInput id="edit-tx-amount" value={amount} onValueChange={setAmount} required disabled={isPending} />
-        </div>
+        <FormField label="Valor" htmlFor="edit-tx-amount" required error={fieldErrors.amount}>
+          <CurrencyInput
+            id="edit-tx-amount"
+            value={amount}
+            onValueChange={(value) => {
+              setAmount(value);
+              clearFieldError("amount");
+            }}
+            aria-invalid={Boolean(fieldErrors.amount)}
+            disabled={isPending}
+          />
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="edit-tx-description">Descrição</Label>
+        <FormField label="Descrição" htmlFor="edit-tx-description" required error={fieldErrors.description}>
           <Input
             id="edit-tx-description"
             value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            required
+            onChange={(event) => {
+              setDescription(event.target.value);
+              clearFieldError("description");
+            }}
+            aria-invalid={Boolean(fieldErrors.description)}
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
         {!isCardPayment && (
-          <div className="flex flex-col gap-1.5">
-            <Label>Categoria</Label>
+          <FormField label="Categoria" htmlFor="edit-tx-category" required error={fieldErrors.categoryId}>
             <EntitySelect
+              id="edit-tx-category"
               options={categoryOptions}
               value={categoryId}
-              onValueChange={setCategoryId}
+              onValueChange={(value) => {
+                setCategoryId(value);
+                clearFieldError("categoryId");
+              }}
               placeholder="Selecione a categoria"
               disabled={isPending || referenceData.loading}
+              aria-invalid={Boolean(fieldErrors.categoryId)}
             />
-          </div>
+          </FormField>
         )}
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Conta / Cartão</Label>
+        <FormField label="Conta / Cartão" htmlFor="edit-tx-origin" required error={fieldErrors.origin}>
           <EntitySelect
+            id="edit-tx-origin"
             options={referenceData.originOptions}
             value={origin}
-            onValueChange={setOrigin}
+            onValueChange={(value) => {
+              setOrigin(value);
+              clearFieldError("origin");
+            }}
             placeholder="Selecione a origem"
             disabled={isPending || referenceData.loading}
+            aria-invalid={Boolean(fieldErrors.origin)}
           />
-        </div>
+        </FormField>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="edit-tx-date">Data</Label>

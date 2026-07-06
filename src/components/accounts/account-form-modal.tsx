@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { CurrencyInput } from "@/components/forms/currency-input";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import { createAccountAction, updateAccountAction } from "@/modules/accounts/actions";
 import { AccountType } from "@/generated/prisma/enums";
 import { notifySuccess } from "@/lib/toast";
@@ -42,6 +45,7 @@ export function AccountFormModal({ open, onOpenChange, account }: AccountFormMod
   const [color, setColor] = useState<string>(DEFAULT_ACCOUNT_COLOR);
   const [icon, setIcon] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   /**
@@ -55,6 +59,7 @@ export function AccountFormModal({ open, onOpenChange, account }: AccountFormMod
     setWasOpen(open);
     if (open) {
       setFormError(null);
+      setFieldErrors({});
       setName(account?.name ?? "");
       setType(account?.type ?? AccountType.CHECKING);
       setInitialBalance(account?.initialBalance ?? "0");
@@ -66,6 +71,12 @@ export function AccountFormModal({ open, onOpenChange, account }: AccountFormMod
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setFormError(null);
+
+    const errors: Record<string, string> = {};
+    if (isBlank(name)) errors.name = "Nome é obrigatório.";
+    if (!type) errors.type = "Selecione um tipo.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     startTransition(async () => {
       // `icon` aceita `null` só no update (limpa o ícone escolhido antes);
@@ -99,31 +110,36 @@ export function AccountFormModal({ open, onOpenChange, account }: AccountFormMod
       description="Contas representam o dinheiro real disponível — saldo é sempre calculado a partir das transações."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="account-name">Nome</Label>
+        <FormField label="Nome" htmlFor="account-name" required error={fieldErrors.name}>
           <Input
             id="account-name"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setName(event.target.value);
+              clearFieldError("name");
+            }}
             placeholder="Ex.: Conta corrente, Nubank…"
-            required
+            aria-invalid={Boolean(fieldErrors.name)}
             autoFocus
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="account-type">Tipo</Label>
+        <FormField label="Tipo" htmlFor="account-type" required error={fieldErrors.type}>
           <EntitySelect
             id="account-type"
             options={ACCOUNT_TYPE_OPTIONS}
             value={type}
-            onValueChange={(value) => setType(value as AccountType)}
+            onValueChange={(value) => {
+              setType(value as AccountType);
+              clearFieldError("type");
+            }}
             placeholder="Selecione o tipo"
             disabled={isPending}
+            aria-invalid={Boolean(fieldErrors.type)}
             className="w-full"
           />
-        </div>
+        </FormField>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="account-initial-balance">Saldo inicial</Label>

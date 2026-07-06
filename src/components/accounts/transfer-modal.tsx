@@ -10,6 +10,9 @@ import { Label } from "@/components/ui/label";
 import { CurrencyInput } from "@/components/forms/currency-input";
 import { DateField } from "@/components/forms/date-field";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import { createTransferAction } from "@/modules/accounts/actions";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { notifySuccess } from "@/lib/toast";
@@ -33,6 +36,7 @@ export function TransferModal({ open, onOpenChange, accounts }: TransferModalPro
   const [date, setDate] = useState(toDateInputValueSaoPaulo());
   const [description, setDescription] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   const accountOptions: EntitySelectOption[] = useMemo(
@@ -50,7 +54,10 @@ export function TransferModal({ open, onOpenChange, accounts }: TransferModalPro
   }
 
   function handleOpenChange(next: boolean) {
-    if (!next) resetForm();
+    if (!next) {
+      resetForm();
+      setFieldErrors({});
+    }
     onOpenChange(next);
   }
 
@@ -58,10 +65,14 @@ export function TransferModal({ open, onOpenChange, accounts }: TransferModalPro
     event.preventDefault();
     setFormError(null);
 
-    if (!fromAccountId || !toAccountId) {
-      setFormError("Selecione a conta de origem e a de destino.");
-      return;
-    }
+    const errors: Record<string, string> = {};
+    if (!fromAccountId) errors.fromAccountId = "Selecione a conta de origem.";
+    if (!toAccountId) errors.toAccountId = "Selecione a conta de destino.";
+    if (isBlank(amount)) errors.amount = "Informe um valor.";
+    if (isBlank(description)) errors.description = "Descrição é obrigatória.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     if (fromAccountId === toAccountId) {
       setFormError("Conta de origem e destino devem ser diferentes.");
       return;
@@ -95,58 +106,73 @@ export function TransferModal({ open, onOpenChange, accounts }: TransferModalPro
       description="Move dinheiro entre duas contas suas — não entra em receita nem despesa."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label>Conta de origem</Label>
+        <FormField
+          label="Conta de origem"
+          htmlFor="transfer-from-account"
+          required
+          error={fieldErrors.fromAccountId}
+        >
           <EntitySelect
+            id="transfer-from-account"
             options={accountOptions}
             value={fromAccountId}
             onValueChange={(value) => {
               setFromAccountId(value);
               if (value === toAccountId) setToAccountId(undefined);
+              clearFieldError("fromAccountId");
             }}
             placeholder="Selecione a origem"
             disabled={isPending}
+            aria-invalid={Boolean(fieldErrors.fromAccountId)}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Conta de destino</Label>
+        <FormField label="Conta de destino" htmlFor="transfer-to-account" required error={fieldErrors.toAccountId}>
           <EntitySelect
+            id="transfer-to-account"
             options={toOptions}
             value={toAccountId}
-            onValueChange={setToAccountId}
+            onValueChange={(value) => {
+              setToAccountId(value);
+              clearFieldError("toAccountId");
+            }}
             placeholder="Selecione o destino"
             disabled={isPending || !fromAccountId}
+            aria-invalid={Boolean(fieldErrors.toAccountId)}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="transfer-amount">Valor</Label>
+        <FormField label="Valor" htmlFor="transfer-amount" required error={fieldErrors.amount}>
           <CurrencyInput
             id="transfer-amount"
             value={amount}
-            onValueChange={setAmount}
-            required
+            onValueChange={(value) => {
+              setAmount(value);
+              clearFieldError("amount");
+            }}
+            aria-invalid={Boolean(fieldErrors.amount)}
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="transfer-date">Data</Label>
           <DateField id="transfer-date" value={date} onValueChange={setDate} disabled={isPending} />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="transfer-description">Descrição</Label>
+        <FormField label="Descrição" htmlFor="transfer-description" required error={fieldErrors.description}>
           <Input
             id="transfer-description"
             value={description}
-            onChange={(event) => setDescription(event.target.value)}
+            onChange={(event) => {
+              setDescription(event.target.value);
+              clearFieldError("description");
+            }}
             placeholder="Ex.: Reserva para viagem"
-            required
+            aria-invalid={Boolean(fieldErrors.description)}
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
         {formError && (
           <p role="alert" className="text-sm font-medium text-destructive">

@@ -10,6 +10,9 @@ import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/forms/currency-input";
 import { DateField } from "@/components/forms/date-field";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import { formatBRL } from "@/lib/money/format";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { notifySuccess } from "@/lib/toast";
@@ -33,6 +36,7 @@ export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstand
   const [accountOptions, setAccountOptions] = useState<EntitySelectOption[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   // Reset ao reabrir — mesmo padrão de NewTransactionForm (sync durante o render, não em efeito).
@@ -45,6 +49,7 @@ export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstand
       setDate(toDateInputValueSaoPaulo());
       setDescription("");
       setFormError(null);
+      setFieldErrors({});
     }
   }
 
@@ -72,10 +77,12 @@ export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstand
     event.preventDefault();
     setFormError(null);
 
-    if (!accountId) {
-      setFormError("Selecione a conta pagadora.");
-      return;
-    }
+    const errors: Record<string, string> = {};
+    if (!accountId) errors.accountId = "Selecione a conta pagadora.";
+    if (isBlank(amount)) errors.amount = "Informe um valor.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     if (Number(amount) > Number(outstandingBalance)) {
       setFormError(`O valor não pode ser maior que o saldo devedor (${formatBRL(outstandingBalance)}).`);
       return;
@@ -112,31 +119,37 @@ export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstand
       description={`Abate o saldo devedor de ${cardName}.`}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label>Conta pagadora</Label>
+        <FormField label="Conta pagadora" htmlFor="pay-account" required error={fieldErrors.accountId}>
           <EntitySelect
+            id="pay-account"
             options={accountOptions}
             value={accountId}
-            onValueChange={setAccountId}
+            onValueChange={(value) => {
+              setAccountId(value);
+              clearFieldError("accountId");
+            }}
             placeholder={loadingAccounts ? "Carregando…" : "Selecione a conta"}
             disabled={isPending || loadingAccounts}
+            aria-invalid={Boolean(fieldErrors.accountId)}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="pay-amount">Valor</Label>
+        <FormField label="Valor" htmlFor="pay-amount" required error={fieldErrors.amount}>
           <CurrencyInput
             id="pay-amount"
             value={amount}
-            onValueChange={setAmount}
+            onValueChange={(value) => {
+              setAmount(value);
+              clearFieldError("amount");
+            }}
+            aria-invalid={Boolean(fieldErrors.amount)}
             autoFocus
-            required
             disabled={isPending}
           />
           <p className="text-xs font-medium text-muted-foreground">
             Saldo devedor: {formatBRL(outstandingBalance)}
           </p>
-        </div>
+        </FormField>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="pay-date">Data</Label>

@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
 import { CurrencyInput } from "@/components/forms/currency-input";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import { createBudgetAction, updateBudgetAction } from "@/modules/budgets/actions";
 import { listCategoryTreeAction } from "@/modules/categories/actions";
 import type { CategoryTreeNode } from "@/modules/categories/types";
@@ -81,6 +84,7 @@ export function BudgetFormModal({
   const [categories, setCategories] = useState<CategoryTreeNode[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   /**
@@ -94,6 +98,7 @@ export function BudgetFormModal({
     setWasOpen(open);
     if (open) {
       setFormError(null);
+      setFieldErrors({});
       setCategoryId(budget?.categoryId ?? undefined);
       setMonth(budget?.month ?? defaultMonth);
       setYear(budget?.year ?? defaultYear);
@@ -127,10 +132,11 @@ export function BudgetFormModal({
     event.preventDefault();
     setFormError(null);
 
-    if (!categoryId) {
-      setFormError("Selecione uma categoria.");
-      return;
-    }
+    const errors: Record<string, string> = {};
+    if (!categoryId) errors.categoryId = "Selecione uma categoria.";
+    if (isBlank(plannedAmount)) errors.plannedAmount = "Informe um valor.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     startTransition(async () => {
       const result = isEditing
@@ -155,17 +161,21 @@ export function BudgetFormModal({
       description="Defina quanto pode gastar por categoria em um mês — o realizado é sempre calculado a partir das transações."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label>Categoria</Label>
+        <FormField label="Categoria" htmlFor="budget-category" required error={fieldErrors.categoryId}>
           <EntitySelect
+            id="budget-category"
             options={categoryOptions}
             value={categoryId}
-            onValueChange={setCategoryId}
+            onValueChange={(value) => {
+              setCategoryId(value);
+              clearFieldError("categoryId");
+            }}
             placeholder={loadingCategories ? "Carregando…" : "Selecione a categoria"}
             emptyMessage="Nenhuma categoria de despesa cadastrada."
             disabled={isPending || loadingCategories}
+            aria-invalid={Boolean(fieldErrors.categoryId)}
           />
-        </div>
+        </FormField>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
@@ -197,17 +207,19 @@ export function BudgetFormModal({
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="budget-planned-amount">Valor planejado</Label>
+        <FormField label="Valor planejado" htmlFor="budget-planned-amount" required error={fieldErrors.plannedAmount}>
           <CurrencyInput
             id="budget-planned-amount"
             value={plannedAmount}
-            onValueChange={setPlannedAmount}
+            onValueChange={(value) => {
+              setPlannedAmount(value);
+              clearFieldError("plannedAmount");
+            }}
+            aria-invalid={Boolean(fieldErrors.plannedAmount)}
             autoFocus
-            required
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
         {formError && (
           <p role="alert" className="text-sm font-medium text-destructive">

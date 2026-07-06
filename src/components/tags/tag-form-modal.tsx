@@ -7,6 +7,9 @@ import { FormModal } from "@/components/shared/form-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import { createTagAction, updateTagAction } from "@/modules/tags/actions";
 import { notifySuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -32,6 +35,7 @@ export function TagFormModal({ open, onOpenChange, tag }: TagFormModalProps) {
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(DEFAULT_TAG_COLOR);
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   const [wasOpen, setWasOpen] = useState(open);
@@ -39,6 +43,7 @@ export function TagFormModal({ open, onOpenChange, tag }: TagFormModalProps) {
     setWasOpen(open);
     if (open) {
       setFormError(null);
+      setFieldErrors({});
       setName(tag?.name ?? "");
       setColor(tag?.color ?? DEFAULT_TAG_COLOR);
     }
@@ -47,6 +52,11 @@ export function TagFormModal({ open, onOpenChange, tag }: TagFormModalProps) {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setFormError(null);
+
+    const errors: Record<string, string> = {};
+    if (isBlank(name)) errors.name = "Nome é obrigatório.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     startTransition(async () => {
       const result = isEditing
@@ -71,18 +81,20 @@ export function TagFormModal({ open, onOpenChange, tag }: TagFormModalProps) {
       description="Marcadores livres e opcionais para contextualizar suas transações."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="tag-name">Nome</Label>
+        <FormField label="Nome" htmlFor="tag-name" required error={fieldErrors.name}>
           <Input
             id="tag-name"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setName(event.target.value);
+              clearFieldError("name");
+            }}
             placeholder="Ex.: Viagem, Filho, MacBook…"
-            required
+            aria-invalid={Boolean(fieldErrors.name)}
             autoFocus
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
         <div className="flex flex-col gap-1.5">
           <Label>Cor</Label>

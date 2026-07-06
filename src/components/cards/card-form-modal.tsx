@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CurrencyInput } from "@/components/forms/currency-input";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import { notifySuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { CARD_COLOR_OPTIONS, cardSwatchClass } from "./card-color";
@@ -56,6 +59,7 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
   const isEditing = Boolean(card);
   const [form, setForm] = useState<FormState>(() => (card ? formStateFromCard(card) : emptyFormState()));
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   /**
@@ -70,12 +74,22 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
     if (syncKey) {
       setForm(card ? formStateFromCard(card) : emptyFormState());
       setFormError(null);
+      setFieldErrors({});
     }
   }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
+
+    const errors: Record<string, string> = {};
+    if (isBlank(form.name)) errors.name = "Nome é obrigatório.";
+    if (isBlank(form.brand)) errors.brand = "Bandeira é obrigatória.";
+    if (isBlank(form.limit)) errors.limit = "Informe um valor.";
+    if (isBlank(form.closingDay)) errors.closingDay = "Dia de fechamento é obrigatório.";
+    if (isBlank(form.dueDay)) errors.dueDay = "Dia de vencimento é obrigatório.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     const input = {
       name: form.name,
@@ -109,69 +123,84 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
       description="Nome, bandeira, limite e datas de fatura."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="card-name">Nome</Label>
+        <FormField label="Nome" htmlFor="card-name" required error={fieldErrors.name}>
           <Input
             id="card-name"
             value={form.name}
-            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+            onChange={(event) => {
+              setForm((prev) => ({ ...prev, name: event.target.value }));
+              clearFieldError("name");
+            }}
             placeholder="Ex.: Nubank, XP Visa…"
+            aria-invalid={Boolean(fieldErrors.name)}
             autoFocus
-            required
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="card-brand">Bandeira</Label>
+        <FormField label="Bandeira" htmlFor="card-brand" required error={fieldErrors.brand}>
           <Input
             id="card-brand"
             value={form.brand}
-            onChange={(event) => setForm((prev) => ({ ...prev, brand: event.target.value }))}
+            onChange={(event) => {
+              setForm((prev) => ({ ...prev, brand: event.target.value }));
+              clearFieldError("brand");
+            }}
             placeholder="Ex.: Visa, Mastercard, Elo…"
-            required
+            aria-invalid={Boolean(fieldErrors.brand)}
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="card-limit">Limite</Label>
+        <FormField label="Limite" htmlFor="card-limit" required error={fieldErrors.limit}>
           <CurrencyInput
             id="card-limit"
             value={form.limit}
-            onValueChange={(value) => setForm((prev) => ({ ...prev, limit: value }))}
-            required
+            onValueChange={(value) => {
+              setForm((prev) => ({ ...prev, limit: value }));
+              clearFieldError("limit");
+            }}
+            aria-invalid={Boolean(fieldErrors.limit)}
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="card-closing-day">Dia de fechamento</Label>
+          <FormField
+            label="Dia de fechamento"
+            htmlFor="card-closing-day"
+            required
+            error={fieldErrors.closingDay}
+          >
             <Input
               id="card-closing-day"
               type="number"
               min={1}
               max={31}
               value={form.closingDay}
-              onChange={(event) => setForm((prev) => ({ ...prev, closingDay: event.target.value }))}
-              required
+              onChange={(event) => {
+                setForm((prev) => ({ ...prev, closingDay: event.target.value }));
+                clearFieldError("closingDay");
+              }}
+              aria-invalid={Boolean(fieldErrors.closingDay)}
               disabled={isPending}
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="card-due-day">Dia de vencimento</Label>
+          </FormField>
+          <FormField label="Dia de vencimento" htmlFor="card-due-day" required error={fieldErrors.dueDay}>
             <Input
               id="card-due-day"
               type="number"
               min={1}
               max={31}
               value={form.dueDay}
-              onChange={(event) => setForm((prev) => ({ ...prev, dueDay: event.target.value }))}
-              required
+              onChange={(event) => {
+                setForm((prev) => ({ ...prev, dueDay: event.target.value }));
+                clearFieldError("dueDay");
+              }}
+              aria-invalid={Boolean(fieldErrors.dueDay)}
               disabled={isPending}
             />
-          </div>
+          </FormField>
         </div>
 
         <div className="flex flex-col gap-1.5">

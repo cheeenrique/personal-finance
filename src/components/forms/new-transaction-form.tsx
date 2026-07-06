@@ -11,6 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { CurrencyInput } from "@/components/forms/currency-input";
 import { DateField } from "@/components/forms/date-field";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import { useShell } from "@/components/providers/shell-provider";
 import { createTransactionAction } from "@/modules/transactions/actions";
 import { listAccountOptionsAction, listCardOptionsAction } from "@/components/shared/entity-options-actions";
@@ -67,6 +70,7 @@ export function NewTransactionForm() {
   const [originOptions, setOriginOptions] = useState<EntitySelectOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   /**
@@ -81,6 +85,7 @@ export function NewTransactionForm() {
   if (isTransactionModalOpen !== wasOpen) {
     setWasOpen(isTransactionModalOpen);
     if (isTransactionModalOpen) {
+      setFieldErrors({});
       setType(initialType);
       setCategoryId(
         typeof window === "undefined"
@@ -142,14 +147,13 @@ export function NewTransactionForm() {
     event.preventDefault();
     setFormError(null);
 
-    if (!categoryId) {
-      setFormError("Selecione uma categoria.");
-      return;
-    }
-    if (!origin) {
-      setFormError("Selecione a conta ou cartão de origem.");
-      return;
-    }
+    const errors: Record<string, string> = {};
+    if (isBlank(amount)) errors.amount = "Informe um valor.";
+    if (isBlank(description)) errors.description = "Descrição é obrigatória.";
+    if (!categoryId) errors.categoryId = "Selecione uma categoria.";
+    if (!origin) errors.origin = "Selecione a conta ou cartão de origem.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0 || !categoryId || !origin) return;
 
     const [originKind, originId] = origin.split(":") as ["account" | "card", string];
 
@@ -210,51 +214,63 @@ export function NewTransactionForm() {
           ))}
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="tx-amount">Valor</Label>
+        <FormField label="Valor" htmlFor="tx-amount" required error={fieldErrors.amount}>
           <CurrencyInput
             id="tx-amount"
             value={amount}
-            onValueChange={setAmount}
+            onValueChange={(value) => {
+              setAmount(value);
+              clearFieldError("amount");
+            }}
+            aria-invalid={Boolean(fieldErrors.amount)}
             autoFocus
-            required
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="tx-description">Descrição</Label>
+        <FormField label="Descrição" htmlFor="tx-description" required error={fieldErrors.description}>
           <Input
             id="tx-description"
             value={description}
-            onChange={(event) => setDescription(event.target.value)}
+            onChange={(event) => {
+              setDescription(event.target.value);
+              clearFieldError("description");
+            }}
             placeholder="Ex.: Mercado, Salário…"
-            required
+            aria-invalid={Boolean(fieldErrors.description)}
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Categoria</Label>
+        <FormField label="Categoria" htmlFor="tx-category" required error={fieldErrors.categoryId}>
           <EntitySelect
+            id="tx-category"
             options={categoryOptions}
             value={categoryId}
-            onValueChange={setCategoryId}
+            onValueChange={(value) => {
+              setCategoryId(value);
+              clearFieldError("categoryId");
+            }}
             placeholder={loadingOptions ? "Carregando…" : "Selecione a categoria"}
             disabled={isPending || loadingOptions}
+            aria-invalid={Boolean(fieldErrors.categoryId)}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Conta / Cartão</Label>
+        <FormField label="Conta / Cartão" htmlFor="tx-origin" required error={fieldErrors.origin}>
           <EntitySelect
+            id="tx-origin"
             options={originOptions}
             value={origin}
-            onValueChange={(value) => setOrigin(value as OriginValue)}
+            onValueChange={(value) => {
+              setOrigin(value as OriginValue);
+              clearFieldError("origin");
+            }}
             placeholder={loadingOptions ? "Carregando…" : "Selecione a origem"}
             disabled={isPending || loadingOptions}
+            aria-invalid={Boolean(fieldErrors.origin)}
           />
-        </div>
+        </FormField>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="tx-date">Data</Label>

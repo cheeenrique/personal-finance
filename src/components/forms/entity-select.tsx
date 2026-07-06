@@ -32,6 +32,8 @@ type EntitySelectProps = {
   /** Repassado ao trigger — permite `<Label htmlFor>` apontar pra ele, igual um input nativo. */
   id?: string;
   "aria-label"?: string;
+  /** Repassado ao trigger — acende a borda/ring de erro (`ui/input.tsx`) quando o campo é obrigatório e está vazio. */
+  "aria-invalid"?: boolean;
   /** `createOnTheFly` — cria a opção direto no fluxo (docs/06-SCREENS.md, "EntitySelect"). */
   onCreate?: (label: string) => void;
   createLabel?: (query: string) => string;
@@ -53,6 +55,7 @@ export function EntitySelect({
   className,
   id,
   "aria-label": ariaLabel,
+  "aria-invalid": ariaInvalid,
   onCreate,
   createLabel = (query) => `Criar "${query}"`,
 }: EntitySelectProps) {
@@ -76,12 +79,14 @@ export function EntitySelect({
       <PopoverTrigger
         disabled={disabled}
         render={
+          // eslint-disable-next-line jsx-a11y/role-supports-aria-props -- trigger funciona como campo de formulário (select customizado); precisa do estado "inválido" pro padrão de validação de FormField, mesmo a role implícita "button" não estar na tabela ARIA que lista aria-invalid.
           <button
             type="button"
             id={id}
             aria-label={ariaLabel}
+            aria-invalid={ariaInvalid}
             className={cn(
-              "flex h-10 w-full items-center justify-between gap-2 rounded-[10px] border border-border bg-input px-3 text-sm outline-none transition-colors focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/28 disabled:cursor-not-allowed disabled:opacity-50",
+              "flex h-10 w-full items-center justify-between gap-2 rounded-[10px] border border-border bg-input px-3 text-sm outline-none transition-colors focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/28 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
               className,
             )}
           />

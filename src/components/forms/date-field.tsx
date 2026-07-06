@@ -16,6 +16,8 @@ type DateFieldProps = {
   onValueChange: (value: string) => void;
   disabled?: boolean;
   className?: string;
+  /** Repassado ao trigger (`ui/button.tsx` já tem o CSS `aria-invalid:` embutido). */
+  "aria-invalid"?: boolean;
 };
 
 /**
@@ -44,7 +46,14 @@ function toDateOnlyString(date: Date): string {
  * `YYYY-MM-DD`) ficou idêntica à anterior — nenhum dos 8 callers precisou
  * mudar.
  */
-export function DateField({ id, value, onValueChange, disabled, className }: DateFieldProps) {
+export function DateField({
+  id,
+  value,
+  onValueChange,
+  disabled,
+  className,
+  "aria-invalid": ariaInvalid,
+}: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const selected = parseDateOnly(value || toDateInputValueSaoPaulo());
 
@@ -57,6 +66,7 @@ export function DateField({ id, value, onValueChange, disabled, className }: Dat
             type="button"
             variant="outline"
             disabled={disabled}
+            aria-invalid={ariaInvalid}
             className={cn("w-full justify-start gap-2 font-mono font-normal", className)}
           >
             <CalendarDays className="size-4 text-muted-foreground" aria-hidden="true" />

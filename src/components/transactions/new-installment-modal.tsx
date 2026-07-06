@@ -10,6 +10,9 @@ import { Label } from "@/components/ui/label";
 import { CurrencyInput } from "@/components/forms/currency-input";
 import { DateField } from "@/components/forms/date-field";
 import { EntitySelect } from "@/components/forms/entity-select";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import type { TransactionsReferenceData } from "./use-transactions-reference-data";
 import { createInstallmentPurchaseAction } from "@/modules/transactions/actions";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
@@ -36,6 +39,7 @@ export function NewInstallmentModal({ open, onOpenChange, referenceData, onSaved
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [firstDueDate, setFirstDueDate] = useState(toDateInputValueSaoPaulo());
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   const cardOptions = referenceData.originOptions
@@ -50,20 +54,21 @@ export function NewInstallmentModal({ open, onOpenChange, referenceData, onSaved
     setCardId(undefined);
     setCategoryId(undefined);
     setFirstDueDate(toDateInputValueSaoPaulo());
+    setFieldErrors({});
   }
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setFormError(null);
 
-    if (!cardId) {
-      setFormError("Selecione o cartão.");
-      return;
-    }
-    if (!categoryId) {
-      setFormError("Selecione uma categoria.");
-      return;
-    }
+    const errors: Record<string, string> = {};
+    if (isBlank(description)) errors.description = "Descrição é obrigatória.";
+    if (isBlank(totalAmount)) errors.totalAmount = "Informe um valor.";
+    if (isBlank(installmentsCount)) errors.installmentsCount = "Número de parcelas é obrigatório.";
+    if (!cardId) errors.cardId = "Selecione o cartão.";
+    if (!categoryId) errors.categoryId = "Selecione uma categoria.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     startTransition(async () => {
       const result = await createInstallmentPurchaseAction({
@@ -95,58 +100,83 @@ export function NewInstallmentModal({ open, onOpenChange, referenceData, onSaved
       description="Cria a compra e todas as parcelas de uma vez."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="installment-description">Descrição</Label>
+        <FormField label="Descrição" htmlFor="installment-description" required error={fieldErrors.description}>
           <Input
             id="installment-description"
             value={description}
-            onChange={(event) => setDescription(event.target.value)}
+            onChange={(event) => {
+              setDescription(event.target.value);
+              clearFieldError("description");
+            }}
             placeholder="Ex.: MacBook Pro"
-            required
+            aria-invalid={Boolean(fieldErrors.description)}
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="installment-total">Valor total</Label>
-          <CurrencyInput id="installment-total" value={totalAmount} onValueChange={setTotalAmount} required disabled={isPending} />
-        </div>
+        <FormField label="Valor total" htmlFor="installment-total" required error={fieldErrors.totalAmount}>
+          <CurrencyInput
+            id="installment-total"
+            value={totalAmount}
+            onValueChange={(value) => {
+              setTotalAmount(value);
+              clearFieldError("totalAmount");
+            }}
+            aria-invalid={Boolean(fieldErrors.totalAmount)}
+            disabled={isPending}
+          />
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="installment-count">Número de parcelas</Label>
+        <FormField
+          label="Número de parcelas"
+          htmlFor="installment-count"
+          required
+          error={fieldErrors.installmentsCount}
+        >
           <Input
             id="installment-count"
             type="number"
             min={2}
             max={60}
             value={installmentsCount}
-            onChange={(event) => setInstallmentsCount(event.target.value)}
-            required
+            onChange={(event) => {
+              setInstallmentsCount(event.target.value);
+              clearFieldError("installmentsCount");
+            }}
+            aria-invalid={Boolean(fieldErrors.installmentsCount)}
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Cartão</Label>
+        <FormField label="Cartão" htmlFor="installment-card" required error={fieldErrors.cardId}>
           <EntitySelect
+            id="installment-card"
             options={cardOptions}
             value={cardId}
-            onValueChange={setCardId}
+            onValueChange={(value) => {
+              setCardId(value);
+              clearFieldError("cardId");
+            }}
             placeholder={referenceData.loading ? "Carregando…" : "Selecione o cartão"}
             disabled={isPending || referenceData.loading}
+            aria-invalid={Boolean(fieldErrors.cardId)}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Categoria</Label>
+        <FormField label="Categoria" htmlFor="installment-category" required error={fieldErrors.categoryId}>
           <EntitySelect
+            id="installment-category"
             options={expenseCategoryOptions}
             value={categoryId}
-            onValueChange={setCategoryId}
+            onValueChange={(value) => {
+              setCategoryId(value);
+              clearFieldError("categoryId");
+            }}
             placeholder={referenceData.loading ? "Carregando…" : "Selecione a categoria"}
             disabled={isPending || referenceData.loading}
+            aria-invalid={Boolean(fieldErrors.categoryId)}
           />
-        </div>
+        </FormField>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="installment-first-due">Vencimento da 1ª parcela</Label>

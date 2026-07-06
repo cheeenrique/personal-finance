@@ -11,6 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { CurrencyInput } from "@/components/forms/currency-input";
 import { DateField } from "@/components/forms/date-field";
+import { FormField } from "@/components/forms/form-field";
+import { useFieldErrors } from "@/components/forms/use-field-errors";
+import { isBlank } from "@/components/forms/validation";
 import { createAssetAction, updateAssetAction } from "@/modules/assets/actions";
 import { AssetType } from "@/generated/prisma/enums";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
@@ -40,6 +43,7 @@ export function AssetFormModal({ open, onOpenChange, asset }: AssetFormModalProp
   const [purchaseDate, setPurchaseDate] = useState(toDateInputValueSaoPaulo());
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
   /**
@@ -53,6 +57,7 @@ export function AssetFormModal({ open, onOpenChange, asset }: AssetFormModalProp
     setWasOpen(open);
     if (open) {
       setFormError(null);
+      setFieldErrors({});
       setName(asset?.name ?? "");
       setType(asset?.type ?? AssetType.OTHER);
       setPurchaseValue(asset?.purchaseValue ?? "0");
@@ -65,6 +70,14 @@ export function AssetFormModal({ open, onOpenChange, asset }: AssetFormModalProp
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setFormError(null);
+
+    const errors: Record<string, string> = {};
+    if (isBlank(name)) errors.name = "Nome é obrigatório.";
+    if (!type) errors.type = "Selecione um tipo.";
+    if (isBlank(purchaseValue)) errors.purchaseValue = "Informe um valor.";
+    if (isBlank(currentValue)) errors.currentValue = "Informe um valor.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     startTransition(async () => {
       const trimmedNotes = notes.trim();
@@ -105,53 +118,62 @@ export function AssetFormModal({ open, onOpenChange, asset }: AssetFormModalProp
       description="Assets representam bens acumulados — não impactam saldo de conta nem fluxo de caixa."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="asset-name">Nome</Label>
+        <FormField label="Nome" htmlFor="asset-name" required error={fieldErrors.name}>
           <Input
             id="asset-name"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setName(event.target.value);
+              clearFieldError("name");
+            }}
             placeholder="Ex.: Casa em SP, Tesouro Direto…"
-            required
+            aria-invalid={Boolean(fieldErrors.name)}
             autoFocus
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="asset-type">Tipo</Label>
+        <FormField label="Tipo" htmlFor="asset-type" required error={fieldErrors.type}>
           <EntitySelect
             id="asset-type"
             options={ASSET_TYPE_OPTIONS}
             value={type}
-            onValueChange={(value) => setType(value as AssetType)}
+            onValueChange={(value) => {
+              setType(value as AssetType);
+              clearFieldError("type");
+            }}
             placeholder="Selecione o tipo"
             disabled={isPending}
+            aria-invalid={Boolean(fieldErrors.type)}
             className="w-full"
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="asset-purchase-value">Valor de compra</Label>
+        <FormField label="Valor de compra" htmlFor="asset-purchase-value" required error={fieldErrors.purchaseValue}>
           <CurrencyInput
             id="asset-purchase-value"
             value={purchaseValue}
-            onValueChange={setPurchaseValue}
-            required
+            onValueChange={(value) => {
+              setPurchaseValue(value);
+              clearFieldError("purchaseValue");
+            }}
+            aria-invalid={Boolean(fieldErrors.purchaseValue)}
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="asset-current-value">Valor atual</Label>
+        <FormField label="Valor atual" htmlFor="asset-current-value" required error={fieldErrors.currentValue}>
           <CurrencyInput
             id="asset-current-value"
             value={currentValue}
-            onValueChange={setCurrentValue}
-            required
+            onValueChange={(value) => {
+              setCurrentValue(value);
+              clearFieldError("currentValue");
+            }}
+            aria-invalid={Boolean(fieldErrors.currentValue)}
             disabled={isPending}
           />
-        </div>
+        </FormField>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="asset-purchase-date">Data de aquisição</Label>
