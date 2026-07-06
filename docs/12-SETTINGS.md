@@ -50,7 +50,7 @@ userId        // 1:1 com User
 
 currency      // default "BRL"
 timezone      // default "America/Sao_Paulo"
-theme         // LIGHT | DARK
+theme         // LIGHT | DARK | SYSTEM, default DARK
 
 alertAnomalyMultiplier    // default 1.5
 alertMinimumAmount        // Decimal, default 50.00
@@ -103,9 +103,10 @@ Todo cálculo de data (semana, mês, fatura) usa esse timezone — ver `01-STACK
 ```text
 Claro
 Escuro
+Sistema
 ```
 
-Aplicado imediatamente, sem reload.
+Default: Escuro (`DARK`, ver `04-DESIGN_SYSTEM.md`). "Sistema" (`SYSTEM`) segue o tema do SO e é persistido como valor próprio em `UserSettings.theme` — não é só um estado de UI. Aplicado imediatamente, sem reload.
 
 ---
 
@@ -116,20 +117,20 @@ Configuração usada pelo cron de alertas (ver `29-ALERTS.md`).
 ## Campos
 
 ```text
-multiplicadorAnomalia   → default 1.5
-mínimoAbsoluto          → default R$ 50,00
-multiplicadorVerde      → default 0.6
+alertAnomalyMultiplier  → default 1.5
+alertMinimumAmount      → default R$ 50,00
+alertGreenMultiplier    → default 0.6
 ```
 
 ## Explicação em tela
 
 ```text
 Alerta de gasto fora do padrão dispara quando o gasto da semana
-numa categoria passa de {multiplicadorAnomalia}x a média
-e é maior que R$ {mínimoAbsoluto}.
+numa categoria passa de {alertAnomalyMultiplier}x a média
+e é maior que R$ {alertMinimumAmount}.
 
 Alerta de economia dispara quando o gasto fica abaixo de
-{multiplicadorVerde}x a média.
+{alertGreenMultiplier}x a média.
 ```
 
 ## Regra

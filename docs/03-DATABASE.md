@@ -51,7 +51,7 @@ id
 userId
 
 description
-type // INCOME | EXPENSE | TRANSFER
+type // INCOME | EXPENSE | TRANSFER | CARD_PAYMENT
 amount // Decimal(12,2)
 
 categoryId? // null para TRANSFER
@@ -80,6 +80,10 @@ Tags **não** ficam inline em Transaction. Associação via junction `Transactio
 ### Transferências
 
 `type=TRANSFER` sempre gera **2 Transactions com o mesmo `transferId`**: uma `EXPENSE` na conta origem, uma `INCOME` na conta destino. `categoryId=null` nas duas pernas. Relatórios e KPIs excluem `TRANSFER` — é movimentação, não gasto nem ganho.
+
+### Pagamento de Fatura (CARD_PAYMENT)
+
+`type=CARD_PAYMENT` representa o pagamento da fatura do cartão — nunca uma despesa nova por categoria. `accountId`=conta que paga a fatura, `cardId`=cartão cuja fatura está sendo paga, `categoryId=null`. Compras no cartão já entram como `EXPENSE` no mês da compra; contar o pagamento da fatura de novo como despesa duplicaria o gasto. Efeitos: reduz o saldo da conta (`accountId`) e abate a fatura/saldo devedor do cartão (`cardId`). Excluído de "Despesas do mês" por categoria (ver `11-DASHBOARD.md`, `28-REPORTS.md`), mas incluído no cálculo de saldo da conta. Ver `22-CREDIT_CARDS.md` para o fluxo completo.
 
 ### isPaid
 
@@ -143,8 +147,8 @@ userId
 
 name
 type
-icon
-color
+icon?
+color?
 
 parentId?
 
@@ -176,6 +180,8 @@ deletedAt
 transactionId
 tagId
 ```
+
+Sem `userId` próprio — exceção consciente ao Princípio Principal (topo do doc). Isolamento por usuário vem da entidade-pai (`Transaction.userId`); a junction nunca é consultada sem passar pela Transaction.
 
 ---
 
@@ -237,6 +243,8 @@ createdAt
 ```
 
 Série temporal para o gráfico de evolução do patrimônio. `Asset.currentValue` guarda o valor corrente; os snapshots alimentam o histórico.
+
+Sem `userId` próprio — mesma exceção consciente do `TransactionTag`: isolamento por usuário vem da entidade-pai (`Asset.userId`), nunca consultado sem passar por ela.
 
 ---
 
@@ -313,11 +321,11 @@ userId
 
 currency // default BRL
 timezone // default America/Sao_Paulo
-theme // LIGHT | DARK
+theme // LIGHT | DARK | SYSTEM, default DARK (ver 04-DESIGN_SYSTEM.md)
 
-anomalyMultiplier // Decimal, default 1.5
-minAbsoluteAlert // Decimal(12,2), default 50
-greenMultiplier // Decimal, default 0.6
+alertAnomalyMultiplier // Decimal, default 1.5
+alertMinimumAmount // Decimal(12,2), default 50.00
+alertGreenMultiplier // Decimal, default 0.6
 
 createdAt
 updatedAt

@@ -142,16 +142,17 @@ Ponto que gera ambiguidade se não for explícito — regra fechada:
 
 ## Pagamento da fatura
 
-* Ato de pagar a fatura é **outra Transaction**, separada da(s) compra(s): `type=EXPENSE`, `accountId=<conta bancária usada>`, `cardId=null`, `categoryId=null`, `amount=valor da fatura`.
+* Ato de pagar a fatura é **outra Transaction**, com tipo próprio: `type=CARD_PAYMENT`, `accountId=<conta bancária usada para pagar>`, `cardId=<cartão cuja fatura está sendo paga>`, `categoryId=null`, `amount=valor da fatura`.
 * `categoryId=null` porque o gasto por categoria já foi contabilizado no momento de cada compra — contar de novo aqui duplicaria a despesa. Segue o mesmo raciocínio de exclusão usado em TRANSFER.
-* Essa Transaction **não entra em KPIs de despesa por categoria**, mas debita normalmente o saldo da conta bancária.
+* `type=CARD_PAYMENT` (não `EXPENSE`) é o que evita a dupla contagem: fica explícito no schema que essa Transaction é a liquidação de gastos já lançados, não um gasto novo. Ver `03-DATABASE.md`.
+* Essa Transaction **não entra em "Despesas do mês" por categoria** (`11-DASHBOARD.md`, `28-REPORTS.md`), mas debita normalmente o saldo da conta bancária (`accountId`) e abate a fatura/saldo devedor do cartão (`cardId`).
 * `isPaid` dessa transação segue o padrão comum: `true` quando o pagamento já ocorreu, `false` se foi só agendado/lançado como previsão (entra em "Previsto / A pagar" até ser confirmado).
 
 ## Resumo
 
 ```text id="cp1x8mz"
-Compra no cartão   → despesa já confirmada (isPaid=true), categorizada, no mês da compra
-Pagamento da fatura → transação à parte, sem categoria, debita a conta bancária
+Compra no cartão    → type=EXPENSE, isPaid=true, categorizada, conta no mês da compra
+Pagamento da fatura → type=CARD_PAYMENT, accountId+cardId, sem categoria, não conta como despesa nova
 ```
 
 ---

@@ -34,13 +34,14 @@ Alert nunca é fonte de verdade.
 
 # Rota
 
-Não existe página própria de alertas. Eles aparecem:
+Alertas aparecem em dois lugares:
 
-* no box "Resumo Semanal" no topo do Dashboard (ver `11-DASHBOARD.md`)
-* na lista de alertas ativos, também no Dashboard
-* opcionalmente, como mensagem no Telegram
+* Dashboard (`11-DASHBOARD.md`): box "Resumo Semanal" + lista de alertas ativos (`readAt = null`)
+* página `/alerts` (ver `06-SCREENS.md`): histórico completo, incluindo os já lidos, com filtro por tipo e por status de leitura
 
-A única rota HTTP do módulo é o cron (`/api/cron/weekly-summary`), descrito abaixo.
+Opcionalmente, o resumo semanal também chega como mensagem no Telegram.
+
+A única rota HTTP do módulo é o cron (`/api/cron/weekly-summary`), descrito abaixo. Tanto o Dashboard quanto `/alerts` leem os dados via Server Component, sem rota HTTP própria.
 
 ---
 
@@ -175,10 +176,12 @@ baseline = média(gasto da categoria nas últimas 8 semanas)
 Dispara `WARN` quando **ambas** as condições forem verdadeiras:
 
 ```text
-gasto_semana_atual > baseline * multiplicadorAnomalia   (default 1.5)
+gasto_semana_atual > baseline * alertAnomalyMultiplier   (default 1.5)
 E
-gasto_semana_atual > mínimoAbsoluto                      (default R$ 50)
+gasto_semana_atual > alertMinimumAmount                   (default R$ 50)
 ```
+
+Campos em `UserSettings` (ver `12-SETTINGS.md`).
 
 O mínimo absoluto existe pra evitar ruído: categoria com baseline de R$ 10 não deve gerar alerta por gastar R$ 20.
 
@@ -211,7 +214,7 @@ Média das últimas 8 semanas: R$ 400
 Dispara `GOOD` quando **qualquer uma** for verdadeira:
 
 ```text
-(a) gasto_semana_categoria < baseline * multiplicadorVerde  (default 0.6)
+(a) gasto_semana_categoria < baseline * alertGreenMultiplier  (default 0.6)
 
 (b) mês fechou ABAIXO do orçamento da categoria (ver 26-BUDGETS.md)
 
@@ -242,12 +245,12 @@ Média das últimas 8 semanas: R$ 300
 
 # Thresholds Configuráveis
 
-Definidos pelo usuário em Settings (`12-SETTINGS.md`):
+Definidos pelo usuário em Settings, campos de `UserSettings` (`12-SETTINGS.md`, `03-DATABASE.md`):
 
 ```text
-multiplicadorAnomalia   → default 1.5
-mínimoAbsoluto          → default R$ 50
-multiplicadorVerde      → default 0.6
+alertAnomalyMultiplier   → default 1.5
+alertMinimumAmount       → default R$ 50,00
+alertGreenMultiplier     → default 0.6
 ```
 
 Alterar esses valores muda a sensibilidade dos alertas para as próximas execuções do cron. Alertas já gerados não são recalculados.
@@ -324,7 +327,7 @@ Header: Authorization: Bearer <CRON_SECRET>
 * Todo alerta gerado é um `INSERT` em `Alert`, com `readAt = null`.
 * O Dashboard lista alertas com `readAt = null` em destaque.
 * Ao abrir/expandir um alerta (ou clicar em "marcar como lido"), o sistema faz `UPDATE Alert SET readAt = now()`.
-* Alertas não são apagados ao serem lidos — só saem do destaque. Ficam disponíveis no histórico.
+* Alertas não são apagados ao serem lidos — só saem do destaque do Dashboard. Ficam disponíveis no histórico completo em `/alerts` (`06-SCREENS.md`).
 * Não há exclusão automática de alertas antigos (soft, sem job de limpeza por enquanto — YAGNI).
 
 ---
@@ -339,7 +342,7 @@ Header: Authorization: Bearer <CRON_SECRET>
   - verde (verde)
 ```
 
-Ver `11-DASHBOARD.md` para o layout completo.
+Ver `11-DASHBOARD.md` para o layout completo. Histórico completo (incluindo já lidos) fica em `/alerts`, ver `06-SCREENS.md`.
 
 ---
 

@@ -115,6 +115,13 @@ Exibidos no topo da tela, logo abaixo do Resumo Semanal.
 KPIs excluem transações TRANSFER
   → transferência não é receita nem despesa, é só movimentação entre contas
 
+"Despesas do mês" (por categoria) exclui TRANSFER e CARD_PAYMENT
+  → pagamento de fatura já foi contado como despesa no momento de cada compra (EXPENSE);
+    contar de novo no pagamento duplicaria o gasto (ver 03-DATABASE.md, 22-CREDIT_CARDS.md)
+
+"Saldo Atual" considera EXPENSE + CARD_PAYMENT + TRANSFER
+  → tudo que efetivamente move dinheiro da conta, inclusive o pagamento da fatura
+
 KPIs de "Despesas do mês" e "Saldo atual" excluem, por default,
 despesas com isPaid = false
   → despesas pendentes entram no bloco "Previsto / A Pagar", separado
@@ -133,6 +140,8 @@ Total disponível (contas + carteira)
 Ex: R$ 12.430
 ```
 
+Derivado de `initialBalance + soma das Transactions da conta` (`03-DATABASE.md`) — inclui EXPENSE, CARD_PAYMENT e TRANSFER, tudo que move o saldo da conta.
+
 ---
 
 ### Receitas do mês
@@ -146,7 +155,7 @@ Total recebido no mês atual
 ### Despesas do mês
 
 ```text
-Total gasto no mês atual (apenas isPaid = true, exclui TRANSFER)
+Total gasto no mês atual (apenas isPaid = true, exclui TRANSFER e CARD_PAYMENT)
 ```
 
 ---
