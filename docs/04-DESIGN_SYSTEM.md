@@ -4,6 +4,8 @@
 
 Este documento define toda a identidade visual da aplicação.
 
+Fonte visual: `design/design-system.html` (protótipo interativo com os tokens reais, temas claro/escuro e componentes). Onde este documento e o protótipo divergirem, **o protótipo é a fonte da verdade**.
+
 O objetivo é criar uma interface limpa, moderna e extremamente rápida de utilizar.
 
 O usuário deve conseguir identificar rapidamente as informações mais importantes sem excesso de elementos visuais.
@@ -45,27 +47,30 @@ Apenas utilizar os conceitos de simplicidade e organização.
 
 # Paleta
 
+> Correção: a versão anterior deste documento invertia os papéis (laranja como primária, azul como secundária). O Design System real (`design-system.html`) define o oposto — segue abaixo.
+
 ## Primária
 
-Laranja
+Azul escuro `#1E40AF` (token `--primary`, texto sobre ela `--primary-foreground` `#ffffff`).
 
 Utilizada para:
 
-* ações principais
-* botões primários
-* indicadores importantes
+* saldo, estrutura, confiança
+* navegação ativa (item selecionado na sidebar/bottom nav)
+* botão primário (ex.: "Transferir")
 
 ---
 
-## Secundária
+## Accent
 
-Azul
+Laranja `#EA580C` (token `--accent`, texto sobre ela `--accent-foreground` `#0B1223`).
 
 Utilizada para:
 
-* links
-* informações
-* gráficos
+* ações que movem dinheiro (nova transação, CTAs de ação)
+* eyebrows (rótulo de seção em maiúsculas, ex. "01 — Fundamentos")
+
+Regra prática: **primária = onde eu estou / estrutura**. **Accent = o que eu faço agora (ação que mexe em dinheiro)**.
 
 ---
 
@@ -74,6 +79,39 @@ Utilizada para:
 Toda a interface deve utilizar neutros.
 
 As cores devem aparecer apenas quando agregarem significado.
+
+---
+
+# Tokens (dark + light)
+
+Tabela mapeada 1:1 pros nomes do shadcn/ui. Cola direto no `globals.css` do projeto (ver `design/design-system.html` para os valores aplicados ao vivo).
+
+| Token shadcn | Uso | Dark (padrão) | Light |
+|---|---|---|---|
+| `--background` | fundo da página | `#0B1223` | `#F5F7FB` |
+| `--foreground` | texto principal | `#F1F5F9` | `#0F1B2E` |
+| `--card` / `--popover` | superfície de cards, popovers | `#141D30` | `#FFFFFF` |
+| `--card-foreground` / `--popover-foreground` | texto sobre card/popover | `#F1F5F9` | `#0F1B2E` |
+| `--secondary` (elevated/s2) | dropdowns, modais, chips, hover, trilhos | `#1F2A40` | `#EEF2F8` (elevated `#FFFFFF`) |
+| `--muted-foreground` | texto secundário/legenda | `#93A2B8` | `#5B6B82` |
+| `--border` | bordas, divisores | `#28344C` | `#E3E8F0` |
+| `--input` | fundo de input | `rgba(255,255,255,0.03)` | `#FFFFFF` |
+| `--primary` | ação estrutural/navegação ativa | `#1E40AF` | `#1E40AF` |
+| `--primary-foreground` | texto sobre primary | `#ffffff` | `#ffffff` |
+| `--accent` | ação que move dinheiro (CTA) | `#EA580C` | `#EA580C` |
+| `--accent-foreground` | texto sobre accent | `#0B1223` | `#0B1223` |
+| `--success` (receita) | valores positivos | `#16A34A` | `#16A34A` |
+| on-success (ícone/texto sobre success tint) | — | `#4ADE80` | `#15803D` |
+| `--destructive` (despesa) | valores negativos, ação destrutiva | `#EF4444` | `#EF4444` |
+| on-destructive (ícone/texto sobre destructive tint) | — | `#F87171` | `#B91C1C` |
+| `--warning` (alerta/vencendo) | conta a vencer, meta baixa | `#F59E0B` | `#F59E0B` |
+| on-warning (ícone/texto sobre warning tint) | — | `#FBBF24` | `#B45309` |
+| on-primary (ícone/texto sobre primary tint) | — | `#8FABFF` | `#1E40AF` |
+| on-accent (ícone/texto sobre accent tint) | — | `#FB923C` | `#C2410C` |
+| header (barra superior, sticky/blur) | — | `rgba(11,18,35,0.72)` | `rgba(255,255,255,0.82)` |
+| shadow (cards, dropdowns) | — | `0 2px 12px rgba(0,0,0,0.35)` | `0 1px 3px rgba(15,23,42,0.08)` |
+
+Primária e accent **não mudam entre temas** — só o fundo/superfície/borda invertem claro↔escuro.
 
 ---
 
@@ -91,25 +129,35 @@ Dark Mode deve ser o padrão.
 
 # Tipografia
 
-Utilizar apenas uma família tipográfica.
+Duas famílias, cada uma com um papel fixo (substitui a regra anterior de "uma família só"):
 
-Hierarquia
+* **Nunito** (400/500/600/700/800/900) — toda a UI: títulos, labels, corpo de texto, botões. Arredondada, amistosa, legível.
+* **JetBrains Mono** (400/500/600) — **todo dado financeiro**: saldos, valores em R$, datas, percentuais. Regra fixa: número, dinheiro ou data sempre em mono, nunca em Nunito.
 
-```text
-H1
+Escala (conforme `design-system.html`):
 
-H2
+| Papel | Peso | Tamanho | Observação |
+|---|---|---|---|
+| Display | 900 | 34–52px | letter-spacing −0.02em a −0.03em; hero e valores grandes |
+| Título | 800 | 20px | títulos de seção/card |
+| Eyebrow | 800 | 12px | uppercase, cor accent, letter-spacing 0.16em |
+| Corpo | 500 | 16px | cor muted-foreground |
+| Dados/Mono | 500 | 16px | JetBrains Mono, valores/datas/percentuais |
 
-H3
+A regra "nunca mais de 6 tamanhos diferentes" continua valendo como guia geral de disciplina visual — não confundir com "uma família só", que foi corrigido acima.
 
-Body
+---
 
-Small
+# Radius
 
-Muted
-```
+Escala fixa de border-radius, base ~12px:
 
-Nunca utilizar mais de 6 tamanhos diferentes.
+| Uso | Radius |
+|---|---|
+| Cards | 14–16px |
+| Controles (botão, input) | 8–9px |
+| Pills (badge, status) | 999px |
+| Tiles de ícone | 12–14px |
 
 ---
 
@@ -302,23 +350,23 @@ Legenda
 
 Receita
 
-Verde
+Verde `#16A34A` (mesma cor de `--success`)
 
 Despesa
 
-Vermelho
+Vermelho `#EF4444` (mesma cor de `--destructive`)
 
 Transferência
 
-Azul
+Azul — **atenção:** como azul virou a cor primária da marca (`#1E40AF`), usar um tom distinto pra Transferência (azul/ciano mais claro, nunca o mesmo navy do `--primary`), senão a badge de Transferência se confunde com botão/nav primária.
 
 Parcelamento
 
-Laranja
+Laranja — **atenção:** como laranja virou `--accent` (cor de ação), Parcelamento pode visualmente colidir com botões de CTA. Se a badge de Parcelamento ficar perto de um botão accent na mesma tela, escolher um tom de laranja próprio (mais escuro/dessaturado) pra diferenciar "isto é uma categoria" de "isto é uma ação".
 
 Patrimônio
 
-Roxo
+Roxo (mantido, sem conflito com primária/accent)
 
 Essas cores devem ser utilizadas em toda aplicação.
 
@@ -330,15 +378,15 @@ Utilizadas em Alertas/Insights (resumo semanal, anomalia, economia).
 
 GOOD
 
-Verde (reaproveita a cor de Receita)
+Verde (reaproveita a cor de Receita/`--success`)
 
 WARN
 
-Amarelo/Laranja
+Âmbar `#F59E0B` (`--warning`, mesma cor de "Alerta/Vencendo" da Paleta — antes descrito como "Amarelo/Laranja", alinhado aqui ao token real)
 
 DANGER
 
-Vermelho
+Vermelho (`--destructive`)
 
 ---
 

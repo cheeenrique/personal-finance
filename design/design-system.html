@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --pf-bg:#0B1223; --pf-surface:#141D30; --pf-elevated:#1A2438; --pf-s2:#1F2A40; --pf-border:#28344C; --pf-input:rgba(255,255,255,0.03);
+    --pf-text:#F1F5F9; --pf-muted:#93A2B8;
+    --pf-primary:#1E40AF; --pf-primary-fg:#ffffff; --pf-accent:#EA580C; --pf-accent-fg:#0B1223;
+    --pf-success:#16A34A; --pf-warning:#F59E0B; --pf-danger:#EF4444;
+    --pf-on-primary:#8FABFF; --pf-on-success:#4ADE80; --pf-on-warning:#FBBF24; --pf-on-danger:#F87171; --pf-on-accent:#FB923C;
+    --pf-shadow:0 2px 12px rgba(0,0,0,0.35); --pf-header:rgba(11,18,35,0.72);
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body { background:var(--pf-bg); font-family:'Nunito',sans-serif; -webkit-font-smoothing:antialiased; transition:background .25s; }
+  ::selection { background:var(--pf-accent); color:#0B1223; }
+  @keyframes pf-spin { to { transform: rotate(360deg); } }
+  @keyframes pf-pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+  @keyframes pf-indeterminate { 0% { left:-42%; } 100% { left:100%; } }
+  @keyframes pf-slidein { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  @keyframes pf-fadein { from { opacity:0; } to { opacity:1; } }
+  @keyframes pf-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  @keyframes pf-slideup { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+  @keyframes pf-track { from { left:0; } to { left:calc(100% - 16px); } }
+</style>
+</helmet>
+<div style="min-height:100vh; background:radial-gradient(1100px 560px at 84% -12%, color-mix(in srgb, var(--pf-primary) 20%, transparent), transparent 60%), radial-gradient(820px 460px at -8% 6%, color-mix(in srgb, var(--pf-accent) 11%, transparent), transparent 55%), var(--pf-bg); color:var(--pf-text); padding:0 0 96px 0; transition:color .25s;">
+
+  <!-- ===== TOP BAR ===== -->
+  <header style="position:sticky; top:0; z-index:40; backdrop-filter:blur(14px); background:var(--pf-header); border-bottom:1px solid var(--pf-border);">
+    <div style="max-width:1160px; margin:0 auto; padding:15px 32px; display:flex; align-items:center; justify-content:space-between; gap:24px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="width:42px; height:42px; border-radius:12px; background:linear-gradient(145deg, var(--pf-primary), color-mix(in srgb, var(--pf-primary), #000 50%)); position:relative; box-shadow:0 6px 18px color-mix(in srgb, var(--pf-primary) 45%, transparent); flex-shrink:0; overflow:hidden;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--pf-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+        </div>
+        <div style="display:flex; flex-direction:column; line-height:1;">
+          <span style="font-size:20px; font-weight:900; letter-spacing:-0.02em;">Personal Finance</span>
+          <span style="font-size:11px; font-weight:600; color:var(--pf-muted); letter-spacing:0.14em; text-transform:uppercase; margin-top:3px;">Design System</span>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <nav style="display:flex; align-items:center; gap:2px; margin-right:6px;">
+          <a href="#foundations" style="font-size:13px; font-weight:700; color:var(--pf-muted); text-decoration:none; padding:8px 12px; border-radius:8px;" style-hover="color:var(--pf-text)">Fundamentos</a>
+          <a href="#components" style="font-size:13px; font-weight:700; color:var(--pf-muted); text-decoration:none; padding:8px 12px; border-radius:8px;" style-hover="color:var(--pf-text)">Componentes</a>
+          <a href="#finance" style="font-size:13px; font-weight:700; color:var(--pf-muted); text-decoration:none; padding:8px 12px; border-radius:8px;" style-hover="color:var(--pf-text)">Dashboard</a>
+          <a href="#motion" style="font-size:13px; font-weight:700; color:var(--pf-muted); text-decoration:none; padding:8px 12px; border-radius:8px;" style-hover="color:var(--pf-text)">Movimento</a>
+          <a href="#tokens" style="font-size:13px; font-weight:700; color:var(--pf-muted); text-decoration:none; padding:8px 12px; border-radius:8px;" style-hover="color:var(--pf-text)">Tokens</a>
+        </nav>
+        <button onClick="{{ toggleMode }}" title="Alternar tema" style="display:inline-flex; align-items:center; gap:8px; height:38px; padding:0 14px; border-radius:9px; border:1px solid var(--pf-border); background:var(--pf-surface); color:var(--pf-text); cursor:pointer; font-family:'Nunito',sans-serif; font-weight:700; font-size:13px;" style-hover="border-color:var(--pf-primary)">
+          <sc-if value="{{ isDark }}" hint-placeholder-val="{{ true }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+          </sc-if>
+          <sc-if value="{{ isLight }}" hint-placeholder-val="{{ false }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg>
+          </sc-if>
+          <span>{{ modeLabel }}</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div style="max-width:1160px; margin:0 auto; padding:0 32px;">
+
+    <!-- ===== HERO ===== -->
+    <section style="padding:72px 0 48px 0;">
+      <div style="display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:999px; background:var(--pf-s2); border:1px solid var(--pf-border); margin-bottom:24px;">
+        <span style="width:7px; height:7px; border-radius:99px; background:var(--pf-accent);"></span>
+        <span style="font-size:12px; font-weight:700; color:var(--pf-muted); letter-spacing:0.04em;">Personal Finance · v1.0 · claro &amp; escuro</span>
+      </div>
+      <h1 style="font-size:52px; font-weight:900; letter-spacing:-0.03em; line-height:1.02; margin:0 0 20px 0; max-width:16ch;">Controle o seu <span style="color:var(--pf-primary);">dinheiro</span> com <span style="color:var(--pf-accent);">clareza</span>.</h1>
+      <p style="font-size:18px; line-height:1.55; color:var(--pf-muted); max-width:56ch; margin:0; font-weight:500;">Sistema de tokens e componentes para um app de finanças pessoais. Azul-escuro para saldo, estrutura e confiança; laranja-escuro para as ações que movem o dinheiro. Verde para o que entra, vermelho para o que sai. Compatível com shadcn/ui, nos temas claro e escuro.</p>
+    </section>
+
+    <!-- ===== FOUNDATIONS ===== -->
+    <div id="foundations" style="height:1px; background:var(--pf-border);"></div>
+
+    <section style="padding:56px 0 8px 0;">
+      <span style="font-size:12px; font-weight:800; color:var(--pf-accent); letter-spacing:0.16em; text-transform:uppercase;">01 — Fundamentos</span>
+      <h2 style="font-size:30px; font-weight:900; letter-spacing:-0.02em; margin:12px 0 0 0;">Marca</h2>
+      <p style="font-size:15px; color:var(--pf-muted); margin:10px 0 0 0; font-weight:500; max-width:58ch;">Um gráfico ascendente como símbolo — crescimento, patrimônio, dinheiro que sobe. Use o lockup completo por padrão; o ícone com fundo em espaços quadrados (avatar, favicon); o símbolo sozinho quando já houver contexto da marca.</p>
+    </section>
+
+    <div style="margin-top:28px; display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:16px;">
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); display:flex; flex-direction:column; overflow:hidden;">
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:40px;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="width:52px; height:52px; border-radius:14px; background:linear-gradient(145deg, var(--pf-primary), color-mix(in srgb, var(--pf-primary), #000 50%)); position:relative; box-shadow:0 6px 18px color-mix(in srgb, var(--pf-primary) 45%, transparent); flex-shrink:0; overflow:hidden;">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--pf-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+            </div>
+            <div style="display:flex; flex-direction:column; line-height:1;"><span style="font-size:26px; font-weight:900; letter-spacing:-0.02em;">Personal Finance</span><span style="font-size:11px; font-weight:600; color:var(--pf-muted); letter-spacing:0.14em; text-transform:uppercase; margin-top:4px;">Design System</span></div>
+          </div>
+        </div>
+        <div style="padding:12px 16px; border-top:1px solid var(--pf-border); font-size:12px; font-weight:700; color:var(--pf-muted);">Lockup completo</div>
+      </div>
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); display:flex; flex-direction:column; overflow:hidden;">
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:40px;">
+          <div style="width:72px; height:72px; border-radius:18px; background:linear-gradient(145deg, var(--pf-primary), color-mix(in srgb, var(--pf-primary), #000 50%)); position:relative; box-shadow:0 8px 22px color-mix(in srgb, var(--pf-primary) 45%, transparent); flex-shrink:0; overflow:hidden;">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="var(--pf-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+          </div>
+        </div>
+        <div style="padding:12px 16px; border-top:1px solid var(--pf-border); font-size:12px; font-weight:700; color:var(--pf-muted);">Ícone (com fundo)</div>
+      </div>
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); display:flex; flex-direction:column; overflow:hidden;">
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:40px;">
+          <svg width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="var(--pf-accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+        </div>
+        <div style="padding:12px 16px; border-top:1px solid var(--pf-border); font-size:12px; font-weight:700; color:var(--pf-muted);">Símbolo (sem fundo)</div>
+      </div>
+    </div>
+
+    <!-- ===== COLOR PALETTE ===== -->
+    <section style="padding:48px 0 8px 0;">
+      <h2 style="font-size:30px; font-weight:900; letter-spacing:-0.02em; margin:12px 0 0 0;">Paleta de cores</h2>
+      <p style="font-size:15px; color:var(--pf-muted); margin:10px 0 0 0; font-weight:500; max-width:58ch;">Cada cor mapeia direto num token do shadcn/ui. Cole no <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--pf-text);">globals.css</span> e o app inteiro herda a identidade Personal Finance.</p>
+    </section>
+
+    <div style="margin-top:28px;">
+      <h3 style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.1em; text-transform:uppercase; margin:0 0 14px 0;">Marca &amp; superfícies</h3>
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px;">
+        <div style="border-radius:14px; overflow:hidden; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow);">
+          <div style="height:96px; background:var(--pf-bg); border-bottom:1px solid var(--pf-border);"></div>
+          <div style="padding:14px;"><div style="font-size:14px; font-weight:800;">Background</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">--background</div><div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-on-primary); margin-top:6px;">{{ hexBg }}</div></div>
+        </div>
+        <div style="border-radius:14px; overflow:hidden; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow);">
+          <div style="height:96px; background:var(--pf-surface); border-bottom:1px solid var(--pf-border); box-shadow:inset 0 0 0 1px var(--pf-border);"></div>
+          <div style="padding:14px;"><div style="font-size:14px; font-weight:800;">Card / Surface</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">--card --popover</div><div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-on-primary); margin-top:6px;">{{ hexSurface }}</div></div>
+        </div>
+        <div style="border-radius:14px; overflow:hidden; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow);">
+          <div style="height:96px; background:var(--pf-primary); border-bottom:1px solid var(--pf-border);"></div>
+          <div style="padding:14px;"><div style="font-size:14px; font-weight:800;">Primary</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">--primary (azul escuro)</div><div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-on-primary); margin-top:6px;">{{ hexPrimary }}</div></div>
+        </div>
+        <div style="border-radius:14px; overflow:hidden; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow);">
+          <div style="height:96px; background:var(--pf-accent); border-bottom:1px solid var(--pf-border);"></div>
+          <div style="padding:14px;"><div style="font-size:14px; font-weight:800;">Accent</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">--accent (ação)</div><div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-on-accent); margin-top:6px;">{{ hexAccent }}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+      <div>
+        <h3 style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.1em; text-transform:uppercase; margin:0 0 14px 0;">Fluxo financeiro (semânticas)</h3>
+        <div style="border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-surface); overflow:hidden; box-shadow:var(--pf-shadow);">
+          <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid var(--pf-border);"><span style="width:34px; height:34px; border-radius:9px; background:var(--pf-success); flex-shrink:0;"></span><div style="flex:1;"><div style="font-size:14px; font-weight:800;">Receita / Entrada</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">--success · valores positivos</div></div><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-on-success);">#16A34A</span></div>
+          <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid var(--pf-border);"><span style="width:34px; height:34px; border-radius:9px; background:var(--pf-danger); flex-shrink:0;"></span><div style="flex:1;"><div style="font-size:14px; font-weight:800;">Despesa / Saída</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">--destructive · valores negativos</div></div><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-on-danger);">#EF4444</span></div>
+          <div style="display:flex; align-items:center; gap:14px; padding:14px 16px;"><span style="width:34px; height:34px; border-radius:9px; background:var(--pf-warning); flex-shrink:0;"></span><div style="flex:1;"><div style="font-size:14px; font-weight:800;">Alerta / Vencendo</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">--warning · conta a vencer, meta baixa</div></div><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-on-warning);">#F59E0B</span></div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.1em; text-transform:uppercase; margin:0 0 14px 0;">Neutros</h3>
+        <div style="border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-surface); overflow:hidden; box-shadow:var(--pf-shadow);">
+          <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid var(--pf-border);"><span style="width:34px; height:34px; border-radius:9px; background:var(--pf-text); border:1px solid var(--pf-border); flex-shrink:0;"></span><div style="flex:1;"><div style="font-size:14px; font-weight:800;">Text / Foreground</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">--foreground</div></div><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">{{ hexText }}</span></div>
+          <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid var(--pf-border);"><span style="width:34px; height:34px; border-radius:9px; background:var(--pf-muted); flex-shrink:0;"></span><div style="flex:1;"><div style="font-size:14px; font-weight:800;">Muted foreground</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">--muted-foreground</div></div><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">{{ hexMuted }}</span></div>
+          <div style="display:flex; align-items:center; gap:14px; padding:14px 16px;"><span style="width:34px; height:34px; border-radius:9px; background:var(--pf-s2); border:1px solid var(--pf-border); flex-shrink:0;"></span><div style="flex:1;"><div style="font-size:14px; font-weight:800;">Secondary surface (s2)</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">chips, trilhos, hovers</div></div><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">{{ hexS2 }}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TYPOGRAPHY ===== -->
+    <section style="padding:48px 0 8px 0;">
+      <h2 style="font-size:30px; font-weight:900; letter-spacing:-0.02em; margin:12px 0 0 0;">Tipografia</h2>
+      <p style="font-size:15px; color:var(--pf-muted); margin:10px 0 0 0; font-weight:500; max-width:58ch;"><span style="font-weight:800; color:var(--pf-text);">Nunito</span> para tudo — arredondada, amistosa, legível em números. <span style="font-family:'JetBrains Mono',monospace; color:var(--pf-text);">JetBrains Mono</span> em todo dado financeiro: saldos, valores, datas, percentuais.</p>
+    </section>
+
+    <div style="margin-top:28px; border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:16px; padding:22px 24px; border-bottom:1px solid var(--pf-border);">
+        <div style="font-size:52px; font-weight:900; letter-spacing:-0.03em; line-height:1;">Aa</div>
+        <div style="text-align:right;"><div style="font-size:16px; font-weight:800;">Nunito</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">400 · 500 · 600 · 700 · 800 · 900</div></div>
+      </div>
+      <div style="padding:8px 24px;">
+        <div style="display:flex; align-items:baseline; gap:20px; padding:14px 0; border-bottom:1px solid var(--pf-border);"><span style="width:120px; font-size:12px; color:var(--pf-muted); font-weight:700; flex-shrink:0;">Display / 900</span><span style="font-size:34px; font-weight:900; letter-spacing:-0.02em;">R$ 42.980,00</span></div>
+        <div style="display:flex; align-items:baseline; gap:20px; padding:14px 0; border-bottom:1px solid var(--pf-border);"><span style="width:120px; font-size:12px; color:var(--pf-muted); font-weight:700; flex-shrink:0;">Título / 800</span><span style="font-size:20px; font-weight:800;">Resumo do mês</span></div>
+        <div style="display:flex; align-items:baseline; gap:20px; padding:14px 0; border-bottom:1px solid var(--pf-border);"><span style="width:120px; font-size:12px; color:var(--pf-muted); font-weight:700; flex-shrink:0;">Eyebrow / 800</span><span style="font-size:12px; font-weight:800; color:var(--pf-accent); letter-spacing:0.16em; text-transform:uppercase;">Contas a pagar</span></div>
+        <div style="display:flex; align-items:baseline; gap:20px; padding:14px 0; border-bottom:1px solid var(--pf-border);"><span style="width:120px; font-size:12px; color:var(--pf-muted); font-weight:700; flex-shrink:0;">Corpo / 500</span><span style="font-size:16px; font-weight:500; color:var(--pf-muted);">Você gastou 68% do orçamento de alimentação.</span></div>
+        <div style="display:flex; align-items:baseline; gap:20px; padding:14px 0;"><span style="width:120px; font-size:12px; color:var(--pf-muted); font-weight:700; flex-shrink:0;">Dados / Mono</span><span style="font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:500;">- R$ 1.248,90 · 06/07/2026 · +12,4%</span></div>
+      </div>
+    </div>
+
+    <!-- ===== ICONOGRAPHY ===== -->
+    <section style="padding:48px 0 8px 0;">
+      <h2 style="font-size:30px; font-weight:900; letter-spacing:-0.02em; margin:12px 0 0 0;">Iconografia</h2>
+      <p style="font-size:15px; color:var(--pf-muted); margin:10px 0 0 0; font-weight:500; max-width:58ch;"><span style="color:var(--pf-text); font-weight:800;">lucide</span>, traço 2. Quadrado de ícone tint = <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--pf-text);">bg color-mix(cor 16%)</span> + ícone na cor <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--pf-text);">on-&lt;cor&gt;</span>. Cada categoria tem seu par cor + ícone.</p>
+    </section>
+
+    <div style="margin-top:28px; display:grid; grid-template-columns:repeat(6,1fr); gap:12px;">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 8px; border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-surface);">
+        <div style="width:44px; height:44px; border-radius:11px; background:color-mix(in srgb, var(--pf-success) 16%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg></div>
+        <span style="font-size:12px; font-weight:700; color:var(--pf-muted);">Salário</span>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 8px; border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-surface);">
+        <div style="width:44px; height:44px; border-radius:11px; background:color-mix(in srgb, var(--pf-accent) 16%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg></div>
+        <span style="font-size:12px; font-weight:700; color:var(--pf-muted);">Mercado</span>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 8px; border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-surface);">
+        <div style="width:44px; height:44px; border-radius:11px; background:color-mix(in srgb, var(--pf-primary) 18%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path><circle cx="7" cy="17" r="2"></circle><path d="M9 17h6"></path><circle cx="17" cy="17" r="2"></circle></svg></div>
+        <span style="font-size:12px; font-weight:700; color:var(--pf-muted);">Transporte</span>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 8px; border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-surface);">
+        <div style="width:44px; height:44px; border-radius:11px; background:color-mix(in srgb, var(--pf-warning) 16%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></div>
+        <span style="font-size:12px; font-weight:700; color:var(--pf-muted);">Moradia</span>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 8px; border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-surface);">
+        <div style="width:44px; height:44px; border-radius:11px; background:color-mix(in srgb, var(--pf-danger) 16%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg></div>
+        <span style="font-size:12px; font-weight:700; color:var(--pf-muted);">Saúde</span>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 8px; border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-surface);">
+        <div style="width:44px; height:44px; border-radius:11px; background:color-mix(in srgb, var(--pf-on-primary) 18%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg></div>
+        <span style="font-size:12px; font-weight:700; color:var(--pf-muted);">Lazer</span>
+      </div>
+    </div>
+
+    <!-- ===== COMPONENTS ===== -->
+    <div id="components" style="height:1px; background:var(--pf-border); margin-top:56px;"></div>
+
+    <section style="padding:56px 0 8px 0;">
+      <span style="font-size:12px; font-weight:800; color:var(--pf-accent); letter-spacing:0.16em; text-transform:uppercase;">02 — Componentes base</span>
+      <h2 style="font-size:30px; font-weight:900; letter-spacing:-0.02em; margin:12px 0 0 0;">Blocos de construção</h2>
+      <p style="font-size:15px; color:var(--pf-muted); margin:10px 0 0 0; font-weight:500; max-width:58ch;">Azul = confiança e estrutura. Laranja = a ação principal (nova transação, pagar conta, transferir). Verde/vermelho só para o fluxo de dinheiro.</p>
+    </section>
+
+    <!-- Buttons -->
+    <div style="margin-top:28px; border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+      <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Botões</div>
+      <div style="padding:24px; display:flex; flex-direction:column; gap:20px;">
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:12px;">
+          <button style="display:inline-flex; align-items:center; gap:8px; height:42px; padding:0 18px; border-radius:10px; border:none; background:var(--pf-accent); color:#fff; font-family:'Nunito',sans-serif; font-weight:800; font-size:14px; cursor:pointer; box-shadow:0 6px 16px color-mix(in srgb, var(--pf-accent) 40%, transparent);" style-hover="filter:brightness(1.06)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"></path></svg>Nova transação</button>
+          <button style="display:inline-flex; align-items:center; gap:8px; height:42px; padding:0 18px; border-radius:10px; border:none; background:var(--pf-primary); color:#fff; font-family:'Nunito',sans-serif; font-weight:800; font-size:14px; cursor:pointer;" style-hover="filter:brightness(1.1)">Transferir</button>
+          <button style="display:inline-flex; align-items:center; height:42px; padding:0 18px; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-s2); color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:14px; cursor:pointer;" style-hover="border-color:var(--pf-muted)">Secundário</button>
+          <button style="display:inline-flex; align-items:center; height:42px; padding:0 18px; border-radius:10px; border:1px solid var(--pf-border); background:transparent; color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:14px; cursor:pointer;" style-hover="border-color:var(--pf-primary)">Outline</button>
+          <button style="display:inline-flex; align-items:center; height:42px; padding:0 14px; border-radius:10px; border:none; background:transparent; color:var(--pf-muted); font-family:'Nunito',sans-serif; font-weight:700; font-size:14px; cursor:pointer;" style-hover="background:var(--pf-s2)">Ghost</button>
+          <button style="display:inline-flex; align-items:center; height:42px; padding:0 18px; border-radius:10px; border:none; background:var(--pf-danger); color:#fff; font-family:'Nunito',sans-serif; font-weight:800; font-size:14px; cursor:pointer;" style-hover="filter:brightness(1.06)">Excluir</button>
+          <button style="display:inline-flex; align-items:center; height:42px; padding:0 6px; border:none; background:transparent; color:var(--pf-on-primary); font-family:'Nunito',sans-serif; font-weight:700; font-size:14px; cursor:pointer; text-decoration:underline; text-underline-offset:3px;">Ver extrato</button>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:12px;">
+          <button style="display:inline-flex; align-items:center; height:32px; padding:0 12px; border-radius:8px; border:1px solid var(--pf-border); background:var(--pf-s2); color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:13px; cursor:pointer;">Pequeno</button>
+          <button style="display:inline-flex; align-items:center; height:42px; padding:0 18px; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-s2); color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:14px; cursor:pointer;">Padrão</button>
+          <button style="display:inline-flex; align-items:center; height:48px; padding:0 24px; border-radius:12px; border:1px solid var(--pf-border); background:var(--pf-s2); color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:800; font-size:15px; cursor:pointer;">Grande</button>
+          <button style="width:42px; height:42px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-s2); color:var(--pf-text); cursor:pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+          <button onClick="{{ startBtnLoading }}" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; min-width:150px; height:42px; padding:0 18px; border-radius:10px; border:none; background:var(--pf-accent); color:#fff; font-family:'Nunito',sans-serif; font-weight:800; font-size:14px; cursor:pointer;">
+            <sc-if value="{{ btnLoading }}" hint-placeholder-val="{{ false }}"><span style="width:16px; height:16px; border-radius:99px; border:2px solid rgba(255,255,255,0.35); border-top-color:#fff; animation:pf-spin .7s linear infinite;"></span>Salvando…</sc-if>
+            <sc-if value="{{ btnIdle }}" hint-placeholder-val="{{ true }}">Clique para carregar</sc-if>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Badges -->
+    <div style="margin-top:20px; border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+      <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Badges &amp; status de conta</div>
+      <div style="padding:24px; display:flex; flex-wrap:wrap; gap:10px;">
+        <span style="display:inline-flex; align-items:center; gap:7px; height:26px; padding:0 12px; border-radius:999px; background:color-mix(in srgb, var(--pf-success) 15%, transparent); color:var(--pf-on-success); font-size:12px; font-weight:800;"><span style="width:6px; height:6px; border-radius:99px; background:currentColor;"></span>Pago</span>
+        <span style="display:inline-flex; align-items:center; gap:7px; height:26px; padding:0 12px; border-radius:999px; background:color-mix(in srgb, var(--pf-warning) 15%, transparent); color:var(--pf-on-warning); font-size:12px; font-weight:800;"><span style="width:6px; height:6px; border-radius:99px; background:currentColor;"></span>Pendente</span>
+        <span style="display:inline-flex; align-items:center; gap:7px; height:26px; padding:0 12px; border-radius:999px; background:color-mix(in srgb, var(--pf-primary) 18%, transparent); color:var(--pf-on-primary); font-size:12px; font-weight:800;"><span style="width:6px; height:6px; border-radius:99px; background:currentColor;"></span>Agendado</span>
+        <span style="display:inline-flex; align-items:center; gap:7px; height:26px; padding:0 12px; border-radius:999px; background:color-mix(in srgb, var(--pf-danger) 15%, transparent); color:var(--pf-on-danger); font-size:12px; font-weight:800;"><span style="width:6px; height:6px; border-radius:99px; background:currentColor;"></span>Atrasado</span>
+        <span style="display:inline-flex; align-items:center; height:26px; padding:0 12px; border-radius:999px; background:var(--pf-s2); color:var(--pf-muted); font-size:12px; font-weight:800;">Recorrente</span>
+        <span style="display:inline-flex; align-items:center; height:26px; padding:0 12px; border-radius:999px; border:1px solid var(--pf-border); color:var(--pf-text); font-size:12px; font-weight:800;">Outline</span>
+        <span style="display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 12px; border-radius:999px; background:color-mix(in srgb, var(--pf-accent) 15%, transparent); color:var(--pf-on-accent); font-size:12px; font-weight:800;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>Fatura aberta</span>
+      </div>
+    </div>
+
+    <!-- Inputs & Select -->
+    <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Inputs</div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:18px;">
+          <div>
+            <label style="display:block; font-size:13px; font-weight:700; margin-bottom:8px;">Descrição</label>
+            <input value="Supermercado Pão de Açúcar" style="width:100%; height:44px; padding:0 14px; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-input); color:var(--pf-text); font-family:'Nunito',sans-serif; font-size:14px; font-weight:600; outline:none;" style-focus="border-color:var(--pf-primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--pf-primary) 26%, transparent)">
+          </div>
+          <div>
+            <label style="display:block; font-size:13px; font-weight:700; margin-bottom:8px;">Valor</label>
+            <div style="display:flex; align-items:center; height:44px; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-input); overflow:hidden;" style-focus-within="border-color:var(--pf-primary)">
+              <span style="padding:0 12px; font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--pf-muted); border-right:1px solid var(--pf-border); align-self:stretch; display:flex; align-items:center;">R$</span>
+              <input value="1.248,90" style="flex:1; height:100%; padding:0 14px; border:none; background:transparent; color:var(--pf-text); font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:500; outline:none;">
+            </div>
+          </div>
+          <div>
+            <label style="display:block; font-size:13px; font-weight:700; margin-bottom:8px;">Observação</label>
+            <textarea rows="3" placeholder="Adicione uma nota…" style="width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-input); color:var(--pf-text); font-family:'Nunito',sans-serif; font-size:14px; font-weight:600; outline:none; resize:none;" style-focus="border-color:var(--pf-primary)"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Select com busca (combobox)</div>
+        <div style="padding:24px;">
+          <label style="display:block; font-size:13px; font-weight:700; margin-bottom:8px;">Categoria</label>
+          <div style="position:relative;">
+            <button onClick="{{ toggleSel }}" style="{{ selTrigger }}">
+              <span>{{ selValue }}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pf-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+            </button>
+            <sc-if value="{{ selOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute; top:52px; left:0; right:0; z-index:30; border-radius:12px; border:1px solid var(--pf-border); background:var(--pf-elevated); box-shadow:0 24px 60px rgba(0,0,0,0.5); overflow:hidden; animation:pf-fadein .12s ease;">
+                <div style="padding:10px; border-bottom:1px solid var(--pf-border);">
+                  <input value="{{ selQuery }}" onInput="{{ onSelQuery }}" placeholder="Buscar categoria…" autofocus style="width:100%; height:38px; padding:0 12px; border-radius:8px; border:1px solid var(--pf-border); background:var(--pf-input); color:var(--pf-text); font-family:'Nunito',sans-serif; font-size:14px; font-weight:600; outline:none;">
+                </div>
+                <div style="max-height:220px; overflow:auto; padding:6px;">
+                  <sc-for list="{{ filtered }}" as="opt" hint-placeholder-count="5">
+                    <button onClick="{{ opt.pick }}" style="{{ opt.style }}" style-hover="background:var(--pf-s2)">
+                      <span>{{ opt.name }}</span>
+                      <sc-if value="{{ opt.selected }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pf-accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+                    </button>
+                  </sc-for>
+                  <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div style="padding:16px; text-align:center; font-size:13px; color:var(--pf-muted); font-weight:600;">Nenhuma categoria encontrada</div></sc-if>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+          <div style="margin-top:22px; display:flex; flex-direction:column; gap:14px;">
+            <label style="display:flex; align-items:center; gap:12px; cursor:pointer;">
+              <span style="{{ trackStyle }}" onClick="{{ toggle }}"><span style="{{ thumbStyle }}"></span></span>
+              <span style="font-size:14px; font-weight:700;">Marcar como recorrente</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Segmented / Tabs / Chips / Selection controls -->
+    <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Segmented control · período</div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:20px;">
+          <div style="display:inline-flex; align-self:flex-start; padding:4px; gap:3px; border-radius:12px; background:var(--pf-bg); border:1px solid var(--pf-border);">
+            <button onClick="{{ setMes }}" style="{{ segMes }}">Mês</button>
+            <button onClick="{{ setTri }}" style="{{ segTri }}">Trimestre</button>
+            <button onClick="{{ setAno }}" style="{{ segAno }}">Ano</button>
+          </div>
+          <div>
+            <div style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase; margin-bottom:12px;">Checkbox / Radio</div>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;"><span style="width:20px; height:20px; border-radius:6px; background:var(--pf-primary); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span><span style="font-size:14px; font-weight:600;">Incluir nas metas</span></label>
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;"><span style="width:20px; height:20px; border-radius:6px; border:1.5px solid var(--pf-border); flex-shrink:0;"></span><span style="font-size:14px; font-weight:600; color:var(--pf-muted);">Ignorar no relatório</span></label>
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;"><span style="width:20px; height:20px; border-radius:99px; border:2px solid var(--pf-primary); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><span style="width:9px; height:9px; border-radius:99px; background:var(--pf-primary);"></span></span><span style="font-size:14px; font-weight:600;">Débito</span></label>
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;"><span style="width:20px; height:20px; border-radius:99px; border:2px solid var(--pf-border); flex-shrink:0;"></span><span style="font-size:14px; font-weight:600; color:var(--pf-muted);">Crédito</span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Tabs de conteúdo &amp; chips</div>
+        <div style="padding:24px 24px 4px 24px;">
+          <div style="display:flex; gap:4px; border-bottom:1px solid var(--pf-border);">
+            <button onClick="{{ setTxTab }}" style="{{ tabTx }}">Transações</button>
+            <button onClick="{{ setBudTab }}" style="{{ tabBud }}">Orçamento</button>
+            <button onClick="{{ setGoalTab }}" style="{{ tabGoal }}">Metas</button>
+          </div>
+        </div>
+        <div style="padding:20px 24px 24px 24px;">
+          <div style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase; margin-bottom:12px;">Chips de categoria (filtro)</div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <button style="display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 14px; border-radius:10px; border:1px solid var(--pf-primary); background:color-mix(in srgb, var(--pf-primary) 14%, transparent); color:var(--pf-text); font-family:'Nunito',sans-serif; font-size:13px; font-weight:700; cursor:pointer;"><span style="width:8px; height:8px; border-radius:99px; background:var(--pf-on-primary);"></span>Todas<span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">128</span></button>
+            <button style="display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 14px; border-radius:10px; border:1px solid var(--pf-border); background:transparent; color:var(--pf-muted); font-family:'Nunito',sans-serif; font-size:13px; font-weight:700; cursor:pointer;" style-hover="border-color:var(--pf-muted)"><span style="width:8px; height:8px; border-radius:99px; background:var(--pf-on-accent);"></span>Mercado<span style="font-family:'JetBrains Mono',monospace; font-size:11px;">32</span></button>
+            <button style="display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 14px; border-radius:10px; border:1px solid var(--pf-border); background:transparent; color:var(--pf-muted); font-family:'Nunito',sans-serif; font-size:13px; font-weight:700; cursor:pointer;" style-hover="border-color:var(--pf-muted)"><span style="width:8px; height:8px; border-radius:99px; background:var(--pf-on-primary);"></span>Transporte<span style="font-family:'JetBrains Mono',monospace; font-size:11px;">18</span></button>
+            <button style="display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 14px; border-radius:10px; border:1px solid var(--pf-border); background:transparent; color:var(--pf-muted); font-family:'Nunito',sans-serif; font-size:13px; font-weight:700; cursor:pointer;" style-hover="border-color:var(--pf-muted)"><span style="width:8px; height:8px; border-radius:99px; background:var(--pf-on-warning);"></span>Moradia<span style="font-family:'JetBrains Mono',monospace; font-size:11px;">9</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlays: Modal / Drawer / Dropdown / Toasts -->
+    <div style="margin-top:20px; border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+      <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Overlays, menu &amp; toasts</div>
+      <div style="padding:24px; display:flex; flex-direction:column; gap:24px;">
+        <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+          <button onClick="{{ openModal }}" style="display:inline-flex; align-items:center; height:42px; padding:0 18px; border-radius:10px; border:none; background:var(--pf-accent); color:#fff; font-family:'Nunito',sans-serif; font-weight:800; font-size:14px; cursor:pointer;">Abrir modal</button>
+          <button onClick="{{ openDrawer }}" style="display:inline-flex; align-items:center; height:42px; padding:0 18px; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-s2); color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:14px; cursor:pointer;">Abrir drawer</button>
+          <div style="position:relative;">
+            <button onClick="{{ toggleMenu }}" style="display:inline-flex; align-items:center; gap:8px; height:42px; padding:0 16px; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-s2); color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:14px; cursor:pointer;">Menu<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--pf-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+            <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute; top:48px; left:0; z-index:30; min-width:200px; border-radius:12px; border:1px solid var(--pf-border); background:var(--pf-elevated); box-shadow:0 24px 60px rgba(0,0,0,0.5); overflow:hidden; padding:6px; animation:pf-fadein .12s ease;">
+                <button style="display:flex; align-items:center; gap:10px; width:100%; padding:10px 10px; border:none; background:transparent; color:var(--pf-text); font-family:'Nunito',sans-serif; font-size:14px; font-weight:600; border-radius:8px; cursor:pointer; text-align:left;" style-hover="background:var(--pf-s2)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pf-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Editar</button>
+                <button style="display:flex; align-items:center; gap:10px; width:100%; padding:10px 10px; border:none; background:transparent; color:var(--pf-text); font-family:'Nunito',sans-serif; font-size:14px; font-weight:600; border-radius:8px; cursor:pointer; text-align:left;" style-hover="background:var(--pf-s2)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pf-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>Duplicar</button>
+                <div style="height:1px; background:var(--pf-border); margin:6px 4px;"></div>
+                <button style="display:flex; align-items:center; gap:10px; width:100%; padding:10px 10px; border:none; background:transparent; color:var(--pf-on-danger); font-family:'Nunito',sans-serif; font-size:14px; font-weight:700; border-radius:8px; cursor:pointer; text-align:left;" style-hover="background:color-mix(in srgb, var(--pf-danger) 14%, transparent)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>Excluir</button>
+              </div>
+            </sc-if>
+          </div>
+          <button onClick="{{ showPageLoading }}" style="display:inline-flex; align-items:center; height:42px; padding:0 18px; border-radius:10px; border:1px solid var(--pf-border); background:transparent; color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:14px; cursor:pointer;">Loading de página</button>
+        </div>
+
+        <!-- toasts -->
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
+          <div style="display:flex; gap:12px; padding:14px; border-radius:12px; border:1px solid var(--pf-border); background:var(--pf-elevated); box-shadow:var(--pf-shadow);"><div style="width:36px; height:36px; border-radius:10px; background:color-mix(in srgb, var(--pf-success) 16%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-success)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></div><div style="flex:1;"><div style="font-size:14px; font-weight:800;">Pagamento registrado</div><div style="font-size:12.5px; color:var(--pf-muted); font-weight:500; margin-top:2px;">Conta de luz · R$ 189,40</div></div></div>
+          <div style="display:flex; gap:12px; padding:14px; border-radius:12px; border:1px solid var(--pf-border); background:var(--pf-elevated); box-shadow:var(--pf-shadow);"><div style="width:36px; height:36px; border-radius:10px; background:color-mix(in srgb, var(--pf-danger) 16%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-danger)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg></div><div style="flex:1;"><div style="font-size:14px; font-weight:800;">Orçamento estourado</div><div style="font-size:12.5px; color:var(--pf-muted); font-weight:500; margin-top:2px;">Lazer passou do limite</div></div></div>
+          <div style="display:flex; gap:12px; padding:14px; border-radius:12px; border:1px solid var(--pf-border); background:var(--pf-elevated); box-shadow:var(--pf-shadow);"><div style="width:36px; height:36px; border-radius:10px; background:color-mix(in srgb, var(--pf-primary) 18%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-primary)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16v-4M12 8h.01"></path><circle cx="12" cy="12" r="10"></circle></svg></div><div style="flex:1;"><div style="font-size:14px; font-weight:800;">Fatura fecha em 3 dias</div><div style="font-size:12.5px; color:var(--pf-muted); font-weight:500; margin-top:2px;">Cartão Nubank</div></div></div>
+        </div>
+
+        <!-- skeleton + spinners -->
+        <div style="display:grid; grid-template-columns:2fr 1fr; gap:20px;">
+          <div>
+            <div style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase; margin-bottom:12px;">Skeleton</div>
+            <div style="display:flex; align-items:center; gap:14px; padding:14px; border-radius:12px; border:1px solid var(--pf-border); background:var(--pf-bg);">
+              <div style="width:40px; height:40px; border-radius:11px; background:var(--pf-s2); animation:pf-pulse 1.4s ease-in-out infinite;"></div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:8px;"><div style="height:12px; width:60%; border-radius:6px; background:var(--pf-s2); animation:pf-pulse 1.4s ease-in-out infinite;"></div><div style="height:10px; width:40%; border-radius:6px; background:var(--pf-s2); animation:pf-pulse 1.4s ease-in-out infinite;"></div></div>
+              <div style="width:70px; height:14px; border-radius:6px; background:var(--pf-s2); animation:pf-pulse 1.4s ease-in-out infinite;"></div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase; margin-bottom:12px;">Spinners</div>
+            <div style="display:flex; align-items:center; gap:16px; padding:16px; border-radius:12px; border:1px solid var(--pf-border); background:var(--pf-bg);">
+              <span style="width:18px; height:18px; border-radius:99px; border:2px solid var(--pf-s2); border-top-color:var(--pf-primary); animation:pf-spin .7s linear infinite;"></span>
+              <span style="width:26px; height:26px; border-radius:99px; border:3px solid var(--pf-s2); border-top-color:var(--pf-accent); animation:pf-spin .7s linear infinite;"></span>
+              <span style="width:34px; height:34px; border-radius:99px; border:3px solid var(--pf-s2); border-top-color:var(--pf-primary); animation:pf-spin .7s linear infinite;"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== FINANCE COMPONENTS ===== -->
+    <div id="finance" style="height:1px; background:var(--pf-border); margin-top:56px;"></div>
+
+    <section style="padding:56px 0 8px 0;">
+      <span style="font-size:12px; font-weight:800; color:var(--pf-accent); letter-spacing:0.16em; text-transform:uppercase;">03 — Componentes do dashboard</span>
+      <h2 style="font-size:30px; font-weight:900; letter-spacing:-0.02em; margin:12px 0 0 0;">Blocos financeiros</h2>
+      <p style="font-size:15px; color:var(--pf-muted); margin:10px 0 0 0; font-weight:500; max-width:58ch;">Tudo que um dashboard de finanças pessoais precisa padronizar: KPIs, transações, contas, orçamento, metas, gráficos, calendário de contas e fatura.</p>
+    </section>
+
+    <!-- KPI stat cards -->
+    <div style="margin-top:28px;">
+      <h3 style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.1em; text-transform:uppercase; margin:0 0 14px 0;">Cards de KPI</h3>
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px;">
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); padding:20px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:12.5px; font-weight:700; color:var(--pf-muted);">Saldo total</span><div style="width:34px; height:34px; border-radius:10px; background:color-mix(in srgb, var(--pf-primary) 18%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path></svg></div></div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:600; margin-top:14px; letter-spacing:-0.02em;">R$ 42.980</div>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12.5px; font-weight:700; color:var(--pf-on-success);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>+12,4% <span style="color:var(--pf-muted); font-weight:600;">vs. mês anterior</span></div>
+        </div>
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); padding:20px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:12.5px; font-weight:700; color:var(--pf-muted);">Receitas</span><div style="width:34px; height:34px; border-radius:10px; background:color-mix(in srgb, var(--pf-success) 16%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7 7 17"></path><path d="M17 17H7V7"></path></svg></div></div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:600; margin-top:14px; letter-spacing:-0.02em; color:var(--pf-on-success);">R$ 8.640</div>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12.5px; font-weight:700; color:var(--pf-on-success);">+3,1% <span style="color:var(--pf-muted); font-weight:600;">este mês</span></div>
+        </div>
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); padding:20px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:12.5px; font-weight:700; color:var(--pf-muted);">Despesas</span><div style="width:34px; height:34px; border-radius:10px; background:color-mix(in srgb, var(--pf-danger) 16%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"></path><path d="M7 7h10v10"></path></svg></div></div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:600; margin-top:14px; letter-spacing:-0.02em; color:var(--pf-on-danger);">R$ 5.212</div>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12.5px; font-weight:700; color:var(--pf-on-danger);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"></polyline><polyline points="16 17 22 17 22 11"></polyline></svg>+8,0% <span style="color:var(--pf-muted); font-weight:600;">este mês</span></div>
+        </div>
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); padding:20px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:12.5px; font-weight:700; color:var(--pf-muted);">Economia</span><div style="width:34px; height:34px; border-radius:10px; background:color-mix(in srgb, var(--pf-accent) 16%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg></div></div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:600; margin-top:14px; letter-spacing:-0.02em; color:var(--pf-on-accent);">R$ 3.428</div>
+          <div style="margin-top:10px; height:6px; border-radius:99px; background:var(--pf-s2); overflow:hidden;"><div style="width:40%; height:100%; border-radius:99px; background:var(--pf-accent);"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transactions list + Table -->
+    <div style="margin-top:24px; display:grid; grid-template-columns:1fr 1.15fr; gap:20px; align-items:start;">
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:16px 20px; border-bottom:1px solid var(--pf-border); display:flex; align-items:center; justify-content:space-between;"><span style="font-size:15px; font-weight:800;">Transações recentes</span><a href="#finance" style="font-size:12.5px; font-weight:700; color:var(--pf-on-primary); text-decoration:none;">Ver tudo</a></div>
+        <div>
+          <div style="display:flex; align-items:center; gap:14px; padding:14px 20px; border-bottom:1px solid var(--pf-border);" style-hover="background:var(--pf-bg)"><div style="width:40px; height:40px; border-radius:11px; background:color-mix(in srgb, var(--pf-success) 16%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg></div><div style="flex:1; min-width:0;"><div style="font-size:14px; font-weight:800;">Salário</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">Empresa XYZ · Conta corrente</div></div><div style="text-align:right; flex-shrink:0;"><div style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:600; color:var(--pf-on-success);">+ R$ 8.400,00</div><div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">05/07</div></div></div>
+          <div style="display:flex; align-items:center; gap:14px; padding:14px 20px; border-bottom:1px solid var(--pf-border);" style-hover="background:var(--pf-bg)"><div style="width:40px; height:40px; border-radius:11px; background:color-mix(in srgb, var(--pf-accent) 16%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg></div><div style="flex:1; min-width:0;"><div style="font-size:14px; font-weight:800;">Supermercado</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">Pão de Açúcar · Cartão de crédito</div></div><div style="text-align:right; flex-shrink:0;"><div style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:600; color:var(--pf-on-danger);">- R$ 348,90</div><div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">04/07</div></div></div>
+          <div style="display:flex; align-items:center; gap:14px; padding:14px 20px; border-bottom:1px solid var(--pf-border);" style-hover="background:var(--pf-bg)"><div style="width:40px; height:40px; border-radius:11px; background:color-mix(in srgb, var(--pf-primary) 18%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path><circle cx="7" cy="17" r="2"></circle><path d="M9 17h6"></path><circle cx="17" cy="17" r="2"></circle></svg></div><div style="flex:1; min-width:0;"><div style="font-size:14px; font-weight:800;">Uber</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">Transporte · Débito</div></div><div style="text-align:right; flex-shrink:0;"><div style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:600; color:var(--pf-on-danger);">- R$ 27,50</div><div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">04/07</div></div></div>
+          <div style="display:flex; align-items:center; gap:14px; padding:14px 20px;" style-hover="background:var(--pf-bg)"><div style="width:40px; height:40px; border-radius:11px; background:color-mix(in srgb, var(--pf-warning) 16%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></div><div style="flex:1; min-width:0;"><div style="font-size:14px; font-weight:800;">Aluguel</div><div style="font-size:12px; color:var(--pf-muted); font-weight:600;">Moradia · Transferência</div></div><div style="text-align:right; flex-shrink:0;"><div style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:600; color:var(--pf-on-danger);">- R$ 2.100,00</div><div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">01/07</div></div></div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:16px 20px; border-bottom:1px solid var(--pf-border); font-size:15px; font-weight:800;">Extrato completo</div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead><tr style="background:var(--pf-bg);"><th style="text-align:left; padding:11px 16px; font-size:11px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; letter-spacing:0.05em;">Descrição</th><th style="text-align:left; padding:11px 16px; font-size:11px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; letter-spacing:0.05em;">Status</th><th style="text-align:right; padding:11px 16px; font-size:11px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; letter-spacing:0.05em;">Valor</th><th style="text-align:right; padding:11px 16px; font-size:11px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; letter-spacing:0.05em;">Ações</th></tr></thead>
+            <tbody>
+              <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 16px;"><div style="font-size:13.5px; font-weight:800;">Netflix</div><div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">assinatura · 02/07</div></td><td style="padding:12px 16px;"><span style="display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border-radius:999px; background:color-mix(in srgb, var(--pf-success) 15%, transparent); color:var(--pf-on-success); font-size:11.5px; font-weight:800;"><span style="width:5px; height:5px; border-radius:99px; background:currentColor;"></span>Pago</span></td><td style="padding:12px 16px; text-align:right; font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:600; color:var(--pf-on-danger);">- R$ 55,90</td><td style="padding:12px 16px;"><div style="display:flex; gap:6px; justify-content:flex-end;"><button style="width:30px; height:30px; border-radius:8px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);" style-hover="border-color:var(--pf-primary); color:var(--pf-text)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button style="width:30px; height:30px; border-radius:8px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);" style-hover="border-color:var(--pf-primary); color:var(--pf-text)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button></div></td></tr>
+              <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 16px;"><div style="font-size:13.5px; font-weight:800;">Conta de luz</div><div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">boleto · vence 10/07</div></td><td style="padding:12px 16px;"><span style="display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border-radius:999px; background:color-mix(in srgb, var(--pf-warning) 15%, transparent); color:var(--pf-on-warning); font-size:11.5px; font-weight:800;"><span style="width:5px; height:5px; border-radius:99px; background:currentColor;"></span>Pendente</span></td><td style="padding:12px 16px; text-align:right; font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:600; color:var(--pf-on-danger);">- R$ 189,40</td><td style="padding:12px 16px;"><div style="display:flex; gap:6px; justify-content:flex-end;"><button style="width:30px; height:30px; border-radius:8px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);" style-hover="border-color:var(--pf-primary); color:var(--pf-text)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button style="width:30px; height:30px; border-radius:8px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);" style-hover="border-color:var(--pf-danger); color:var(--pf-on-danger)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></div></td></tr>
+              <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 16px;"><div style="font-size:13.5px; font-weight:800;">Academia</div><div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">débito automático · 15/07</div></td><td style="padding:12px 16px;"><span style="display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border-radius:999px; background:color-mix(in srgb, var(--pf-primary) 18%, transparent); color:var(--pf-on-primary); font-size:11.5px; font-weight:800;"><span style="width:5px; height:5px; border-radius:99px; background:currentColor;"></span>Agendado</span></td><td style="padding:12px 16px; text-align:right; font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:600; color:var(--pf-on-danger);">- R$ 119,00</td><td style="padding:12px 16px;"><div style="display:flex; gap:6px; justify-content:flex-end;"><button style="width:30px; height:30px; border-radius:8px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);" style-hover="border-color:var(--pf-primary); color:var(--pf-text)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button style="width:30px; height:30px; border-radius:8px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);" style-hover="border-color:var(--pf-primary); color:var(--pf-text)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Account cards + credit card -->
+    <div style="margin-top:24px;">
+      <h3 style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.1em; text-transform:uppercase; margin:0 0 14px 0;">Contas &amp; cartão de crédito</h3>
+      <div style="display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:16px;">
+        <!-- credit card visual -->
+        <div style="border-radius:18px; padding:22px; background:linear-gradient(135deg, var(--pf-primary), color-mix(in srgb, var(--pf-primary), #000 55%)); position:relative; overflow:hidden; box-shadow:0 12px 30px color-mix(in srgb, var(--pf-primary) 40%, transparent); min-height:180px; display:flex; flex-direction:column; justify-content:space-between;">
+          <div style="position:absolute; top:-40px; right:-30px; width:160px; height:160px; border-radius:99px; background:color-mix(in srgb, var(--pf-accent) 40%, transparent); filter:blur(10px); opacity:0.35;"></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; position:relative;"><span style="font-size:13px; font-weight:800; color:#fff; letter-spacing:0.02em;">Cartão principal</span><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--pf-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg></div>
+          <div style="position:relative;"><div style="width:38px; height:27px; border-radius:6px; background:linear-gradient(135deg, #F5C542, #C99A22); margin-bottom:14px;"></div><div style="font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:500; color:#fff; letter-spacing:0.12em;">•••• •••• •••• 4829</div></div>
+          <div style="display:flex; align-items:flex-end; justify-content:space-between; position:relative;"><div><div style="font-size:10px; color:rgba(255,255,255,0.6); font-weight:700; text-transform:uppercase; letter-spacing:0.1em;">Titular</div><div style="font-size:13px; font-weight:700; color:#fff;">Ana Ribeiro</div></div><div style="text-align:right;"><div style="font-size:10px; color:rgba(255,255,255,0.6); font-weight:700; text-transform:uppercase; letter-spacing:0.1em;">Fatura</div><div style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:600; color:#fff;">R$ 2.847</div></div></div>
+        </div>
+        <!-- account rows -->
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:12px; padding:16px; border-bottom:1px solid var(--pf-border);"><div style="width:38px; height:38px; border-radius:10px; background:color-mix(in srgb, var(--pf-primary) 18%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path></svg></div><div style="flex:1;"><div style="font-size:13.5px; font-weight:800;">Conta corrente</div><div style="font-size:11.5px; color:var(--pf-muted); font-weight:600;">Nubank</div></div><div style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:600;">R$ 12.480</div></div>
+          <div style="display:flex; align-items:center; gap:12px; padding:16px; border-bottom:1px solid var(--pf-border);"><div style="width:38px; height:38px; border-radius:10px; background:color-mix(in srgb, var(--pf-success) 16%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg></div><div style="flex:1;"><div style="font-size:13.5px; font-weight:800;">Poupança</div><div style="font-size:11.5px; color:var(--pf-muted); font-weight:600;">Reserva</div></div><div style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:600;">R$ 28.900</div></div>
+          <div style="display:flex; align-items:center; gap:12px; padding:16px;"><div style="width:38px; height:38px; border-radius:10px; background:color-mix(in srgb, var(--pf-accent) 16%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" x2="22" y1="10" y2="10"></line></svg></div><div style="flex:1;"><div style="font-size:13.5px; font-weight:800;">Cartão de crédito</div><div style="font-size:11.5px; color:var(--pf-muted); font-weight:600;">Fatura aberta</div></div><div style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:600; color:var(--pf-on-danger);">- R$ 2.847</div></div>
+        </div>
+        <!-- invoice / statement -->
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden; display:flex; flex-direction:column;">
+          <div style="padding:14px 16px; border-bottom:1px solid var(--pf-border); display:flex; align-items:center; justify-content:space-between;"><span style="font-size:14px; font-weight:800;">Fatura de julho</span><span style="display:inline-flex; align-items:center; height:22px; padding:0 9px; border-radius:999px; background:color-mix(in srgb, var(--pf-warning) 15%, transparent); color:var(--pf-on-warning); font-size:11px; font-weight:800;">Aberta</span></div>
+          <div style="padding:8px 16px; flex:1;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--pf-border);"><span style="font-size:13px; font-weight:600; color:var(--pf-muted);">Mercado</span><span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:500;">R$ 1.240,00</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--pf-border);"><span style="font-size:13px; font-weight:600; color:var(--pf-muted);">Restaurantes</span><span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:500;">R$ 680,00</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 0;"><span style="font-size:13px; font-weight:600; color:var(--pf-muted);">Assinaturas</span><span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:500;">R$ 174,90</span></div>
+          </div>
+          <div style="padding:14px 16px; border-top:1px solid var(--pf-border); background:var(--pf-bg); display:flex; align-items:center; justify-content:space-between;"><span style="font-size:13px; font-weight:800;">Total</span><span style="font-family:'JetBrains Mono',monospace; font-size:17px; font-weight:600; color:var(--pf-on-accent);">R$ 2.847,00</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Budget progress + Savings goals -->
+    <div style="margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:16px 20px; border-bottom:1px solid var(--pf-border); font-size:15px; font-weight:800;">Orçamento por categoria</div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:20px;">
+          <div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;"><div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:99px; background:var(--pf-on-accent);"></span><span style="font-size:13.5px; font-weight:800;">Mercado</span></div><span style="font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-muted);">R$ 1.240 / 1.500</span></div>
+            <div style="height:8px; border-radius:99px; background:var(--pf-s2); overflow:hidden;"><div style="width:83%; height:100%; border-radius:99px; background:var(--pf-accent);"></div></div>
+          </div>
+          <div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;"><div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:99px; background:var(--pf-on-primary);"></span><span style="font-size:13.5px; font-weight:800;">Transporte</span></div><span style="font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-muted);">R$ 320 / 600</span></div>
+            <div style="height:8px; border-radius:99px; background:var(--pf-s2); overflow:hidden;"><div style="width:53%; height:100%; border-radius:99px; background:var(--pf-primary);"></div></div>
+          </div>
+          <div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;"><div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:99px; background:var(--pf-on-danger);"></span><span style="font-size:13.5px; font-weight:800;">Lazer</span><span style="display:inline-flex; align-items:center; height:19px; padding:0 8px; border-radius:999px; background:color-mix(in srgb, var(--pf-danger) 15%, transparent); color:var(--pf-on-danger); font-size:10.5px; font-weight:800;">Estourou</span></div><span style="font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-on-danger);">R$ 520 / 400</span></div>
+            <div style="height:8px; border-radius:99px; background:var(--pf-s2); overflow:hidden;"><div style="width:100%; height:100%; border-radius:99px; background:var(--pf-danger);"></div></div>
+          </div>
+          <div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;"><div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:99px; background:var(--pf-on-success);"></span><span style="font-size:13.5px; font-weight:800;">Saúde</span></div><span style="font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-muted);">R$ 90 / 500</span></div>
+            <div style="height:8px; border-radius:99px; background:var(--pf-s2); overflow:hidden;"><div style="width:18%; height:100%; border-radius:99px; background:var(--pf-success);"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- savings goals -->
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:16px 20px; border-bottom:1px solid var(--pf-border); font-size:15px; font-weight:800;">Metas &amp; cofrinhos</div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:16px;">
+          <div style="display:flex; align-items:center; gap:16px; padding:14px; border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-bg);">
+            <div style="position:relative; width:56px; height:56px; flex-shrink:0;">
+              <svg width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="24" fill="none" stroke="var(--pf-s2)" stroke-width="6"></circle><circle cx="28" cy="28" r="24" fill="none" stroke="var(--pf-accent)" stroke-width="6" stroke-linecap="round" stroke-dasharray="150.8" stroke-dashoffset="45" transform="rotate(-90 28 28)"></circle></svg>
+              <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600;">70%</span>
+            </div>
+            <div style="flex:1;"><div style="font-size:14px; font-weight:800;">Viagem Europa</div><div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted); margin-top:2px;">R$ 10.500 <span style="color:var(--pf-muted);">/ 15.000</span></div></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px; padding:14px; border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-bg);">
+            <div style="position:relative; width:56px; height:56px; flex-shrink:0;">
+              <svg width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="24" fill="none" stroke="var(--pf-s2)" stroke-width="6"></circle><circle cx="28" cy="28" r="24" fill="none" stroke="var(--pf-primary)" stroke-width="6" stroke-linecap="round" stroke-dasharray="150.8" stroke-dashoffset="105" transform="rotate(-90 28 28)"></circle></svg>
+              <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600;">30%</span>
+            </div>
+            <div style="flex:1;"><div style="font-size:14px; font-weight:800;">Reserva de emergência</div><div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted); margin-top:2px;">R$ 9.000 <span style="color:var(--pf-muted);">/ 30.000</span></div></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px; padding:14px; border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-bg);">
+            <div style="position:relative; width:56px; height:56px; flex-shrink:0;">
+              <svg width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="24" fill="none" stroke="var(--pf-s2)" stroke-width="6"></circle><circle cx="28" cy="28" r="24" fill="none" stroke="var(--pf-success)" stroke-width="6" stroke-linecap="round" stroke-dasharray="150.8" stroke-dashoffset="15" transform="rotate(-90 28 28)"></circle></svg>
+              <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600;">90%</span>
+            </div>
+            <div style="flex:1;"><div style="font-size:14px; font-weight:800;">Notebook novo</div><div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted); margin-top:2px;">R$ 6.300 <span style="color:var(--pf-muted);">/ 7.000</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div style="margin-top:24px;">
+      <h3 style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.1em; text-transform:uppercase; margin:0 0 14px 0;">Gráficos</h3>
+      <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:20px;">
+        <!-- line chart -->
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+          <div style="padding:16px 20px; border-bottom:1px solid var(--pf-border); display:flex; align-items:center; justify-content:space-between;"><span style="font-size:15px; font-weight:800;">Fluxo de caixa</span><div style="display:flex; gap:14px; font-size:12px; font-weight:700;"><span style="display:inline-flex; align-items:center; gap:6px; color:var(--pf-muted);"><span style="width:10px; height:3px; border-radius:2px; background:var(--pf-success);"></span>Receitas</span><span style="display:inline-flex; align-items:center; gap:6px; color:var(--pf-muted);"><span style="width:10px; height:3px; border-radius:2px; background:var(--pf-danger);"></span>Despesas</span></div></div>
+          <div style="padding:20px;">
+            <svg width="100%" height="200" viewBox="0 0 520 200" preserveAspectRatio="none">
+              <line x1="0" y1="40" x2="520" y2="40" stroke="var(--pf-border)" stroke-width="1"></line>
+              <line x1="0" y1="90" x2="520" y2="90" stroke="var(--pf-border)" stroke-width="1"></line>
+              <line x1="0" y1="140" x2="520" y2="140" stroke="var(--pf-border)" stroke-width="1"></line>
+              <polyline points="10,120 95,90 180,100 265,55 350,70 435,35 510,45" fill="none" stroke="var(--pf-success)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+              <polyline points="10,150 95,140 180,155 265,120 350,135 435,110 510,125" fill="none" stroke="var(--pf-danger)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+            </svg>
+            <div style="display:flex; justify-content:space-between; margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);"><span>Jan</span><span>Fev</span><span>Mar</span><span>Abr</span><span>Mai</span><span>Jun</span><span>Jul</span></div>
+          </div>
+        </div>
+        <!-- donut -->
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+          <div style="padding:16px 20px; border-bottom:1px solid var(--pf-border); font-size:15px; font-weight:800;">Despesas por categoria</div>
+          <div style="padding:20px; display:flex; align-items:center; gap:20px;">
+            <div style="position:relative; width:130px; height:130px; flex-shrink:0;">
+              <svg width="130" height="130" viewBox="0 0 130 130">
+                <circle cx="65" cy="65" r="52" fill="none" stroke="var(--pf-accent)" stroke-width="20" stroke-dasharray="130.7 196" transform="rotate(-90 65 65)"></circle>
+                <circle cx="65" cy="65" r="52" fill="none" stroke="var(--pf-primary)" stroke-width="20" stroke-dasharray="81.7 245" stroke-dashoffset="-130.7" transform="rotate(-90 65 65)"></circle>
+                <circle cx="65" cy="65" r="52" fill="none" stroke="var(--pf-warning)" stroke-width="20" stroke-dasharray="49 277.6" stroke-dashoffset="-212.4" transform="rotate(-90 65 65)"></circle>
+                <circle cx="65" cy="65" r="52" fill="none" stroke="var(--pf-success)" stroke-width="20" stroke-dasharray="65.4 261.2" stroke-dashoffset="-261.4" transform="rotate(-90 65 65)"></circle>
+              </svg>
+              <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center;"><div style="font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:600;">R$ 5.2k</div><div style="font-size:10px; color:var(--pf-muted); font-weight:700;">total</div></div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:3px; background:var(--pf-accent);"></span><span style="font-size:12.5px; font-weight:700; flex:1;">Mercado</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">40%</span></div>
+              <div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:3px; background:var(--pf-primary);"></span><span style="font-size:12.5px; font-weight:700; flex:1;">Moradia</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">25%</span></div>
+              <div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:3px; background:var(--pf-warning);"></span><span style="font-size:12.5px; font-weight:700; flex:1;">Transporte</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">15%</span></div>
+              <div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:3px; background:var(--pf-success);"></span><span style="font-size:12.5px; font-weight:700; flex:1;">Outros</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">20%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- bars -->
+      <div style="margin-top:20px; border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:16px 20px; border-bottom:1px solid var(--pf-border); font-size:15px; font-weight:800;">Gasto mensal</div>
+        <div style="padding:24px 20px; display:flex; align-items:flex-end; gap:14px; height:180px;">
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; height:100%; justify-content:flex-end;"><div style="width:100%; max-width:44px; height:52%; border-radius:8px 8px 0 0; background:var(--pf-s2);"></div><span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">Fev</span></div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; height:100%; justify-content:flex-end;"><div style="width:100%; max-width:44px; height:68%; border-radius:8px 8px 0 0; background:var(--pf-s2);"></div><span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">Mar</span></div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; height:100%; justify-content:flex-end;"><div style="width:100%; max-width:44px; height:45%; border-radius:8px 8px 0 0; background:var(--pf-s2);"></div><span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">Abr</span></div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; height:100%; justify-content:flex-end;"><div style="width:100%; max-width:44px; height:74%; border-radius:8px 8px 0 0; background:var(--pf-s2);"></div><span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">Mai</span></div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; height:100%; justify-content:flex-end;"><div style="width:100%; max-width:44px; height:60%; border-radius:8px 8px 0 0; background:var(--pf-s2);"></div><span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-muted);">Jun</span></div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; height:100%; justify-content:flex-end;"><div style="width:100%; max-width:44px; height:86%; border-radius:8px 8px 0 0; background:linear-gradient(180deg, var(--pf-accent), color-mix(in srgb, var(--pf-accent), #000 25%));"></div><span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pf-text); font-weight:600;">Jul</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bills calendar + empty state -->
+    <div style="margin-top:24px; display:grid; grid-template-columns:1.3fr 1fr; gap:20px; align-items:start;">
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:16px 20px; border-bottom:1px solid var(--pf-border); display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:15px; font-weight:800;">Contas a pagar</span>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button onClick="{{ calPrev }}" style="width:32px; height:32px; border-radius:8px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);" style-hover="border-color:var(--pf-primary); color:var(--pf-text)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></button>
+            <span style="font-size:13.5px; font-weight:800; min-width:120px; text-align:center;">{{ calMonthLabel }} {{ calYearLabel }}</span>
+            <button onClick="{{ calNext }}" style="width:32px; height:32px; border-radius:8px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);" style-hover="border-color:var(--pf-primary); color:var(--pf-text)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></button>
+          </div>
+        </div>
+        <div style="padding:16px 20px;">
+          <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-bottom:6px;">
+            <sc-for list="{{ weekdays }}" as="wd" hint-placeholder-count="7"><div style="text-align:center; font-size:11px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; padding:4px 0;">{{ wd }}</div></sc-for>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px;">
+            <sc-for list="{{ calDays }}" as="d" hint-placeholder-count="42">
+              <button onClick="{{ d.pick }}" style="{{ d.cell }}">
+                {{ d.num }}
+                <sc-if value="{{ d.hasDot }}" hint-placeholder-val="{{ false }}"><span style="{{ d.dot }}"></span></sc-if>
+              </button>
+            </sc-for>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px; margin-top:14px; padding-top:14px; border-top:1px solid var(--pf-border); font-size:11.5px; font-weight:700; color:var(--pf-muted);">
+            <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:8px; height:8px; border-radius:99px; background:var(--pf-accent);"></span>Conta a vencer</span>
+            <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:12px; height:12px; border-radius:5px; background:var(--pf-primary);"></span>Selecionado</span>
+          </div>
+        </div>
+      </div>
+      <!-- empty state + datepicker -->
+      <div style="display:flex; flex-direction:column; gap:20px;">
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:visible; position:relative; z-index:5;">
+          <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Date picker</div>
+          <div style="padding:20px;">
+            <label style="display:block; font-size:13px; font-weight:700; margin-bottom:8px;">Data de vencimento</label>
+            <div style="position:relative;">
+              <button onClick="{{ togglePicker }}" style="{{ pickerTrigger }}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pf-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path></svg>
+                <span style="{{ pickerValueStyle }}">{{ pickerValue }}</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--pf-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+              <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; top:52px; left:0; z-index:30; width:280px; border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-elevated); box-shadow:0 24px 60px rgba(0,0,0,0.5); padding:14px; animation:pf-fadein .12s ease;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;"><button onClick="{{ pPrev }}" style="width:28px; height:28px; border-radius:7px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></button><span style="font-size:13px; font-weight:800;">{{ pMonthLabel }} {{ pYearLabel }}</span><button onClick="{{ pNext }}" style="width:28px; height:28px; border-radius:7px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></button></div>
+                  <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:1px; margin-bottom:4px;"><sc-for list="{{ weekdays }}" as="wd" hint-placeholder-count="7"><div style="text-align:center; font-size:10px; font-weight:800; color:var(--pf-muted);">{{ wd }}</div></sc-for></div>
+                  <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:1px;"><sc-for list="{{ pDays }}" as="d" hint-placeholder-count="42"><button onClick="{{ d.pick }}" style="{{ d.cell }}">{{ d.num }}</button></sc-for></div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+          <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Empty state</div>
+          <div style="padding:36px 24px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:12px;">
+            <div style="width:56px; height:56px; border-radius:16px; background:var(--pf-s2); display:flex; align-items:center; justify-content:center;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--pf-muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"></path><path d="M12 17.5v-11"></path></svg></div>
+            <div style="font-size:16px; font-weight:800;">Nenhuma conta cadastrada</div>
+            <div style="font-size:13.5px; color:var(--pf-muted); font-weight:500; max-width:34ch;">Adicione suas contas fixas para acompanhar os vencimentos no calendário.</div>
+            <button style="display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 18px; border-radius:10px; border:none; background:var(--pf-accent); color:#fff; font-family:'Nunito',sans-serif; font-weight:800; font-size:14px; cursor:pointer; margin-top:4px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"></path></svg>Adicionar conta</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MOTION ===== -->
+    <div id="motion" style="height:1px; background:var(--pf-border); margin-top:56px;"></div>
+    <section style="padding:56px 0 8px 0;">
+      <span style="font-size:12px; font-weight:800; color:var(--pf-accent); letter-spacing:0.16em; text-transform:uppercase;">04 — Movimento</span>
+      <h2 style="font-size:30px; font-weight:900; letter-spacing:-0.02em; margin:12px 0 0 0;">Movimento &amp; animações</h2>
+      <p style="font-size:15px; color:var(--pf-muted); margin:10px 0 0 0; font-weight:500; max-width:60ch;">Animação com propósito, no padrão do mercado (<span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--pf-text);">motion.dev</span> / Framer Motion). Movimento explica de onde algo veio, confirma uma ação e guia a atenção — nunca decora à toa. Curto e discreto: se você repara na animação, ela está longa demais. Sempre respeite <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--pf-text);">prefers-reduced-motion</span>.</p>
+    </section>
+
+    <!-- duration + easing -->
+    <div style="margin-top:28px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Duração</div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:16px;">
+          <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;"><span style="font-size:13px; font-weight:800;">Instantâneo</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">100ms · press, toggle</span></div><div style="position:relative; height:6px; border-radius:99px; background:var(--pf-s2);"><span style="position:absolute; top:-5px; width:16px; height:16px; border-radius:99px; background:var(--pf-accent); animation:pf-track 100ms linear infinite alternate;"></span></div></div>
+          <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;"><span style="font-size:13px; font-weight:800;">Rápido</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">160ms · hover, chips</span></div><div style="position:relative; height:6px; border-radius:99px; background:var(--pf-s2);"><span style="position:absolute; top:-5px; width:16px; height:16px; border-radius:99px; background:var(--pf-accent); animation:pf-track 160ms linear infinite alternate;"></span></div></div>
+          <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;"><span style="font-size:13px; font-weight:800;">Base</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">220ms · overlays, cards</span></div><div style="position:relative; height:6px; border-radius:99px; background:var(--pf-s2);"><span style="position:absolute; top:-5px; width:16px; height:16px; border-radius:99px; background:var(--pf-primary); animation:pf-track 220ms linear infinite alternate;"></span></div></div>
+          <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;"><span style="font-size:13px; font-weight:800;">Lento</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">320ms · drawer, sheets</span></div><div style="position:relative; height:6px; border-radius:99px; background:var(--pf-s2);"><span style="position:absolute; top:-5px; width:16px; height:16px; border-radius:99px; background:var(--pf-primary); animation:pf-track 320ms linear infinite alternate;"></span></div></div>
+          <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;"><span style="font-size:13px; font-weight:800;">Entrada</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">600–900ms · tween de valor</span></div><div style="position:relative; height:6px; border-radius:99px; background:var(--pf-s2);"><span style="position:absolute; top:-5px; width:16px; height:16px; border-radius:99px; background:var(--pf-on-success); animation:pf-track 750ms linear infinite alternate;"></span></div></div>
+        </div>
+      </div>
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Easing</div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:16px;">
+          <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;"><span style="font-size:13px; font-weight:800;">Standard</span><span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--pf-muted);">cubic-bezier(.2,0,0,1)</span></div><div style="position:relative; height:6px; border-radius:99px; background:var(--pf-s2);"><span style="position:absolute; top:-5px; width:16px; height:16px; border-radius:99px; background:var(--pf-primary); animation:pf-track 1400ms cubic-bezier(.2,0,0,1) infinite alternate;"></span></div><div style="font-size:11.5px; color:var(--pf-muted); font-weight:600; margin-top:6px;">Transições gerais — o default de tudo.</div></div>
+          <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;"><span style="font-size:13px; font-weight:800;">Decelerate (out)</span><span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--pf-muted);">cubic-bezier(0,0,.2,1)</span></div><div style="position:relative; height:6px; border-radius:99px; background:var(--pf-s2);"><span style="position:absolute; top:-5px; width:16px; height:16px; border-radius:99px; background:var(--pf-on-success); animation:pf-track 1400ms cubic-bezier(0,0,.2,1) infinite alternate;"></span></div><div style="font-size:11.5px; color:var(--pf-muted); font-weight:600; margin-top:6px;">Entrada de elementos — chega rápido e assenta.</div></div>
+          <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;"><span style="font-size:13px; font-weight:800;">Accelerate (in)</span><span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--pf-muted);">cubic-bezier(.4,0,1,1)</span></div><div style="position:relative; height:6px; border-radius:99px; background:var(--pf-s2);"><span style="position:absolute; top:-5px; width:16px; height:16px; border-radius:99px; background:var(--pf-on-danger); animation:pf-track 1400ms cubic-bezier(.4,0,1,1) infinite alternate;"></span></div><div style="font-size:11.5px; color:var(--pf-muted); font-weight:600; margin-top:6px;">Saída de elementos — sai da tela ganhando velocidade.</div></div>
+          <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;"><span style="font-size:13px; font-weight:800;">Spring</span><span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--pf-muted);">stiffness 380 · damping 34</span></div><div style="position:relative; height:6px; border-radius:99px; background:var(--pf-s2);"><span style="position:absolute; top:-5px; width:16px; height:16px; border-radius:99px; background:var(--pf-accent); animation:pf-track 1400ms cubic-bezier(.34,1.56,.64,1) infinite alternate;"></span></div><div style="font-size:11.5px; color:var(--pf-muted); font-weight:600; margin-top:6px;">Drawer, arrastar, gestos — no Motion, <span style="font-family:'JetBrains Mono',monospace;">type: 'spring'</span>.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- quando usar -->
+    <div style="margin-top:20px; border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+      <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Quando usar</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead><tr style="background:var(--pf-bg);"><th style="text-align:left; padding:11px 20px; font-size:11px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; letter-spacing:0.05em;">Componente</th><th style="text-align:left; padding:11px 16px; font-size:11px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; letter-spacing:0.05em;">Movimento</th><th style="text-align:left; padding:11px 16px; font-size:11px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; letter-spacing:0.05em;">Duração · Easing</th></tr></thead>
+          <tbody>
+            <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 20px; font-size:13.5px; font-weight:800;">Modal / Popover</td><td style="padding:12px 16px; font-size:13px; color:var(--pf-muted); font-weight:600;">Fade + scale 0.96 → 1</td><td style="padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-on-primary);">180ms · standard</td></tr>
+            <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 20px; font-size:13.5px; font-weight:800;">Drawer / Sheet</td><td style="padding:12px 16px; font-size:13px; color:var(--pf-muted); font-weight:600;">Slide-in pela lateral</td><td style="padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-on-primary);">320ms · spring</td></tr>
+            <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 20px; font-size:13.5px; font-weight:800;">Toast</td><td style="padding:12px 16px; font-size:13px; color:var(--pf-muted); font-weight:600;">Slide + fade, auto-dismiss</td><td style="padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-on-primary);">200ms · decelerate</td></tr>
+            <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 20px; font-size:13.5px; font-weight:800;">Hover de card</td><td style="padding:12px 16px; font-size:13px; color:var(--pf-muted); font-weight:600;">Lift + sombra + borda accent</td><td style="padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-on-primary);">220ms · standard</td></tr>
+            <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 20px; font-size:13.5px; font-weight:800;">Press de botão</td><td style="padding:12px 16px; font-size:13px; color:var(--pf-muted); font-weight:600;">Scale 0.97 no toque</td><td style="padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-on-primary);">100ms · standard</td></tr>
+            <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 20px; font-size:13.5px; font-weight:800;">KPI / valor</td><td style="padding:12px 16px; font-size:13px; color:var(--pf-muted); font-weight:600;">Tween numérico ao carregar</td><td style="padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-on-primary);">700ms · decelerate</td></tr>
+            <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 20px; font-size:13.5px; font-weight:800;">Lista / extrato</td><td style="padding:12px 16px; font-size:13px; color:var(--pf-muted); font-weight:600;">Stagger de 60ms entre itens</td><td style="padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-on-primary);">400ms · decelerate</td></tr>
+            <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 20px; font-size:13.5px; font-weight:800;">Gráfico / barra</td><td style="padding:12px 16px; font-size:13px; color:var(--pf-muted); font-weight:600;">Cresce a partir da base</td><td style="padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-on-primary);">320ms · standard</td></tr>
+            <tr style="border-top:1px solid var(--pf-border);"><td style="padding:12px 20px; font-size:13.5px; font-weight:800;">Skeleton</td><td style="padding:12px 16px; font-size:13px; color:var(--pf-muted); font-weight:600;">Pulse de opacidade (loop)</td><td style="padding:12px 16px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--pf-muted);">1400ms · loop</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- motion snippets + reduced motion -->
+    <div style="margin-top:20px; display:grid; grid-template-columns:1.5fr 1fr; gap:20px; align-items:start;">
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Com Motion (Framer Motion)</div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:14px;">
+          <div><div style="font-size:12px; font-weight:800; color:var(--pf-on-primary); margin-bottom:6px;">Overlay — entrar &amp; sair</div><pre style="margin:0; padding:14px; border-radius:10px; background:var(--pf-bg); border:1px solid var(--pf-border); font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.55; color:var(--pf-text); overflow-x:auto;">&lt;motion.div
+  initial={{ opacity: 0, scale: .96 }}
+  animate={{ opacity: 1, scale: 1 }}
+  exit={{ opacity: 0, scale: .96 }}
+  transition={{ duration: .18, ease: [.2, 0, 0, 1] }} /&gt;</pre></div>
+          <div><div style="font-size:12px; font-weight:800; color:var(--pf-on-accent); margin-bottom:6px;">Drawer — spring pela lateral</div><pre style="margin:0; padding:14px; border-radius:10px; background:var(--pf-bg); border:1px solid var(--pf-border); font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.55; color:var(--pf-text); overflow-x:auto;">&lt;motion.aside
+  initial={{ x: '100%' }} animate={{ x: 0 }}
+  transition={{ type: 'spring', stiffness: 380, damping: 34 }} /&gt;</pre></div>
+          <div><div style="font-size:12px; font-weight:800; color:var(--pf-on-success); margin-bottom:6px;">Lista — stagger dos filhos</div><pre style="margin:0; padding:14px; border-radius:10px; background:var(--pf-bg); border:1px solid var(--pf-border); font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.55; color:var(--pf-text); overflow-x:auto;">&lt;motion.ul
+  variants={{ show: { transition: { staggerChildren: .06 } } }}
+  initial="hide" animate="show" /&gt;</pre></div>
+        </div>
+      </div>
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Acessibilidade</div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; gap:12px; padding:14px; border-radius:12px; background:color-mix(in srgb, var(--pf-warning) 12%, transparent); border:1px solid color-mix(in srgb, var(--pf-warning) 30%, transparent);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:1px;"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><path d="M12 9v4M12 17h.01"></path></svg><div style="font-size:13px; font-weight:600; color:var(--pf-text); line-height:1.5;">Sempre respeite <span style="font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700;">prefers-reduced-motion</span>: reduza transições a <span style="font-weight:800;">0ms</span> ou anime só opacidade — nunca movimento/scale.</div></div>
+          <pre style="margin:0; padding:14px; border-radius:10px; background:var(--pf-bg); border:1px solid var(--pf-border); font-family:'JetBrains Mono',monospace; font-size:11.5px; line-height:1.55; color:var(--pf-text); overflow-x:auto;">@media (prefers-reduced-motion) {
+  * { animation: none !important;
+      transition: none !important; }
+}</pre>
+          <div style="font-size:12.5px; color:var(--pf-muted); font-weight:600; line-height:1.5;">No Motion, use o hook <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--pf-text);">useReducedMotion()</span> e desligue <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--pf-text);">x / scale</span>, mantendo o fade.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- live playground -->
+    <div style="margin-top:20px;">
+      <h3 style="font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.1em; text-transform:uppercase; margin:0 0 14px 0;">Playground — passe o mouse, clique</h3>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1.3fr; gap:16px; align-items:start;">
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); padding:20px;">
+          <div style="font-size:12px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:14px;">Hover — lift</div>
+          <div style="border-radius:14px; border:1px solid var(--pf-border); background:var(--pf-bg); padding:18px; cursor:pointer; transition:transform .22s cubic-bezier(.2,0,0,1), box-shadow .22s cubic-bezier(.2,0,0,1), border-color .22s;" style-hover="transform:translateY(-6px); box-shadow:0 16px 30px rgba(0,0,0,0.4); border-color:var(--pf-accent)">
+            <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:12.5px; font-weight:700; color:var(--pf-muted);">Saldo</span><div style="width:30px; height:30px; border-radius:9px; background:color-mix(in srgb, var(--pf-primary) 18%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path></svg></div></div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:600; margin-top:10px;">R$ 42.980</div>
+          </div>
+        </div>
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); padding:20px;">
+          <div style="font-size:12px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:14px;">Press — scale</div>
+          <div style="display:flex; align-items:center; justify-content:center; height:96px;">
+            <button style="display:inline-flex; align-items:center; gap:8px; height:46px; padding:0 22px; border-radius:12px; border:none; background:var(--pf-accent); color:#fff; font-family:'Nunito',sans-serif; font-weight:800; font-size:15px; cursor:pointer; transition:transform .1s ease, filter .15s;" style-hover="filter:brightness(1.06)" style-active="transform:scale(.94)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"></path></svg>Nova transação</button>
+          </div>
+        </div>
+        <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); padding:20px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+            <span style="font-size:12px; font-weight:800; color:var(--pf-muted); text-transform:uppercase; letter-spacing:0.05em;">Tween &amp; stagger</span>
+            <div style="display:flex; gap:8px;">
+              <button onClick="{{ animateSaldo }}" style="height:32px; padding:0 12px; border-radius:8px; border:1px solid var(--pf-border); background:var(--pf-s2); color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:12.5px; cursor:pointer;" style-hover="border-color:var(--pf-accent)">Animar valor</button>
+              <button onClick="{{ replayStagger }}" style="height:32px; padding:0 12px; border-radius:8px; border:1px solid var(--pf-border); background:var(--pf-s2); color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:12.5px; cursor:pointer;" style-hover="border-color:var(--pf-primary)">Replay lista</button>
+            </div>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:30px; font-weight:600; letter-spacing:-0.02em; color:var(--pf-on-success);">{{ saldoAnim }}</div>
+          <sc-if value="{{ staggerOn }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:14px;">
+              <sc-for list="{{ staggerItems }}" as="it" hint-placeholder-count="4">
+                <div style="{{ it.style }}">
+                  <div style="display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-bg);">
+                    <span style="width:8px; height:8px; border-radius:99px; background:var(--pf-accent); flex-shrink:0;"></span>
+                    <span style="font-size:13px; font-weight:700; flex:1;">{{ it.label }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:500; color:var(--pf-on-danger);">{{ it.amount }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TOKENS ===== -->
+    <div id="tokens" style="height:1px; background:var(--pf-border); margin-top:56px;"></div>
+    <section style="padding:56px 0 8px 0;">
+      <span style="font-size:12px; font-weight:800; color:var(--pf-accent); letter-spacing:0.16em; text-transform:uppercase;">05 — Tokens</span>
+      <h2 style="font-size:30px; font-weight:900; letter-spacing:-0.02em; margin:12px 0 0 0;">Espaçamento &amp; raios</h2>
+    </section>
+    <div style="margin-top:28px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Raios</div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; align-items:center; gap:14px;"><div style="width:48px; height:48px; border-radius:8px; border:1.5px solid var(--pf-primary); background:color-mix(in srgb, var(--pf-primary) 12%, transparent);"></div><div><div style="font-size:13.5px; font-weight:800;">Botão / Input</div><div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">10px</div></div></div>
+          <div style="display:flex; align-items:center; gap:14px;"><div style="width:48px; height:48px; border-radius:16px; border:1.5px solid var(--pf-primary); background:color-mix(in srgb, var(--pf-primary) 12%, transparent);"></div><div><div style="font-size:13.5px; font-weight:800;">Card</div><div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">14–16px</div></div></div>
+          <div style="display:flex; align-items:center; gap:14px;"><div style="width:48px; height:48px; border-radius:99px; border:1.5px solid var(--pf-primary); background:color-mix(in srgb, var(--pf-primary) 12%, transparent);"></div><div><div style="font-size:13.5px; font-weight:800;">Badge / Chip</div><div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">999px</div></div></div>
+        </div>
+      </div>
+      <div style="border-radius:16px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:var(--pf-shadow); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--pf-border); font-size:13px; font-weight:800; color:var(--pf-muted); letter-spacing:0.06em; text-transform:uppercase;">Escala de espaçamento</div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; align-items:center; gap:14px;"><div style="height:16px; width:8px; background:var(--pf-accent); border-radius:2px;"></div><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">8px · gap de chips/botões</span></div>
+          <div style="display:flex; align-items:center; gap:14px;"><div style="height:16px; width:16px; background:var(--pf-accent); border-radius:2px;"></div><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">16px · gap de grids de card</span></div>
+          <div style="display:flex; align-items:center; gap:14px;"><div style="height:16px; width:20px; background:var(--pf-accent); border-radius:2px;"></div><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">20px · padding de card</span></div>
+          <div style="display:flex; align-items:center; gap:14px;"><div style="height:16px; width:32px; background:var(--pf-accent); border-radius:2px;"></div><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--pf-muted);">32px · lateral de página</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- footer -->
+    <footer style="margin-top:64px; padding-top:28px; border-top:1px solid var(--pf-border); display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="width:30px; height:30px; border-radius:9px; background:linear-gradient(145deg, var(--pf-primary), color-mix(in srgb, var(--pf-primary), #000 50%)); position:relative; overflow:hidden; flex-shrink:0;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--pf-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+        </div>
+        <span style="font-size:14px; font-weight:800;">Personal Finance</span>
+      </div>
+      <span style="font-size:12px; color:var(--pf-muted); font-weight:600;">Design System v1.0 · Nunito · shadcn/ui · claro &amp; escuro</span>
+    </footer>
+
+  </div>
+
+  <!-- MODAL -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed; inset:0; z-index:60; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:24px; animation:pf-fadein .15s ease;">
+      <div onClick="{{ stop }}" style="width:100%; max-width:440px; border-radius:18px; border:1px solid var(--pf-border); background:var(--pf-surface); box-shadow:0 30px 80px rgba(0,0,0,0.6); overflow:hidden;">
+        <div style="display:flex; align-items:center; gap:12px; padding:20px 22px; border-bottom:1px solid var(--pf-border);">
+          <div style="width:38px; height:38px; border-radius:11px; background:color-mix(in srgb, var(--pf-accent) 16%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"></path></svg></div>
+          <div style="flex:1;"><div style="font-size:16px; font-weight:800;">Nova transação</div><div style="font-size:12.5px; color:var(--pf-muted); font-weight:600;">Registre uma entrada ou saída</div></div>
+          <button onClick="{{ closeModal }}" style="width:32px; height:32px; border-radius:8px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);" style-hover="color:var(--pf-text)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+        </div>
+        <div style="padding:22px; display:flex; flex-direction:column; gap:16px;">
+          <div><label style="display:block; font-size:13px; font-weight:700; margin-bottom:8px;">Descrição</label><input placeholder="Ex: Mercado" style="width:100%; height:44px; padding:0 14px; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-input); color:var(--pf-text); font-family:'Nunito',sans-serif; font-size:14px; font-weight:600; outline:none;" style-focus="border-color:var(--pf-primary)"></div>
+          <div><label style="display:block; font-size:13px; font-weight:700; margin-bottom:8px;">Valor</label><div style="display:flex; align-items:center; height:44px; border-radius:10px; border:1px solid var(--pf-border); background:var(--pf-input); overflow:hidden;"><span style="padding:0 12px; font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--pf-muted); border-right:1px solid var(--pf-border); align-self:stretch; display:flex; align-items:center;">R$</span><input placeholder="0,00" style="flex:1; height:100%; padding:0 14px; border:none; background:transparent; color:var(--pf-text); font-family:'JetBrains Mono',monospace; font-size:14px; outline:none;"></div></div>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--pf-border);">
+          <button onClick="{{ closeModal }}" style="height:40px; padding:0 16px; border-radius:10px; border:1px solid var(--pf-border); background:transparent; color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:14px; cursor:pointer;">Cancelar</button>
+          <button onClick="{{ closeModal }}" style="height:40px; padding:0 18px; border-radius:10px; border:none; background:var(--pf-accent); color:#fff; font-family:'Nunito',sans-serif; font-weight:800; font-size:14px; cursor:pointer;">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- DRAWER -->
+  <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDrawer }}" style="position:fixed; inset:0; z-index:60; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); animation:pf-fadein .15s ease;">
+      <div onClick="{{ stop }}" style="position:absolute; top:0; right:0; bottom:0; width:400px; max-width:90vw; background:var(--pf-surface); border-left:1px solid var(--pf-border); box-shadow:-20px 0 60px rgba(0,0,0,0.5); animation:pf-slidein .25s ease; display:flex; flex-direction:column;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 22px; border-bottom:1px solid var(--pf-border);"><div style="font-size:16px; font-weight:800;">Detalhes da transação</div><button onClick="{{ closeDrawer }}" style="width:32px; height:32px; border-radius:8px; border:1px solid var(--pf-border); background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--pf-muted);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></div>
+        <div style="padding:22px; flex:1; overflow:auto;">
+          <div style="display:flex; align-items:center; gap:14px; padding-bottom:20px; border-bottom:1px solid var(--pf-border);"><div style="width:48px; height:48px; border-radius:12px; background:color-mix(in srgb, var(--pf-accent) 16%, transparent); display:flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--pf-on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg></div><div><div style="font-size:16px; font-weight:800;">Supermercado</div><div style="font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:600; color:var(--pf-on-danger); margin-top:2px;">- R$ 348,90</div></div></div>
+          <div style="display:flex; flex-direction:column; gap:14px; margin-top:20px;">
+            <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:13px; color:var(--pf-muted); font-weight:600;">Categoria</span><span style="font-size:13.5px; font-weight:700;">Mercado</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:13px; color:var(--pf-muted); font-weight:600;">Conta</span><span style="font-size:13.5px; font-weight:700;">Cartão de crédito</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:13px; color:var(--pf-muted); font-weight:600;">Data</span><span style="font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:500;">04/07/2026</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:13px; color:var(--pf-muted); font-weight:600;">Status</span><span style="display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border-radius:999px; background:color-mix(in srgb, var(--pf-success) 15%, transparent); color:var(--pf-on-success); font-size:11.5px; font-weight:800;"><span style="width:5px; height:5px; border-radius:99px; background:currentColor;"></span>Pago</span></div>
+          </div>
+        </div>
+        <div style="padding:16px 22px; border-top:1px solid var(--pf-border); display:flex; gap:10px;"><button style="flex:1; height:42px; border-radius:10px; border:1px solid var(--pf-border); background:transparent; color:var(--pf-text); font-family:'Nunito',sans-serif; font-weight:700; font-size:14px; cursor:pointer;">Editar</button><button onClick="{{ closeDrawer }}" style="flex:1; height:42px; border-radius:10px; border:none; background:var(--pf-primary); color:#fff; font-family:'Nunito',sans-serif; font-weight:800; font-size:14px; cursor:pointer;">Fechar</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- PAGE LOADING -->
+  <sc-if value="{{ pageLoading }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; z-index:70; background:rgba(11,18,35,0.72); backdrop-filter:blur(6px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; animation:pf-fadein .15s ease;">
+      <span style="width:44px; height:44px; border-radius:99px; border:4px solid var(--pf-s2); border-top-color:var(--pf-accent); animation:pf-spin .7s linear infinite;"></span>
+      <span style="font-size:14px; font-weight:700; color:var(--pf-text);">Carregando…</span>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1160,&quot;height&quot;:960},&quot;palette&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ocean&quot;,&quot;options&quot;:[&quot;ocean&quot;,&quot;graphite&quot;,&quot;indigo&quot;,&quot;teal&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Tema&quot;},&quot;primary&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#1E40AF&quot;,&quot;options&quot;:[&quot;#1E40AF&quot;,&quot;#2447C4&quot;,&quot;#3730A3&quot;,&quot;#155E75&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Tema&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#EA580C&quot;,&quot;options&quot;:[&quot;#EA580C&quot;,&quot;#DB6410&quot;,&quot;#C2410C&quot;,&quot;#F97316&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Tema&quot;}}">
+class Component extends DCLogic {
+  state = { period: 'mes', tab: 'transacoes', on: true, mode: 'dark', selOpen: false, selQuery: '', selValue: 'Mercado', modalOpen: false, drawerOpen: false, menuOpen: false, pageLoading: false, btnLoading: false,
+    calViewY: 2026, calViewM: 6, calSel: new Date(2026, 6, 10), pickerOpen: false, pViewY: 2026, pViewM: 6, picked: null };
+
+  CATS = ['Salário','Mercado','Restaurantes','Transporte','Moradia','Saúde','Lazer','Educação','Assinaturas','Investimentos'];
+
+  MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  WEEKDAYS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  today0 = new Date(2026, 6, 6);
+  EVENTS = new Set(['2026-7-5','2026-7-10','2026-7-15','2026-7-20','2026-7-28']);
+
+  ckey(d) { return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate(); }
+  csame(a, b) { return a && b && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+  cfmt(d) { return d ? String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear() : '—'; }
+  cgrid(y, m) { const first = new Date(y, m, 1); const s = new Date(y, m, 1 - first.getDay()); const out = []; for (let i=0;i<42;i++){ const d=new Date(s); d.setDate(s.getDate()+i); out.push(d);} return out; }
+  ccell(inMonth, isSel, isToday) {
+    const base = { position:'relative', width:'100%', height:'42px', border:'none', cursor:'pointer', fontFamily:"'Nunito',sans-serif", fontSize:'14px', fontWeight:700, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'2px', transition:'background .1s', color: inMonth ? 'var(--pf-text)' : 'color-mix(in srgb, var(--pf-muted) 45%, transparent)', background:'transparent', borderRadius:'10px' };
+    if (isSel) return { ...base, background:'var(--pf-primary)', color:'#fff', fontWeight:800, boxShadow:'0 4px 12px color-mix(in srgb, var(--pf-primary) 45%, transparent)' };
+    if (isToday) return { ...base, boxShadow:'inset 0 0 0 1.5px var(--pf-on-primary)' };
+    return base;
+  }
+
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate(prevProps, prevState) {
+    if ((prevState && prevState.mode !== this.state.mode)
+      || prevProps.palette !== this.props.palette
+      || prevProps.primary !== this.props.primary
+      || prevProps.accent !== this.props.accent) this.applyTheme();
+  }
+
+  hexRgba(hex, a) {
+    const h = hex.replace('#',''); const n = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
+    return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+  }
+
+  applyTheme(modeArg) {
+    const P = {
+      ocean:    { bg:'#0B1223', surface:'#141D30', s2:'#1F2A40', border:'#28344C', text:'#F1F5F9', muted:'#93A2B8', primary:'#1E40AF', accent:'#EA580C' },
+      graphite: { bg:'#0F1115', surface:'#1A1D24', s2:'#262A34', border:'#2C313C', text:'#F3F4F6', muted:'#9CA3AF', primary:'#2447C4', accent:'#DB6410' },
+      indigo:   { bg:'#0C1024', surface:'#151A34', s2:'#20264A', border:'#2A3155', text:'#F5F6FF', muted:'#9AA3C8', primary:'#3730A3', accent:'#EA580C' },
+      teal:      { bg:'#08161C', surface:'#0F2530', s2:'#173544', border:'#1F4150', text:'#EAF6F9', muted:'#8BA9B4', primary:'#155E75', accent:'#EA580C' },
+    };
+    const base = P[this.props.palette] || P.ocean;
+    const primary = this.props.primary || base.primary;
+    const accent  = this.props.accent  || base.accent;
+    const dark = (modeArg || this.state.mode) !== 'light';
+
+    const t = dark ? {
+      bg:base.bg, surface:base.surface, elevated:base.s2, s2:base.s2, border:base.border, input:'rgba(255,255,255,0.03)',
+      text:base.text, muted:base.muted,
+      onPrimary:'#8FABFF', onSuccess:'#4ADE80', onWarning:'#FBBF24', onDanger:'#F87171', onAccent:'#FB923C',
+      shadow:'0 2px 12px rgba(0,0,0,0.35)', header:this.hexRgba(base.bg,0.72),
+    } : {
+      bg:'#F5F7FB', surface:'#FFFFFF', elevated:'#FFFFFF', s2:'#EEF2F8', border:'#E3E8F0', input:'#FFFFFF',
+      text:'#0F1B2E', muted:'#5B6B82',
+      onPrimary:primary, onSuccess:'#15803D', onWarning:'#B45309', onDanger:'#B91C1C', onAccent:'#C2410C',
+      shadow:'0 1px 3px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.04)', header:'rgba(255,255,255,0.82)',
+    };
+
+    const r = document.documentElement.style;
+    const set = (k,v) => r.setProperty(k,v);
+    set('--pf-bg',t.bg); set('--pf-surface',t.surface); set('--pf-elevated',t.elevated); set('--pf-s2',t.s2);
+    set('--pf-border',t.border); set('--pf-input',t.input); set('--pf-text',t.text); set('--pf-muted',t.muted);
+    set('--pf-primary',primary); set('--pf-accent',accent); set('--pf-accent-fg','#0B1223');
+    set('--pf-primary-fg','#ffffff');
+    set('--pf-on-primary',t.onPrimary); set('--pf-on-success',t.onSuccess); set('--pf-on-warning',t.onWarning);
+    set('--pf-on-danger',t.onDanger); set('--pf-on-accent',t.onAccent);
+    set('--pf-shadow',t.shadow); set('--pf-header',t.header);
+    this._hex = { bg:base.bg, surface:base.surface, s2:base.s2, border:base.border, text:base.text, muted:base.muted, primary, accent };
+    if (!dark) this._hex = { ...this._hex, bg:'#F5F7FB', surface:'#FFFFFF', s2:'#EEF2F8', border:'#E3E8F0', text:'#0F1B2E', muted:'#5B6B82' };
+  }
+
+  segStyle(active) {
+    return {
+      display:'inline-flex', alignItems:'center', height:'32px', padding:'0 14px', border:'none',
+      borderRadius:'9px', cursor:'pointer', fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:'13px',
+      background: active ? 'var(--pf-surface)' : 'transparent',
+      color: active ? 'var(--pf-accent)' : 'var(--pf-muted)',
+      boxShadow: active ? '0 1px 4px rgba(0,0,0,0.25)' : 'none', transition:'all .15s',
+    };
+  }
+
+  tabStyle(active) {
+    return {
+      display:'inline-flex', alignItems:'center', height:'40px', padding:'0 16px',
+      border:'none', background:'transparent',
+      color: active ? 'var(--pf-accent)' : 'var(--pf-muted)',
+      cursor:'pointer', fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:'14px',
+      boxShadow: active ? 'inset 0 -3px 0 var(--pf-accent)' : 'none', transition:'all .15s',
+    };
+  }
+
+  optStyle() {
+    return {
+      display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px',
+      width:'100%', padding:'9px 10px', borderRadius:'7px', cursor:'pointer', fontSize:'14px', fontWeight:600,
+      color:'var(--pf-text)', textAlign:'left', border:'none', background:'transparent',
+      fontFamily:"'Nunito',sans-serif",
+    };
+  }
+
+  renderVals() {
+    const { period, tab, on, mode, selOpen, selQuery, selValue, modalOpen, drawerOpen, menuOpen, pageLoading, btnLoading } = this.state;
+    const _sig = mode + '|' + (this.props.palette || '') + '|' + (this.props.primary || '') + '|' + (this.props.accent || '');
+    if (_sig !== this._themeSig) { this._themeSig = _sig; this.applyTheme(); }
+    const hex = this._hex || {};
+    const q = selQuery.trim().toLowerCase();
+    const matches = this.CATS.filter(e => e.toLowerCase().includes(q));
+    const filtered = matches.map(name => ({
+      name, selected: name === selValue, style: this.optStyle(),
+      pick: () => this.setState({ selValue: name, selOpen: false, selQuery: '' }),
+    }));
+    const { calViewY, calViewM, calSel, pickerOpen, pViewY, pViewM, picked } = this.state;
+    const calDays = this.cgrid(calViewY, calViewM).map(d => {
+      const inMonth = d.getMonth() === calViewM;
+      const isSel = this.csame(d, calSel);
+      const isToday = this.csame(d, this.today0);
+      const hasEvent = this.EVENTS.has(this.ckey(d)) && inMonth;
+      return {
+        num: d.getDate(),
+        cell: this.ccell(inMonth, isSel, isToday),
+        hasDot: hasEvent && !isSel,
+        dot: { position:'absolute', bottom:'6px', width:'5px', height:'5px', borderRadius:'99px', background:'var(--pf-accent)' },
+        pick: () => this.setState({ calSel: d }),
+      };
+    });
+    const pDays = this.cgrid(pViewY, pViewM).map(d => {
+      const inMonth = d.getMonth() === pViewM;
+      const isPicked = this.csame(d, picked);
+      const isToday = this.csame(d, this.today0);
+      return { num: d.getDate(),
+        cell: { width:'100%', height:'34px', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:"'Nunito',sans-serif", fontSize:'13px', fontWeight:700, transition:'background .1s',
+          color: isPicked ? '#fff' : inMonth ? 'var(--pf-text)' : 'color-mix(in srgb, var(--pf-muted) 45%, transparent)', background: isPicked ? 'var(--pf-primary)' : 'transparent',
+          boxShadow: (isToday && !isPicked) ? 'inset 0 0 0 1.5px var(--pf-on-primary)' : 'none' },
+        pick: () => this.setState({ picked: d, pickerOpen: false }) };
+    });
+    return {
+      isDark: mode !== 'light', isLight: mode === 'light',
+      modeLabel: mode === 'light' ? 'Claro' : 'Escuro',
+      hexBg: hex.bg, hexSurface: hex.surface, hexS2: hex.s2, hexText: hex.text, hexMuted: hex.muted, hexPrimary: hex.primary, hexAccent: hex.accent,
+      weekdays: this.WEEKDAYS, calDays, calMonthLabel: this.MONTHS[calViewM], calYearLabel: calViewY,
+      calPrev: () => { const m = calViewM - 1; this.setState(m < 0 ? { calViewM: 11, calViewY: calViewY - 1 } : { calViewM: m }); },
+      calNext: () => { const m = calViewM + 1; this.setState(m > 11 ? { calViewM: 0, calViewY: calViewY + 1 } : { calViewM: m }); },
+      pickerOpen, togglePicker: () => this.setState(s => ({ pickerOpen: !s.pickerOpen })),
+      pickerValue: picked ? this.cfmt(picked) : 'Selecionar data',
+      pickerValueStyle: { flex:1, textAlign:'left', fontFamily: picked ? "'JetBrains Mono',monospace" : "'Nunito',sans-serif", fontSize:'14px', fontWeight: picked ? 500 : 600, color: picked ? 'var(--pf-text)' : 'var(--pf-muted)' },
+      pickerTrigger: { display:'inline-flex', alignItems:'center', gap:'10px', width:'100%', height:'44px', padding:'0 14px', borderRadius:'11px', border:'1px solid', borderColor: pickerOpen ? 'var(--pf-primary)' : 'var(--pf-border)', background:'var(--pf-input)', cursor:'pointer' },
+      pMonthLabel: this.MONTHS[pViewM], pYearLabel: pViewY, pDays,
+      pPrev: () => { const m = pViewM - 1; this.setState(m < 0 ? { pViewM: 11, pViewY: pViewY - 1 } : { pViewM: m }); },
+      pNext: () => { const m = pViewM + 1; this.setState(m > 11 ? { pViewM: 0, pViewY: pViewY + 1 } : { pViewM: m }); },
+      toggleMode: () => { const m = this.state.mode === 'light' ? 'dark' : 'light'; this._themeSig = null; this.setState({ mode: m }); this.applyTheme(m); },
+      segMes: this.segStyle(period === 'mes'), segTri: this.segStyle(period === 'trimestre'), segAno: this.segStyle(period === 'ano'),
+      setMes: () => this.setState({ period: 'mes' }), setTri: () => this.setState({ period: 'trimestre' }), setAno: () => this.setState({ period: 'ano' }),
+      tabTx: this.tabStyle(tab === 'transacoes'), tabBud: this.tabStyle(tab === 'orcamento'), tabGoal: this.tabStyle(tab === 'metas'),
+      setTxTab: () => this.setState({ tab: 'transacoes' }), setBudTab: () => this.setState({ tab: 'orcamento' }), setGoalTab: () => this.setState({ tab: 'metas' }),
+      toggle: () => this.setState(s => ({ on: !s.on })),
+      trackStyle: { width:'42px', height:'24px', borderRadius:'99px', flexShrink:0, position:'relative', background: on ? 'var(--pf-primary)' : 'var(--pf-s2)', transition:'background .18s', cursor:'pointer' },
+      thumbStyle: { position:'absolute', top:'3px', left:'3px', width:'18px', height:'18px', borderRadius:'99px', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.4)', transform: on ? 'translateX(18px)' : 'translateX(0)', transition:'transform .18s' },
+      selOpen, selValue, selQuery, filtered, noResults: filtered.length === 0,
+      toggleSel: () => this.setState(s => ({ selOpen: !s.selOpen, selQuery: '' })),
+      onSelQuery: (e) => this.setState({ selQuery: e.target.value }),
+      selTrigger: { display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', width:'100%', height:'44px', padding:'0 14px', borderRadius:'10px', border:'1px solid', borderColor: selOpen ? 'var(--pf-primary)' : 'var(--pf-border)', background:'var(--pf-input)', color:'var(--pf-text)', fontFamily:"'Nunito',sans-serif", fontSize:'14px', fontWeight:600, cursor:'pointer', boxShadow: selOpen ? '0 0 0 3px color-mix(in srgb, var(--pf-primary) 26%, transparent)' : 'none' },
+      btnLoading, btnIdle: !btnLoading,
+      startBtnLoading: () => { this.setState({ btnLoading: true }); setTimeout(() => this.setState({ btnLoading: false }), 1600); },
+      modalOpen, openModal: () => this.setState({ modalOpen: true }), closeModal: () => this.setState({ modalOpen: false }),
+      drawerOpen, openDrawer: () => this.setState({ drawerOpen: true }), closeDrawer: () => this.setState({ drawerOpen: false }),
+      menuOpen, toggleMenu: () => this.setState(s => ({ menuOpen: !s.menuOpen })), closeMenu: () => this.setState({ menuOpen: false }),
+      pageLoading, showPageLoading: () => { this.setState({ pageLoading: true }); setTimeout(() => this.setState({ pageLoading: false }), 1800); },
+      stop: (e) => e.stopPropagation(),
+    };
+  }
+}
+</script>
+</body>
+</html>
