@@ -72,29 +72,35 @@ export function AlertFilters() {
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por tipo">
-        {TYPE_OPTIONS.map((option) => (
-          <FilterPill
-            key={option.value}
-            active={type === option.value}
-            onClick={() => updateParam("type", option.value)}
-          >
-            {option.label}
-          </FilterPill>
-        ))}
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Tipo</p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por tipo">
+          {TYPE_OPTIONS.map((option) => (
+            <FilterPill
+              key={option.value}
+              active={type === option.value}
+              onClick={() => updateParam("type", option.value)}
+            >
+              {option.label}
+            </FilterPill>
+          ))}
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por status de leitura">
-        {STATUS_OPTIONS.map((option) => (
-          <FilterPill
-            key={option.value}
-            active={status === option.value}
-            onClick={() => updateParam("status", option.value)}
-          >
-            {option.label}
-          </FilterPill>
-        ))}
+      <div className="flex flex-col gap-1.5">
+        <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Status</p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por status de leitura">
+          {STATUS_OPTIONS.map((option) => (
+            <FilterPill
+              key={option.value}
+              active={status === option.value}
+              onClick={() => updateParam("status", option.value)}
+            >
+              {option.label}
+            </FilterPill>
+          ))}
+        </div>
       </div>
     </div>
   );
