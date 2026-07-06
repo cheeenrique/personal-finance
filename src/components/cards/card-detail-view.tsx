@@ -116,14 +116,19 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
         <InvoiceItemsTable items={invoice.items} />
       </div>
 
-      <div className="flex flex-col gap-2">
-        <h3 className="text-base font-extrabold text-foreground">Parcelamentos deste cartão</h3>
-        <p className="text-sm font-medium text-muted-foreground">
-          Compras parceladas da fatura atual aparecem destacadas na tabela acima (&ldquo;Parcela N&rdquo;). O
-          acompanhamento completo de progresso por parcelamento (N de M, valor restante) vive na tela de
-          Parcelamentos — ainda não implementada (docs/22-CREDIT_CARDS.md, &ldquo;UX Importante&rdquo;: o foco
-          aqui é &ldquo;quanto está comprometido&rdquo;, não &ldquo;quantas parcelas tenho&rdquo;).
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+        <div>
+          <h3 className="text-base font-extrabold text-foreground">Parcelamentos deste cartão</h3>
+          <p className="text-sm font-medium text-muted-foreground">
+            Compras parceladas da fatura atual aparecem destacadas na tabela acima (&ldquo;Parcela N&rdquo;).
+          </p>
+        </div>
+        <Link
+          href="/installments"
+          className="inline-flex h-9 shrink-0 items-center rounded-[10px] border border-border bg-transparent px-3.5 text-[13px] font-bold text-muted-foreground transition-colors duration-100 ease-pf-out hover:border-muted-foreground"
+        >
+          Ver parcelamentos
+        </Link>
       </div>
 
       <div className="flex flex-col gap-2">

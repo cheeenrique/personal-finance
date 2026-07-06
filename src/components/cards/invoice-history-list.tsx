@@ -1,3 +1,6 @@
+import { Receipt } from "lucide-react";
+
+import { EmptyState } from "@/components/shared/empty-state";
 import { formatBRL } from "@/lib/money/format";
 import { formatDateSaoPaulo } from "@/lib/date/format";
 import { TIMEZONE } from "@/lib/date/timezone";
@@ -12,7 +15,14 @@ function monthYearLabel(isoDate: string): string {
 /** Histórico de faturas passadas — lista simples mês/total (docs/22, "Detalhe do Cartão"). */
 export function InvoiceHistoryList({ invoices }: { invoices: PastInvoiceView[] }) {
   if (invoices.length === 0) {
-    return <p className="text-sm font-medium text-muted-foreground">Sem faturas anteriores registradas.</p>;
+    return (
+      <EmptyState
+        icon={Receipt}
+        title="Sem faturas anteriores"
+        description="Faturas de ciclos já fechados aparecem aqui."
+        className="min-h-40 py-8"
+      />
+    );
   }
 
   return (
