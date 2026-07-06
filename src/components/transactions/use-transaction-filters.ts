@@ -76,7 +76,10 @@ export function useTransactionFilters() {
   const replace = useCallback(
     (next: Partial<TransactionFiltersState>, options?: { resetPage?: boolean }) => {
       const params = new URLSearchParams(searchParams.toString());
-      const merged = { ...state, ...next, page: options?.resetPage === false ? state.page : 1 };
+      // `next.page` (ex.: clique na paginação) sempre vence — só cai pro reset
+      // pra 1 quando quem chamou não informou página nenhuma.
+      const nextPage = next.page ?? (options?.resetPage === false ? state.page : 1);
+      const merged = { ...state, ...next, page: nextPage };
 
       const entries: [string, string | undefined][] = [
         ["q", merged.q || undefined],

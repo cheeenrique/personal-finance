@@ -152,121 +152,123 @@ export function DataTable<T>({
 
       <div
         className={cn(
-          "rounded-xl border border-border bg-card",
-          fillHeight ? "min-h-0 flex-1 overflow-auto" : "overflow-x-auto",
+          "flex flex-col overflow-hidden rounded-xl border border-border bg-card",
+          fillHeight && "min-h-0 flex-1",
         )}
       >
-        <table className="w-full border-collapse text-left">
-          <thead className={cn("bg-background", fillHeight && "sticky top-0 z-10")}>
-            <tr>
-              {hasSelection && (
-                <th scope="col" className="w-10 px-4 py-[11px]">
-                  <Checkbox
-                    checked={allSelected}
-                    indeterminate={someSelected}
-                    onCheckedChange={toggleAll}
-                    aria-label="Selecionar todas as linhas"
-                  />
-                </th>
-              )}
-              {columns.map((column) => (
-                <th
-                  key={column.key}
-                  scope="col"
-                  className={cn(
-                    "px-4 py-[11px] text-[11px] font-extrabold tracking-[0.05em] text-muted-foreground uppercase",
-                    column.align === "right" ? "text-right" : "text-left",
-                  )}
-                >
-                  {column.sortable && onSortChange ? (
-                    <button
-                      type="button"
-                      onClick={() => onSortChange(column.key)}
-                      className={cn(
-                        "inline-flex items-center gap-1 hover:text-foreground",
-                        FOCUS_RING_CLASS,
-                      )}
-                    >
-                      {column.header}
-                      <SortIcon active={sort?.column === column.key} direction={sort?.direction} />
-                    </button>
-                  ) : (
-                    column.header
-                  )}
-                </th>
-              ))}
-              {rowActions && <th className="w-20 px-4 py-[11px] text-right">Ações</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <SkeletonRows columnCount={columnCount} />
-            ) : error ? (
+        <div className={cn(fillHeight ? "min-h-0 flex-1 overflow-auto" : "overflow-x-auto")}>
+          <table className="w-full border-collapse text-left">
+            <thead className={cn("bg-background", fillHeight && "sticky top-0 z-10")}>
               <tr>
-                <td colSpan={columnCount} className="px-4 py-10">
-                  <div className="flex flex-col items-center gap-3 text-center">
-                    <p className="text-sm font-medium text-muted-foreground">{error}</p>
-                    {onRetry && (
-                      <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-                        <RefreshCw className="size-3.5" aria-hidden="true" />
-                        Tentar novamente
-                      </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ) : data.length === 0 ? (
-              <tr>
-                <td colSpan={columnCount} className="p-0">
-                  <EmptyState {...emptyState} className="rounded-none border-none" />
-                </td>
-              </tr>
-            ) : (
-              data.map((row) => {
-                const id = getRowId(row);
-                return (
-                  <tr
-                    key={id}
+                {hasSelection && (
+                  <th scope="col" className="w-10 px-4 py-[11px]">
+                    <Checkbox
+                      checked={allSelected}
+                      indeterminate={someSelected}
+                      onCheckedChange={toggleAll}
+                      aria-label="Selecionar todas as linhas"
+                    />
+                  </th>
+                )}
+                {columns.map((column) => (
+                  <th
+                    key={column.key}
+                    scope="col"
                     className={cn(
-                      "border-t border-border text-[13.5px] font-semibold transition-colors hover:bg-background",
-                      selection?.selectedIds.includes(id) && "bg-primary/5",
+                      "px-4 py-[11px] text-[11px] font-extrabold tracking-[0.05em] text-muted-foreground uppercase",
+                      column.align === "right" ? "text-right" : "text-left",
                     )}
                   >
-                    {hasSelection && (
-                      <td className="px-4 py-3">
-                        <Checkbox
-                          checked={selection!.selectedIds.includes(id)}
-                          onCheckedChange={() => toggleRow(id)}
-                          aria-label="Selecionar linha"
-                        />
-                      </td>
-                    )}
-                    {columns.map((column) => (
-                      <td
-                        key={column.key}
-                        className={cn("px-4 py-3", column.align === "right" && "text-right")}
+                    {column.sortable && onSortChange ? (
+                      <button
+                        type="button"
+                        onClick={() => onSortChange(column.key)}
+                        className={cn(
+                          "inline-flex items-center gap-1 hover:text-foreground",
+                          FOCUS_RING_CLASS,
+                        )}
                       >
-                        {column.render(row)}
-                      </td>
-                    ))}
-                    {rowActions && (
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-1.5">{rowActions(row)}</div>
-                      </td>
+                        {column.header}
+                        <SortIcon active={sort?.column === column.key} direction={sort?.direction} />
+                      </button>
+                    ) : (
+                      column.header
                     )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {pagination && !loading && !error && data.length > 0 && (
-        <div className="shrink-0">
-          <DataTablePagination {...pagination} />
+                  </th>
+                ))}
+                {rowActions && <th className="w-20 px-4 py-[11px] text-right">Ações</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <SkeletonRows columnCount={columnCount} />
+              ) : error ? (
+                <tr>
+                  <td colSpan={columnCount} className="px-4 py-10">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <p className="text-sm font-medium text-muted-foreground">{error}</p>
+                      {onRetry && (
+                        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                          <RefreshCw className="size-3.5" aria-hidden="true" />
+                          Tentar novamente
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ) : data.length === 0 ? (
+                <tr>
+                  <td colSpan={columnCount} className="p-0">
+                    <EmptyState {...emptyState} className="rounded-none border-none" />
+                  </td>
+                </tr>
+              ) : (
+                data.map((row) => {
+                  const id = getRowId(row);
+                  return (
+                    <tr
+                      key={id}
+                      className={cn(
+                        "border-t border-border text-[13.5px] font-semibold transition-colors hover:bg-background",
+                        selection?.selectedIds.includes(id) && "bg-primary/5",
+                      )}
+                    >
+                      {hasSelection && (
+                        <td className="px-4 py-3">
+                          <Checkbox
+                            checked={selection!.selectedIds.includes(id)}
+                            onCheckedChange={() => toggleRow(id)}
+                            aria-label="Selecionar linha"
+                          />
+                        </td>
+                      )}
+                      {columns.map((column) => (
+                        <td
+                          key={column.key}
+                          className={cn("px-4 py-3", column.align === "right" && "text-right")}
+                        >
+                          {column.render(row)}
+                        </td>
+                      ))}
+                      {rowActions && (
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-1.5">{rowActions(row)}</div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+
+        {pagination && !loading && !error && data.length > 0 && (
+          <div className="shrink-0 border-t border-border">
+            <DataTablePagination {...pagination} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
