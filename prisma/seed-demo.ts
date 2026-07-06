@@ -26,6 +26,7 @@ import { TIMEZONE, parseInSaoPaulo } from "@/lib/date/timezone";
 import { calendarPartsSP, daysInMonthSP } from "@/lib/date/calendar-sp";
 import { accountService } from "@/modules/accounts/service";
 import { createTransfer } from "@/modules/accounts/transfer";
+import { tagService } from "@/modules/tags/service";
 import { transactionService } from "@/modules/transactions/service";
 import { createInstallmentPurchase } from "@/modules/transactions/installments";
 import { cardService } from "@/modules/cards/service";
@@ -225,6 +226,25 @@ async function seedCategories(userId: string): Promise<IdMap> {
   return idByName;
 }
 
+/** Tags livres (docs/25-TAGS.md: sem seed padrão numa conta real — aqui só pra o demo mostrar a feature). */
+async function seedTags(userId: string): Promise<IdMap> {
+  const definitions = [
+    { name: "Telegram", color: "#0EA5E9" },
+    { name: "Trabalho", color: "#1E40AF" },
+    { name: "Pessoal", color: "#7C3AED" },
+    { name: "Recorrente", color: "#64748B" },
+    { name: "Viagem", color: "#F59E0B" },
+  ];
+
+  const idByName: IdMap = new Map();
+  for (const definition of definitions) {
+    const tag = await tagService.createTag(userId, definition);
+    idByName.set(definition.name, tag.id);
+  }
+
+  return idByName;
+}
+
 async function seedAccounts(userId: string): Promise<IdMap> {
   const definitions = [
     { name: "Conta Corrente", type: AccountType.CHECKING, initialBalance: 3000 },
@@ -286,6 +306,7 @@ async function createTx(
     categoryId?: string;
     source?: Source;
     isPaid?: boolean;
+    tagIds?: string[];
   },
 ): Promise<void> {
   await transactionService.createTransaction(userId, {
@@ -297,7 +318,7 @@ async function createTx(
     cardId: input.source?.cardId,
     date: input.date,
     isPaid: input.isPaid ?? true,
-    tagIds: [],
+    tagIds: input.tagIds ?? [],
   });
 }
 
@@ -360,12 +381,17 @@ async function seedWeekFromRecipes(
   week: WeekWindow,
   recipes: WeeklyRecipe[],
   categories: IdMap,
+  tags: IdMap,
 ): Promise<number> {
   let count = 0;
+  const recorrente = tags.get("Recorrente")!;
+  const telegram = tags.get("Telegram")!;
+  const pessoal = tags.get("Pessoal")!;
 
   for (const recipe of recipes) {
     const occurrences = randomInt(recipe.occurrences[0], recipe.occurrences[1]);
     for (let i = 0; i < occurrences; i += 1) {
+      const tagIds = [recorrente, ...(chance(0.3) ? [telegram] : []), ...(chance(0.2) ? [pessoal] : [])];
       await createTx(userId, {
         description: pick(recipe.descriptions),
         type: TransactionType.EXPENSE,
@@ -373,6 +399,7 @@ async function seedWeekFromRecipes(
         date: dateInWeek(week, randomInt(0, 6), 12),
         categoryId: categories.get(recipe.category)!,
         source: pick(recipe.sources),
+        tagIds,
       });
       count += 1;
     }
@@ -404,7 +431,13 @@ async function seedFarmacia(userId: string, week: WeekWindow, accounts: IdMap, c
  * em zero, então `detectAnomalies` (docs/29-ALERTS.md) dispara garantidamente
  * (`weekAmount > baseline(0) * multiplier` e `weekAmount > alertMinimumAmount`).
  */
-async function seedAnomalyTrip(userId: string, week: WeekWindow, cards: IdMap, categories: IdMap): Promise<number> {
+async function seedAnomalyTrip(
+  userId: string,
+  week: WeekWindow,
+  cards: IdMap,
+  categories: IdMap,
+  tags: IdMap,
+): Promise<number> {
   await createTx(userId, {
     description: "Pacote de viagem - fim de semana",
     type: TransactionType.EXPENSE,
@@ -412,6 +445,7 @@ async function seedAnomalyTrip(userId: string, week: WeekWindow, cards: IdMap, c
     date: dateInWeek(week, 5, 10),
     categoryId: categories.get("Viagens")!,
     source: { cardId: cards.get("Nubank")! },
+    tagIds: [tags.get("Viagem")!],
   });
   return 1;
 }
@@ -453,8 +487,10 @@ async function seedMonth(
   recipes: MonthlyRecipe[],
   categories: IdMap,
   refDate: Date,
+  tags: IdMap,
 ): Promise<number> {
   let count = 0;
+  const trabalho = tags.get("Trabalho")!;
 
   for (const recipe of recipes) {
     if (recipe.chance !== undefined && !chance(recipe.chance)) continue;
@@ -469,6 +505,7 @@ async function seedMonth(
       date,
       categoryId: categories.get(recipe.category)!,
       source: recipe.source,
+      tagIds: recipe.type === TransactionType.INCOME ? [trabalho] : [],
     });
     count += 1;
   }
@@ -549,6 +586,7 @@ async function seedTransactionHistory(
   accounts: IdMap,
   cards: IdMap,
   categories: IdMap,
+  tags: IdMap,
 ): Promise<{ generic: number; farmacia: number; anomaly: number; today: number; unpaid: number }> {
   const refDate = new Date();
   const closedWeek = getClosedWeekWindow(refDate);
@@ -575,7 +613,7 @@ async function seedTransactionHistory(
     const isBaselineWeek = index >= EXTRA_OLDER_WEEKS && !isClosedWeek;
     const isOldestBaselineWeek = index === EXTRA_OLDER_WEEKS;
 
-    generic += await seedWeekFromRecipes(userId, week, weeklyRecipes, categories);
+    generic += await seedWeekFromRecipes(userId, week, weeklyRecipes, categories, tags);
 
     // Farmácia nunca na semana fechada (garante o alerta GREEN por categoria);
     // sempre na semana de baseline mais antiga (garante baseline > 0).
@@ -585,14 +623,14 @@ async function seedTransactionHistory(
     }
   }
 
-  const anomaly = await seedAnomalyTrip(userId, closedWeek, cards, categories);
+  const anomaly = await seedAnomalyTrip(userId, closedWeek, cards, categories, tags);
 
   const monthlyRecipes = buildMonthlyRecipes(accounts, cards);
   const oldestMonth = calendarPartsSP(weeksOldestFirst[0].gte);
   const newestMonth = calendarPartsSP(refDate);
   let monthly = 0;
   for (const { year, month } of monthsInRange(oldestMonth, newestMonth)) {
-    monthly += await seedMonth(userId, year, month, monthlyRecipes, categories, refDate);
+    monthly += await seedMonth(userId, year, month, monthlyRecipes, categories, refDate, tags);
   }
 
   const today = await seedTodayExtras(userId, accounts, categories);
@@ -793,11 +831,12 @@ async function seedAssets(userId: string): Promise<{ assets: number; snapshots: 
 // ---------------------------------------------------------------------------
 
 async function printSummary(userId: string): Promise<void> {
-  const [accounts, cards, categories, transactions, unpaidTransactions, installmentPurchases, budgets, assets, assetSnapshots, alerts] =
+  const [accounts, cards, categories, tags, transactions, unpaidTransactions, installmentPurchases, budgets, assets, assetSnapshots, alerts] =
     await Promise.all([
       prisma.account.count({ where: { userId } }),
       prisma.card.count({ where: { userId } }),
       prisma.category.count({ where: { userId } }),
+      prisma.tag.count({ where: { userId } }),
       prisma.transaction.count({ where: { userId } }),
       prisma.transaction.count({ where: { userId, isPaid: false } }),
       prisma.installmentPurchase.count({ where: { userId } }),
@@ -811,6 +850,7 @@ async function printSummary(userId: string): Promise<void> {
   console.log(`Contas: ${accounts}`);
   console.log(`Cartões: ${cards}`);
   console.log(`Categorias: ${categories}`);
+  console.log(`Tags: ${tags}`);
   console.log(`Transações: ${transactions} (${unpaidTransactions} previstas/não pagas)`);
   console.log(`Compras parceladas: ${installmentPurchases}`);
   console.log(`Orçamentos: ${budgets}`);
@@ -827,15 +867,16 @@ async function main(): Promise<void> {
   console.log("Apagando dados demo anteriores...");
   await wipeDemoData(demoUser.id);
 
-  console.log("Semeando categorias...");
+  console.log("Semeando categorias e tags...");
   const categories = await seedCategories(demoUser.id);
+  const tags = await seedTags(demoUser.id);
 
   console.log("Semeando contas e cartões...");
   const accounts = await seedAccounts(demoUser.id);
   const cards = await seedCards(demoUser.id);
 
   console.log("Semeando ~4 meses de transações...");
-  const historyResult = await seedTransactionHistory(demoUser.id, accounts, cards, categories);
+  const historyResult = await seedTransactionHistory(demoUser.id, accounts, cards, categories, tags);
 
   console.log("Semeando transferências...");
   await seedTransfers(demoUser.id, accounts);
