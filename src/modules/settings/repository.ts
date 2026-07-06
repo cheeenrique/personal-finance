@@ -54,4 +54,26 @@ async function update(userId: string, data: UpdateSettingsData): Promise<UserSet
   });
 }
 
-export const settingsRepository = { findByUserId, findOrCreate, update };
+/** Grava o código de vínculo do Telegram recém-gerado (docs/12-SETTINGS.md, "3. Telegram"). */
+async function setTelegramLinkCode(userId: string, code: string, expiresAt: Date): Promise<UserSettings> {
+  return prisma.userSettings.update({
+    where: { userId },
+    data: { telegramLinkCode: code, telegramLinkCodeExpiresAt: expiresAt },
+  });
+}
+
+/** Desvincula o chat_id — nunca mexe em `telegramLinkCode` (task explícita). */
+async function clearTelegramChatId(userId: string): Promise<UserSettings> {
+  return prisma.userSettings.update({
+    where: { userId },
+    data: { telegramChatId: null },
+  });
+}
+
+export const settingsRepository = {
+  findByUserId,
+  findOrCreate,
+  update,
+  setTelegramLinkCode,
+  clearTelegramChatId,
+};

@@ -54,3 +54,13 @@ export function buildUnknownReply(): string {
 export function buildErrorReply(message: string): string {
   return `⚠️ ${message}`;
 }
+
+/** Vínculo confirmado via `/vincular <CODE>` ou `/start <CODE>` (docs/12-SETTINGS.md, "3. Telegram"). */
+export function buildTelegramLinkedReply(): string {
+  return "✅ Telegram vinculado com sucesso! Agora você pode registrar transações por aqui.";
+}
+
+/** Mesma mensagem pras 3 reasons de falha (`invalid_command`, `invalid_or_expired_code`, `chat_already_linked`) — o usuário só precisa saber que precisa gerar um código novo. */
+export function buildTelegramLinkFailedReply(): string {
+  return "Código inválido ou expirado. Gere um novo em Configurações.";
+}

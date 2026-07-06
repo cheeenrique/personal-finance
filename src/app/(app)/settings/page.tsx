@@ -6,7 +6,6 @@ import { AlertsCard } from "@/components/settings/alerts-card";
 import { TelegramCard } from "@/components/settings/telegram-card";
 import { DataCard } from "@/components/settings/data-card";
 import { SessionCard } from "@/components/settings/session-card";
-import { resolveTelegramChatId } from "@/components/settings/telegram-status";
 
 /**
  * `/settings` (docs/12-SETTINGS.md). Server Component: lê `UserSettings`
@@ -15,6 +14,13 @@ import { resolveTelegramChatId } from "@/components/settings/telegram-status";
  * pelo client, docs/99-CLAUDE.md "Regra de Ouro"). `Prisma.Decimal` vira
  * string na borda antes de descer pros Client Components (RSC não
  * serializa instância de classe).
+ *
+ * Telegram: vínculo é 100% DB-backed agora (`UserSettings.telegramChatId`,
+ * self-service via código — ver `telegram-card.tsx`). O fallback env
+ * (`TELEGRAM_ALLOWED_CHAT_IDS`, legado) só é resolvido no webhook
+ * (`modules/telegram/allowlist.ts`), nunca lido aqui — setups legados via
+ * env aparecem como "não vinculado" nesta tela até o usuário gerar um código
+ * e confirmar pelo bot.
  */
 export default async function SettingsPage() {
   const session = await auth();
@@ -22,7 +28,7 @@ export default async function SettingsPage() {
   if (!userId) return null;
 
   const settings = await settingsService.getSettings(userId);
-  const chatId = resolveTelegramChatId(userId);
+  const pendingCode = settingsService.activeTelegramLinkCode(settings);
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,7 +43,7 @@ export default async function SettingsPage() {
           alertGreenMultiplier={settings.alertGreenMultiplier.toString()}
         />
 
-        <TelegramCard chatId={chatId} />
+        <TelegramCard chatId={settings.telegramChatId} pendingCode={pendingCode} />
       </div>
 
       <DataCard />

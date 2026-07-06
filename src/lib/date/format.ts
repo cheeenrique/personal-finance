@@ -46,6 +46,16 @@ export function formatDateTimeSaoPaulo(value: Date | string): string {
   }).format(date);
 }
 
+/** `14:32` — só horário, usado quando a data já é óbvia pelo contexto (ex.: expiração de um código gerado há poucos minutos). */
+export function formatTimeSaoPaulo(value: Date | string): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 /** `YYYY-MM-DD` no calendário de America/Sao_Paulo — valor default de `<input type="date">` (DateField). */
 export function toDateInputValueSaoPaulo(value: Date | string = new Date()): string {
   const date = typeof value === "string" ? new Date(value) : value;

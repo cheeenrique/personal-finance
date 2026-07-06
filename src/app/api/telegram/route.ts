@@ -4,6 +4,8 @@ import { isValidWebhookSecret } from "@/modules/telegram/webhook-auth";
 import { telegramParser } from "@/modules/telegram/parser";
 import { telegramHandlers } from "@/modules/telegram/handlers";
 import { telegramApi } from "@/modules/telegram/telegram-api";
+import { looksLikeLinkCommand, tryLinkFromMessage } from "@/modules/telegram/link";
+import { buildTelegramLinkedReply, buildTelegramLinkFailedReply } from "@/modules/telegram/reply";
 
 const WEBHOOK_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 
@@ -39,7 +41,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true });
   }
 
-  const userId = resolveUserId(chatId);
+  // Comando de vínculo (`/vincular <CODE>` ou `/start <CODE>`) roda ANTES da
+  // allowlist — é assim que um chat_id novo, ainda não autorizado, entra no
+  // sistema (docs/12-SETTINGS.md, "3. Telegram").
+  if (looksLikeLinkCommand(text)) {
+    const linkResult = await tryLinkFromMessage(chatId, text);
+
+    if (linkResult.ok) {
+      await telegramApi.sendMessage(chatId, buildTelegramLinkedReply());
+      console.log(`chat_id=${chatId} -> telegram_linked`);
+    } else {
+      await telegramApi.sendMessage(chatId, buildTelegramLinkFailedReply());
+      console.log(`chat_id=${chatId} -> link_failed_${linkResult.reason}`);
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
+  const userId = await resolveUserId(chatId);
   if (!userId) {
     // Rejeição silenciosa (docs/30-TELEGRAM.md, "Segurança"): 200 vazio, sem
     // processar nem responder ao remetente.

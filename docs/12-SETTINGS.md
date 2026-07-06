@@ -56,11 +56,15 @@ alertAnomalyMultiplier    // default 1.5
 alertMinimumAmount        // Decimal, default 50.00
 alertGreenMultiplier      // default 0.6
 
+telegramChatId              // String? @unique — vínculo self-service confirmado
+telegramLinkCode            // String? @unique — código de 6 chars, válido 15min
+telegramLinkCodeExpiresAt   // DateTime?
+
 createdAt
 updatedAt
 ```
 
-O `chat_id` do Telegram não é campo do `UserSettings` — vem da allowlist (`TELEGRAM_ALLOWED_CHAT_IDS`, env var) e é só exibido aqui, nunca editado pela UI (ver seção Telegram abaixo).
+O vínculo do Telegram (`telegramChatId`) é 100% gerenciado pelo próprio usuário nesta tela — gera um código, confirma pelo bot, sem precisar editar `.env` (ver seção Telegram abaixo). Fallback legado via `TELEGRAM_ALLOWED_CHAT_IDS` (env var) continua existindo pro webhook, mas não é mais o caminho principal.
 
 ---
 
@@ -141,18 +145,26 @@ Alterar esses valores só afeta as próximas execuções do cron semanal. Alerta
 
 # 3. Telegram
 
-## Status do vínculo
+## Vínculo por código (self-service)
 
 ```text
-Vinculado    → chat_id: 123456789 (via allowlist)
-Não vinculado → nenhum chat_id associado a este usuário
+Vinculado         → badge verde + chat_id: 123456789 + botão "Desvincular"
+Não vinculado     → botão "Vincular Telegram" (gera código)
+Código pendente   → código de 6 chars em destaque + instrução "/vincular <CODE>" + expiração
 ```
+
+## Fluxo
+
+1. Usuário clica "Vincular Telegram" → `generateTelegramLinkCodeAction` gera um código de 6 caracteres (charset sem `0/O/1/I`, `crypto.randomInt`), válido por **15 minutos**.
+2. Usuário envia `/vincular <CODE>` (ou abre o deep-link `/start <CODE>`) pro bot no Telegram.
+3. Webhook confirma o vínculo, gravando `telegramChatId` em `UserSettings` e limpando o código. A tela detecta a confirmação via polling curto (ou refresh manual) e atualiza para o estado "Vinculado".
+4. Código expirado nunca é exibido como válido — expirar é tratado como "sem código pendente".
 
 ## Regras
 
-* `chat_id` é **read-only** nesta tela — não existe botão de "trocar" ou "desvincular" pela UI.
-* O vínculo é definido em `TELEGRAM_ALLOWED_CHAT_IDS` (env var, mapeia 2 chat_ids fixos para os 2 `userId`). Alterar o vínculo exige mudar a env var e reiniciar a aplicação.
-* Se o usuário não está na allowlist, a tela mostra "Não vinculado" e instrui a procurar o administrador do sistema (o próprio dono, no caso).
+* Gerar um novo código com um `chat_id` já vinculado é permitido — troca de celular é caso de uso legítimo (o vínculo antigo só é sobrescrito quando o novo código for confirmado).
+* "Desvincular" (com confirmação, `ConfirmDialog`) limpa `telegramChatId` — para de receber notificações e lançar por lá até um novo vínculo.
+* Fallback legado: `TELEGRAM_ALLOWED_CHAT_IDS` (env var) continua funcionando no webhook para setups antigos, mas não aparece nesta tela — é só um caminho de leitura no bot, nunca editável pela UI.
 
 Ver `30-TELEGRAM.md` para o fluxo completo do bot.
 
@@ -231,7 +243,7 @@ Nenhuma configuração de um usuário é visível ou editável pelo outro.
 
 ## Regra 3
 
-`chat_id` do Telegram nunca é editável pela UI — só leitura, refletindo a env var.
+`chat_id` do Telegram não é editável diretamente — só é definido via confirmação do código de vínculo pelo bot (`/vincular <CODE>`/`/start <CODE>`). A UI só gera o código e desvincula; nunca escreve `telegramChatId` diretamente.
 
 ---
 

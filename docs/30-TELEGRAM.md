@@ -200,9 +200,11 @@ Todas as mensagens criam ou consultam:
 
 # Segurança
 
-* **Allowlist fixa** via env `TELEGRAM_ALLOWED_CHAT_IDS` — mapeia os 2 `chat_id` autorizados para o `userId` correspondente. Mensagem de `chat_id` fora da lista: **rejeitar silenciosamente** (sem responder — não confirma ao remetente que o bot existe).
+* **Allowlist DB-backed (self-service)** — o vínculo principal vive em `UserSettings.telegramChatId` (`@unique`). Cada usuário gera, em Configurações, um código de 6 caracteres válido por 15min (`UserSettings.telegramLinkCode`/`telegramLinkCodeExpiresAt`) e confirma o vínculo enviando `/vincular <CODE>` (ou o deep-link `/start <CODE>`, formato `t.me/<bot>?start=<code>`) pro bot. Ver `12-SETTINGS.md`, "3. Telegram".
+* **Fallback legado** via env `TELEGRAM_ALLOWED_CHAT_IDS` — mapa fixo "chatId:userId" configurado manualmente pelo admin. Só é consultado quando o `chat_id` não está vinculado a nenhum `UserSettings` no banco. `resolveUserId` (`modules/telegram/allowlist.ts`) checa o banco primeiro, cai pro env depois.
+* Comando de vínculo (`/vincular`/`/start`) roda **antes** da checagem de allowlist no webhook — é assim que um `chat_id` novo, ainda não autorizado, entra no sistema. Mensagem de `chat_id` fora da lista (e que não é um comando de vínculo): **rejeitar silenciosamente** (sem responder — não confirma ao remetente que o bot existe).
 * **Validação do webhook:** toda request em `/api/telegram` valida o header `X-Telegram-Bot-Api-Secret-Token` contra `TELEGRAM_WEBHOOK_SECRET` (configurado no `setWebhook`) antes de processar. Sem o header correto → descarta.
-* **Logs:** nunca logar corpo da mensagem nem valores monetários — só `chat_id` + resultado (ex.: `chat_id=123 -> transaction_created`).
+* **Logs:** nunca logar corpo da mensagem nem valores monetários — só `chat_id` + resultado (ex.: `chat_id=123 -> transaction_created`, `chat_id=123 -> telegram_linked`).
 
 ---
 

@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/db/client";
+
 /**
  * Allowlist fixa via env `TELEGRAM_ALLOWED_CHAT_IDS` (docs/30-TELEGRAM.md,
  * "Segurança"): mapa "chatId:userId" separado por vírgula, ex.
@@ -19,14 +21,32 @@ function parseAllowlist(raw: string): Map<string, string> {
 }
 
 /**
- * Resolve o `userId` autorizado para um `chatId`. Aceita `rawAllowlist`
- * explícito (default = env `TELEGRAM_ALLOWED_CHAT_IDS`) — parâmetro existe
- * pra permitir teste isolado sem mexer em `process.env`.
+ * Fallback LEGADO: resolve via env `TELEGRAM_ALLOWED_CHAT_IDS` (default =
+ * env atual — parâmetro existe pra permitir teste isolado sem mexer em
+ * `process.env`). Só é consultado quando o `chatId` não está vinculado a
+ * nenhum `UserSettings` no banco (ver `resolveUserId`).
  */
-export function resolveUserId(
+function resolveUserIdFromEnv(
   chatId: string | number,
   rawAllowlist: string = process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? "",
 ): string | null {
   const allowlist = parseAllowlist(rawAllowlist);
   return allowlist.get(String(chatId)) ?? null;
+}
+
+/**
+ * Resolve o `userId` autorizado para um `chatId`. Vínculo self-service
+ * (`UserSettings.telegramChatId`, docs/12-SETTINGS.md "3. Telegram") tem
+ * prioridade; só cai no fallback estático da env
+ * (`TELEGRAM_ALLOWED_CHAT_IDS`, legado) se não achar ninguém vinculado no
+ * banco.
+ */
+export async function resolveUserId(chatId: string | number): Promise<string | null> {
+  const linked = await prisma.userSettings.findFirst({
+    where: { telegramChatId: String(chatId) },
+    select: { userId: true },
+  });
+  if (linked) return linked.userId;
+
+  return resolveUserIdFromEnv(chatId);
 }

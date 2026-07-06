@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { settingsService } from "./service";
 import { updateSettingsSchema } from "./schemas";
 import { SettingsDomainError } from "./errors";
-import type { UserSettings, ActionResult } from "./types";
+import type { UserSettings, ActionResult, TelegramLinkCode } from "./types";
 
 const SETTINGS_PATH = "/settings";
 
@@ -35,7 +35,8 @@ export async function getSettingsAction(): Promise<ActionResult<UserSettings>> {
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
   try {
-    const settings = await settingsService.getSettings(userId);
+    // `getSettingsForClient` (não `getSettings`) — nunca deixa o client ver um código de vínculo já expirado.
+    const settings = await settingsService.getSettingsForClient(userId);
     return { success: true, data: settings };
   } catch (error) {
     return toActionError(error);
@@ -56,6 +57,32 @@ export async function updateSettingsAction(input: unknown): Promise<ActionResult
 
   try {
     const settings = await settingsService.updateSettings(userId, parsed.data);
+    revalidatePath(SETTINGS_PATH);
+    return { success: true, data: settings };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function generateTelegramLinkCodeAction(): Promise<ActionResult<TelegramLinkCode>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  try {
+    const linkCode = await settingsService.generateTelegramLinkCode(userId);
+    revalidatePath(SETTINGS_PATH);
+    return { success: true, data: linkCode };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function unlinkTelegramAction(): Promise<ActionResult<UserSettings>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  try {
+    const settings = await settingsService.unlinkTelegram(userId);
     revalidatePath(SETTINGS_PATH);
     return { success: true, data: settings };
   } catch (error) {
