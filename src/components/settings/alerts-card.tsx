@@ -26,6 +26,16 @@ type AlertsCardProps = {
 };
 
 /**
+ * Reserva a mesma altura pros 3 labels do grid abaixo, alinhados por baixo
+ * (`items-end`) — "Valor mínimo para disparar alerta" quebra em 2 linhas
+ * nas colunas mais estreitas (`sm:grid-cols-3`) enquanto os outros 2 labels
+ * cabem em 1 linha; sem isso o Input da coluna do meio ficava mais baixo que
+ * os vizinhos (label bold + subtítulo muted — mesma altura reservada de
+ * `PreferenceRow`, preferences-card.tsx, aplicada aqui a labels em vez de linhas).
+ */
+const ALERT_LABEL_CLASSNAME = "sm:min-h-10 sm:items-end sm:leading-snug";
+
+/**
  * Alertas (thresholds) — docs/12-SETTINGS.md, item 2. Os 3 campos batem 1:1
  * com `UserSettings.alertAnomalyMultiplier/alertMinimumAmount/alertGreenMultiplier`;
  * validação de range (>0, máx. 99.99, 2 casas decimais) já vive no
@@ -74,7 +84,9 @@ export function AlertsCard({
         <CardContent className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="alert-anomaly">Multiplicador de atenção</Label>
+              <Label htmlFor="alert-anomaly" className={ALERT_LABEL_CLASSNAME}>
+                Multiplicador de atenção
+              </Label>
               <Input
                 id="alert-anomaly"
                 inputMode="decimal"
@@ -86,7 +98,9 @@ export function AlertsCard({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="alert-minimum">Valor mínimo para disparar alerta</Label>
+              <Label htmlFor="alert-minimum" className={ALERT_LABEL_CLASSNAME}>
+                Valor mínimo para disparar alerta
+              </Label>
               <CurrencyInput
                 id="alert-minimum"
                 value={minimum}
@@ -97,7 +111,9 @@ export function AlertsCard({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="alert-green">Multiplicador de economia</Label>
+              <Label htmlFor="alert-green" className={ALERT_LABEL_CLASSNAME}>
+                Multiplicador de economia
+              </Label>
               <Input
                 id="alert-green"
                 inputMode="decimal"
