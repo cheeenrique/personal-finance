@@ -1,0 +1,264 @@
+# 12 - SETTINGS.md
+
+# Configurações
+
+Este módulo concentra as preferências do usuário logado.
+
+Cada um dos 2 usuários tem suas próprias configurações, totalmente isoladas.
+
+---
+
+# Objetivo
+
+Permitir que o usuário:
+
+* defina moeda e fuso horário
+* escolha o tema (claro/escuro)
+* ajuste a sensibilidade dos alertas automáticos
+* veja o status da integração com o Telegram
+* acesse rapidamente categorias e tags
+* exporte seus dados e acesse o backup
+
+---
+
+# Regra Principal
+
+Toda configuração pertence a um único usuário.
+
+```text
+UserSettings é 1:1 com User.
+Nunca compartilhado entre os 2 usuários.
+```
+
+---
+
+# Rota
+
+```text
+/settings
+```
+
+Acessível apenas autenticado, protegida pelo mesmo middleware das demais rotas (ver `10-AUTH.md`).
+
+---
+
+# Estrutura do UserSettings
+
+```ts
+id            // cuid
+userId        // 1:1 com User
+
+currency      // default "BRL"
+timezone      // default "America/Sao_Paulo"
+theme         // LIGHT | DARK
+
+alertAnomalyMultiplier    // default 1.5
+alertMinimumAmount        // Decimal, default 50.00
+alertGreenMultiplier      // default 0.6
+
+createdAt
+updatedAt
+```
+
+O `chat_id` do Telegram não é campo do `UserSettings` — vem da allowlist (`TELEGRAM_ALLOWED_CHAT_IDS`, env var) e é só exibido aqui, nunca editado pela UI (ver seção Telegram abaixo).
+
+---
+
+# Seções da Tela
+
+```text
+1. Preferências gerais (moeda, timezone, tema)
+2. Alertas (thresholds)
+3. Telegram (status do vínculo)
+4. Categorias e Tags (atalho)
+5. Dados (export CSV + backup)
+```
+
+---
+
+# 1. Preferências Gerais
+
+## Moeda
+
+```text
+BRL (default, único suportado no momento)
+```
+
+Campo existe pra abrir espaço futuro, mas hoje só BRL é aceito — sem multi-moeda real (YAGNI).
+
+---
+
+## Timezone
+
+```text
+America/Sao_Paulo (default e fixo)
+```
+
+Todo cálculo de data (semana, mês, fatura) usa esse timezone — ver `01-STACK.md`. Trocar aqui é só cosmético até o sistema suportar múltiplos fusos (não é o caso hoje).
+
+---
+
+## Tema
+
+```text
+Claro
+Escuro
+```
+
+Aplicado imediatamente, sem reload.
+
+---
+
+# 2. Alertas (Thresholds)
+
+Configuração usada pelo cron de alertas (ver `29-ALERTS.md`).
+
+## Campos
+
+```text
+multiplicadorAnomalia   → default 1.5
+mínimoAbsoluto          → default R$ 50,00
+multiplicadorVerde      → default 0.6
+```
+
+## Explicação em tela
+
+```text
+Alerta de gasto fora do padrão dispara quando o gasto da semana
+numa categoria passa de {multiplicadorAnomalia}x a média
+e é maior que R$ {mínimoAbsoluto}.
+
+Alerta de economia dispara quando o gasto fica abaixo de
+{multiplicadorVerde}x a média.
+```
+
+## Regra
+
+Alterar esses valores só afeta as próximas execuções do cron semanal. Alertas já gerados não são recalculados.
+
+---
+
+# 3. Telegram
+
+## Status do vínculo
+
+```text
+Vinculado    → chat_id: 123456789 (via allowlist)
+Não vinculado → nenhum chat_id associado a este usuário
+```
+
+## Regras
+
+* `chat_id` é **read-only** nesta tela — não existe botão de "trocar" ou "desvincular" pela UI.
+* O vínculo é definido em `TELEGRAM_ALLOWED_CHAT_IDS` (env var, mapeia 2 chat_ids fixos para os 2 `userId`). Alterar o vínculo exige mudar a env var e reiniciar a aplicação.
+* Se o usuário não está na allowlist, a tela mostra "Não vinculado" e instrui a procurar o administrador do sistema (o próprio dono, no caso).
+
+Ver `30-TELEGRAM.md` para o fluxo completo do bot.
+
+---
+
+# 4. Categorias e Tags (Atalho)
+
+```text
+[ Gerenciar categorias ]  → leva para 24-CATEGORIES.md
+[ Gerenciar tags ]        → leva para 25-TAGS.md
+```
+
+Settings não duplica a UI de categorias/tags — é só um atalho de navegação.
+
+---
+
+# 5. Dados
+
+## Export CSV
+
+```text
+[ Exportar transações (CSV) ]
+```
+
+Mesma exportação documentada em `28-REPORTS.md`, com atalho direto aqui para conveniência.
+
+## Backup
+
+```text
+[ Ver informações de backup ]
+```
+
+Exibe texto explicando a estratégia de backup do provider (point-in-time recovery do Postgres gerenciado — Neon/Supabase/Railway) e, se aplicável, a data do último `pg_dump` manual. Ver `01-STACK.md` e `03-DATABASE.md` para detalhes técnicos.
+
+---
+
+# Estados
+
+## Loading
+
+Skeleton dos cards de seção.
+
+---
+
+## Erro
+
+```text
+Não foi possível carregar suas configurações.
+```
+
+---
+
+## Salvo
+
+```text
+Configurações atualizadas.
+```
+
+Feedback inline (toast curto), sem reload de página.
+
+---
+
+# Regras de Negócio
+
+## Regra 1
+
+`UserSettings` é criado automaticamente no primeiro acesso do usuário (via seed ou lazy-create no primeiro `GET /settings`), sempre com os defaults (BRL, America/Sao_Paulo, thresholds default).
+
+---
+
+## Regra 2
+
+Nenhuma configuração de um usuário é visível ou editável pelo outro.
+
+---
+
+## Regra 3
+
+`chat_id` do Telegram nunca é editável pela UI — só leitura, refletindo a env var.
+
+---
+
+## Regra 4
+
+Alterar timezone/moeda hoje é cosmético — o sistema só opera corretamente em BRL + America/Sao_Paulo (ver `01-STACK.md`). Documentado aqui pra não gerar expectativa de multi-moeda real.
+
+---
+
+# Performance
+
+* tela simples, 1 registro por usuário — sem paginação, sem agregação pesada
+* leitura direta do `UserSettings`, sem cache dedicado
+
+---
+
+# Integração com Sistema
+
+Settings alimenta:
+
+* Alerts (thresholds do cron semanal — `29-ALERTS.md`)
+* Telegram (exibição do status de vínculo — `30-TELEGRAM.md`)
+* Dashboard e Reports (moeda/timezone usados na formatação e nos cálculos de data)
+
+---
+
+# Filosofia
+
+Settings não é o coração do sistema — é o painel de ajuste fino.
+
+Poucas opções, direto ao ponto: o usuário deve conseguir ajustar o essencial (tema, sensibilidade de alerta, status do Telegram) sem se perder em configuração desnecessária.
