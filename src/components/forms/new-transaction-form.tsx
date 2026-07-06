@@ -13,8 +13,7 @@ import { DateField } from "@/components/forms/date-field";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
 import { useShell } from "@/components/providers/shell-provider";
 import { createTransactionAction } from "@/modules/transactions/actions";
-import { listAccountsAction } from "@/modules/accounts/actions";
-import { listCardsAction } from "@/modules/cards/actions";
+import { listAccountOptionsAction, listCardOptionsAction } from "@/components/shared/entity-options-actions";
 import { listCategoryTreeAction } from "@/modules/categories/actions";
 import type { CategoryTreeNode } from "@/modules/categories/types";
 import { TransactionType, CategoryType } from "@/generated/prisma/enums";
@@ -101,7 +100,7 @@ export function NewTransactionForm() {
       .then(() => {
         setFormError(null);
         setLoadingOptions(true);
-        return Promise.all([listCategoryTreeAction(), listAccountsAction(), listCardsAction()]);
+        return Promise.all([listCategoryTreeAction(), listAccountOptionsAction(), listCardOptionsAction()]);
       })
       .then(([categoryResult, accountResult, cardResult]) => {
         if (categoryResult.success) setCategories(categoryResult.data);

@@ -1,16 +1,15 @@
-import { TransactionType } from "@/generated/prisma/enums";
+import { CategoryType, TransactionType } from "@/generated/prisma/enums";
 import type { ClientTransaction } from "@/modules/transactions/types";
 import type { DataTableColumn } from "@/components/tables/data-table";
-import {
-  TransactionTypeBadge,
-  InstallmentBadge,
-} from "@/components/shared/badges/transaction-type-badge";
+import { TransactionInlineBadges } from "@/components/shared/badges/transaction-type-badge";
+import { resolveCategoryDotColor } from "@/components/categories/category-config";
+import type { CategoryRef } from "./use-transactions-reference-data";
 import { formatBRL } from "@/lib/money/format";
 import { formatDateSaoPaulo } from "@/lib/date/format";
 import { cn } from "@/lib/utils";
 
 type ColumnDeps = {
-  categoryNameById: Map<string, string>;
+  categoryById: Map<string, CategoryRef>;
   accountNameById: Map<string, string>;
   cardNameById: Map<string, string>;
   installmentTotals: Map<string, number>;
@@ -33,7 +32,7 @@ function amountAppearance(row: ClientTransaction): { className: string; sign: st
  * `useTransactionsReferenceData`.
  */
 export function buildTransactionColumns({
-  categoryNameById,
+  categoryById,
   accountNameById,
   cardNameById,
   installmentTotals,
@@ -48,26 +47,46 @@ export function buildTransactionColumns({
     {
       key: "description",
       header: "Descrição",
+      // Sem coluna "Tipo" própria (design/Personal Finance App.dc.html,
+      // "Transações"): parcela/transferência/fatura/pendência viram pills
+      // inline aqui, junto da descrição.
       render: (row) => (
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate">{row.description}</span>
-          {row.installmentPurchaseId && row.installmentNumber && (
-            <InstallmentBadge
-              current={row.installmentNumber}
-              total={installmentTotals.get(row.installmentPurchaseId) ?? row.installmentNumber}
-            />
-          )}
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate font-semibold text-foreground">{row.description}</span>
+          <TransactionInlineBadges
+            row={{
+              type: row.type,
+              transferId: row.transferId,
+              isPaid: row.isPaid,
+              installmentNumber: row.installmentPurchaseId ? row.installmentNumber : null,
+              installmentsCount: row.installmentPurchaseId
+                ? (installmentTotals.get(row.installmentPurchaseId) ?? row.installmentNumber)
+                : null,
+            }}
+          />
         </div>
       ),
     },
     {
       key: "category",
       header: "Categoria",
-      render: (row) => (
-        <span className="text-muted-foreground">
-          {row.categoryId ? (categoryNameById.get(row.categoryId) ?? "—") : "—"}
-        </span>
-      ),
+      render: (row) => {
+        const category = row.categoryId ? categoryById.get(row.categoryId) : undefined;
+        if (!category) return <span className="text-muted-foreground">—</span>;
+
+        return (
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{
+                backgroundColor: resolveCategoryDotColor(category.color, row.type as unknown as CategoryType),
+              }}
+              aria-hidden="true"
+            />
+            {category.name}
+          </span>
+        );
+      },
     },
     {
       key: "origin",
@@ -78,16 +97,6 @@ export function buildTransactionColumns({
             (row.cardId && cardNameById.get(row.cardId)) ||
             "—"}
         </span>
-      ),
-    },
-    {
-      key: "type",
-      header: "Tipo",
-      render: (row) => (
-        <div className="flex flex-col items-start gap-1">
-          <TransactionTypeBadge type={row.type} />
-          {!row.isPaid && <span className="text-[10.5px] font-bold text-warning">Pendente</span>}
-        </div>
       ),
     },
     {

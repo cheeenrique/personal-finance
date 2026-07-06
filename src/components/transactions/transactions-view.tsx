@@ -43,12 +43,12 @@ export function TransactionsView() {
   const columns = useMemo(
     () =>
       buildTransactionColumns({
-        categoryNameById: referenceData.categoryNameById,
+        categoryById: referenceData.categoryById,
         accountNameById: referenceData.accountNameById,
         cardNameById: referenceData.cardNameById,
         installmentTotals,
       }),
-    [referenceData.categoryNameById, referenceData.accountNameById, referenceData.cardNameById, installmentTotals],
+    [referenceData.categoryById, referenceData.accountNameById, referenceData.cardNameById, installmentTotals],
   );
 
   const selectedRows = page.items.filter((item) => selectedIds.includes(item.id));
@@ -60,8 +60,8 @@ export function TransactionsView() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium text-muted-foreground">
           {loading ? "Carregando…" : `${page.total} transação(ões) encontrada(s)`}
         </p>
@@ -84,6 +84,7 @@ export function TransactionsView() {
         loading={loading}
         error={error}
         onRetry={reload}
+        fillHeight
         emptyState={{
           icon: Receipt,
           title: "Nenhuma transação encontrada.",

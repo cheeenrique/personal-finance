@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { listAccountsAction } from "@/modules/accounts/actions";
-import { listCardsAction } from "@/modules/cards/actions";
+import { listAccountOptionsAction, listCardOptionsAction } from "@/components/shared/entity-options-actions";
 import { listCategoryTreeAction } from "@/modules/categories/actions";
 import { listTagsAction } from "@/modules/tags/actions";
 import type { CategoryTreeNode } from "@/modules/categories/types";
@@ -18,10 +17,13 @@ function flattenCategories(nodes: CategoryTreeNode[], depth = 0): EntitySelectOp
   ]);
 }
 
-function flattenCategoryNames(nodes: CategoryTreeNode[]): [string, string][] {
+/** Nome + cor da categoria — a bolinha da coluna "Categoria" precisa da cor, não só do nome (docs/04-DESIGN_SYSTEM.md, "Categoria"). */
+export type CategoryRef = { name: string; color: string | null };
+
+function flattenCategoryRefs(nodes: CategoryTreeNode[]): [string, CategoryRef][] {
   return nodes.flatMap((node) => [
-    [node.id, node.name] as [string, string],
-    ...flattenCategoryNames(node.children),
+    [node.id, { name: node.name, color: node.color }] as [string, CategoryRef],
+    ...flattenCategoryRefs(node.children),
   ]);
 }
 
@@ -30,7 +32,7 @@ export type TransactionsReferenceData = {
   categoryOptions: EntitySelectOption[];
   originOptions: EntitySelectOption[];
   tags: Tag[];
-  categoryNameById: Map<string, string>;
+  categoryById: Map<string, CategoryRef>;
   accountNameById: Map<string, string>;
   cardNameById: Map<string, string>;
 };
@@ -40,7 +42,7 @@ const EMPTY: TransactionsReferenceData = {
   categoryOptions: [],
   originOptions: [],
   tags: [],
-  categoryNameById: new Map(),
+  categoryById: new Map(),
   accountNameById: new Map(),
   cardNameById: new Map(),
 };
@@ -57,7 +59,7 @@ export function useTransactionsReferenceData(): TransactionsReferenceData {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([listCategoryTreeAction(), listAccountsAction(), listCardsAction(), listTagsAction()]).then(
+    Promise.all([listCategoryTreeAction(), listAccountOptionsAction(), listCardOptionsAction(), listTagsAction()]).then(
       ([categoryResult, accountResult, cardResult, tagResult]) => {
         if (cancelled) return;
 
@@ -74,7 +76,7 @@ export function useTransactionsReferenceData(): TransactionsReferenceData {
             ...cards.map((card) => ({ value: `card:${card.id}`, label: card.name, group: "Cartões" })),
           ],
           tags,
-          categoryNameById: new Map(flattenCategoryNames(categories)),
+          categoryById: new Map(flattenCategoryRefs(categories)),
           accountNameById: new Map(accounts.map((account) => [account.id, account.name])),
           cardNameById: new Map(cards.map((card) => [card.id, card.name])),
         });

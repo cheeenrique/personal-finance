@@ -31,7 +31,16 @@ export function DateField({ value, onValueChange, className, ...props }: DateFie
         type="date"
         value={value || toDateInputValueSaoPaulo()}
         onChange={(event) => onValueChange(event.target.value)}
-        className={cn("pl-8 font-mono", className)}
+        className={cn(
+          "pl-8 font-mono",
+          // O indicador nativo do <input type="date"> (ícone de calendário do
+          // browser) duplica o `CalendarDays` que já desenhamos à esquerda, e
+          // não segue o estilo dos ícones do app. Deixamos ele invisível mas
+          // esticado sobre todo o campo — continua clicável (abre o seletor
+          // nativo), só não aparece mais visualmente.
+          "[&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0",
+          className,
+        )}
         {...props}
       />
     </div>

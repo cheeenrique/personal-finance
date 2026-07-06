@@ -43,8 +43,8 @@ export function UserMenu({ name, email }: UserMenuProps) {
           />
         }
       >
-        <Avatar>
-          <AvatarFallback className="bg-gradient-to-br from-accent to-orange-700 font-bold text-white">
+        <Avatar className="size-[38px] transition-shadow duration-150 ease-pf-out hover:shadow-[0_4px_12px_rgba(234,88,12,0.3)]">
+          <AvatarFallback className="bg-[linear-gradient(135deg,#EA580C_0%,#D97316_100%)] text-[12px] font-black text-white">
             {initials}
           </AvatarFallback>
         </Avatar>

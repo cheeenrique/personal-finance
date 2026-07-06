@@ -21,12 +21,19 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <ShellProvider>
-      <div className="flex min-h-svh">
+      {/*
+        Shell com altura travada em 100svh: só `<main>` rola (não a janela
+        inteira). Sidebar/Header já eram visualmente fixos via `sticky`; isso
+        só torna explícito, e é o que permite telas como `/transactions`
+        esticarem uma tabela até a base do viewport (`h-full` cascateia a
+        partir daqui).
+      */}
+      <div className="flex h-svh overflow-hidden">
         <Sidebar name={name} email={email} />
 
-        <div className="flex min-h-svh flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <Header name={name} email={email} />
-          <main className="flex-1 px-4 py-5 pb-28 sm:px-7 lg:pb-6">{children}</main>
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 pb-28 sm:px-7 lg:pb-6">{children}</main>
         </div>
       </div>
 

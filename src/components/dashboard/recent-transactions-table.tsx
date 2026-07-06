@@ -3,24 +3,64 @@
 import Link from "next/link";
 import { Receipt } from "lucide-react";
 
-import type { RecentTransactionRow } from "@/modules/transactions/types";
-import { TransactionType } from "@/generated/prisma/enums";
+import type { RecentTransactionRowClient } from "@/modules/transactions/types";
+import { CategoryType, TransactionType } from "@/generated/prisma/enums";
 import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
-import { TransactionTypeBadge, InstallmentBadge } from "@/components/shared/badges/transaction-type-badge";
+import { TransactionInlineBadges } from "@/components/shared/badges/transaction-type-badge";
 import { useShell } from "@/components/providers/shell-provider";
+import { resolveCategoryDotColor } from "@/components/categories/category-config";
 import { formatBRL } from "@/lib/money/format";
-import { formatDateSaoPaulo } from "@/lib/date/format";
+import { formatDateShortSaoPaulo } from "@/lib/date/format";
 import { cn } from "@/lib/utils";
 
-/** Tipo de exibição — perna de transferência mostra badge "Transferência" mesmo persistida como EXPENSE/INCOME (docs/06-SCREENS.md, "Linha de TRANSFER"). */
-function displayType(row: RecentTransactionRow): TransactionType {
+/** Tipo de exibição — perna de transferência mostra badge "Transfer" mesmo persistida como EXPENSE/INCOME (docs/06-SCREENS.md, "Linha de TRANSFER"). */
+function displayType(row: RecentTransactionRowClient): TransactionType {
   return row.transferId ? TransactionType.TRANSFER : row.type;
 }
 
-function AmountCell({ row }: { row: RecentTransactionRow }) {
+/**
+ * Descrição + badges inline (parcela/transferência/pendência) + data curta
+ * abaixo — layout do preview do Dashboard (design/Personal Finance
+ * App.dc.html, "últimas transações"), diferente da tabela completa de
+ * `/transactions` (que tem coluna de Data e Ações próprias).
+ */
+function DescriptionCell({ row }: { row: RecentTransactionRowClient }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1.5">
+        <span className="truncate text-[13.5px] font-extrabold text-foreground">{row.description}</span>
+        <TransactionInlineBadges row={row} />
+      </div>
+      <span className="font-mono text-[11px] text-muted-foreground">{formatDateShortSaoPaulo(row.date)}</span>
+    </div>
+  );
+}
+
+/**
+ * Categoria só existe em transação INCOME/EXPENSE (transferência e pagamento
+ * de fatura não têm — mostram "—"), então `row.type` aqui equivale a
+ * `CategoryType` pra efeito do fallback de cor (mesma regra de
+ * `category-row.tsx` quando a categoria não tem `color` próprio).
+ */
+function CategoryCell({ row }: { row: RecentTransactionRowClient }) {
+  if (!row.categoryName) return <span className="text-[12.5px] font-semibold text-muted-foreground">—</span>;
+
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold">
+      <span
+        className="size-2 shrink-0 rounded-full"
+        style={{ backgroundColor: resolveCategoryDotColor(row.categoryColor, row.type as unknown as CategoryType) }}
+        aria-hidden="true"
+      />
+      {row.categoryName}
+    </span>
+  );
+}
+
+function AmountCell({ row }: { row: RecentTransactionRowClient }) {
   const type = displayType(row);
   const isNegative = type === TransactionType.EXPENSE || type === TransactionType.CARD_PAYMENT;
-  const value = row.amount.toNumber();
+  const value = row.amount;
 
   return (
     <span
@@ -37,34 +77,25 @@ function AmountCell({ row }: { row: RecentTransactionRow }) {
   );
 }
 
-const COLUMNS: DataTableColumn<RecentTransactionRow>[] = [
+const COLUMNS: DataTableColumn<RecentTransactionRowClient>[] = [
   {
     key: "description",
     header: "Descrição",
-    render: (row) => (
-      <div className="flex items-center gap-2">
-        <TransactionTypeBadge type={displayType(row)} />
-        <span className="truncate font-semibold text-foreground">{row.description}</span>
-        {row.installmentNumber && row.installmentsCount && (
-          <InstallmentBadge current={row.installmentNumber} total={row.installmentsCount} />
-        )}
-      </div>
-    ),
+    render: (row) => <DescriptionCell row={row} />,
   },
   {
     key: "category",
     header: "Categoria",
-    render: (row) => <span className="text-muted-foreground">{row.categoryName ?? "—"}</span>,
+    render: (row) => <CategoryCell row={row} />,
   },
   {
     key: "source",
     header: "Conta / Cartão",
-    render: (row) => <span className="text-muted-foreground">{row.accountName ?? row.cardName ?? "—"}</span>,
-  },
-  {
-    key: "date",
-    header: "Data",
-    render: (row) => <span className="font-mono text-muted-foreground">{formatDateSaoPaulo(row.date)}</span>,
+    render: (row) => (
+      <span className="text-[12.5px] font-semibold text-muted-foreground">
+        {row.accountName ?? row.cardName ?? "—"}
+      </span>
+    ),
   },
   {
     key: "amount",
@@ -75,7 +106,7 @@ const COLUMNS: DataTableColumn<RecentTransactionRow>[] = [
 ];
 
 type RecentTransactionsTableProps = {
-  transactions: RecentTransactionRow[];
+  transactions: RecentTransactionRowClient[];
 };
 
 /**

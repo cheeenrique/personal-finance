@@ -1,69 +1,74 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ArrowLeftRight, CreditCard, Layers3, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { ArrowLeftRight, CreditCard, Layers3, Plus, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { useShell } from "@/components/providers/shell-provider";
 import { TransactionType } from "@/generated/prisma/enums";
-import { cn } from "@/lib/utils";
+import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
 
 type QuickAction =
-  | { kind: "modal"; label: string; icon: LucideIcon; type: TransactionType; className: string }
-  | { kind: "link"; label: string; icon: LucideIcon; href: string; className: string };
+  | { kind: "modal"; label: string; icon: LucideIcon; type: TransactionType; className: string; strokeWidth?: number }
+  | { kind: "link"; label: string; icon: LucideIcon; href: string; className: string; strokeWidth?: number };
 
 /**
- * 6 ações fixas do Dashboard (docs/11-DASHBOARD.md, "Ações Rápidas";
- * design/PERSONAL_FINANCE_LAYOUT_HANDOFF.md, "Dashboard"). Receita/Despesa
+ * 6 ações fixas do Dashboard (docs/11-DASHBOARD.md, "Ações Rápidas") —
+ * botões "outline + tint" (borda e fundo no mix da cor semântica, texto no
+ * tom `on-*`), não preenchidos — visual de referência em
+ * `design/Personal Finance App.dc.html` ("quick actions"). Receita/Despesa
  * abrem o mesmo modal de nova transação usado em qualquer ponto do sistema
  * (`useShell`, docs/06-SCREENS.md: "não duplicar modal"); Transferência,
  * Cartão, Conta e Parcelamento navegam pra tela dedicada — fluxos próprios
- * (`modules/accounts/transfer.ts`, `modules/cards`, `modules/transactions/installments.ts`)
- * ainda sem modal no shell global.
+ * ainda sem modal no shell global. Cartão/Conta/Parcelamento usam o mesmo
+ * tratamento neutro (borda `--pf-border`) do demo — só as 3 ações que
+ * movimentam dinheiro (receita/despesa/transferência) levam cor.
  */
 const ACTIONS: QuickAction[] = [
   {
     kind: "modal",
     label: "Nova receita",
-    icon: TrendingUp,
+    icon: Plus,
     type: TransactionType.INCOME,
-    className: "bg-success text-success-foreground hover:bg-success/90",
+    className: "border-success/40 bg-success/12 text-on-success hover:bg-success/20",
+    strokeWidth: 2.4,
   },
   {
     kind: "modal",
     label: "Nova despesa",
-    icon: TrendingDown,
+    icon: Plus,
     type: TransactionType.EXPENSE,
-    className: "bg-destructive text-white hover:bg-destructive/90",
+    className: "border-destructive/40 bg-destructive/12 text-on-danger hover:bg-destructive/20",
+    strokeWidth: 2.4,
   },
   {
     kind: "link",
     label: "Transferência",
     icon: ArrowLeftRight,
     href: "/accounts",
-    className: "bg-transfer text-white hover:bg-transfer/90",
+    className: "border-transfer/40 bg-transfer/12 text-on-transfer hover:bg-transfer/20",
+    strokeWidth: 2.2,
   },
   {
     kind: "link",
     label: "Novo cartão",
     icon: CreditCard,
     href: "/cards",
-    className: "bg-accent text-accent-foreground hover:bg-accent/90",
+    className: "border-border bg-transparent text-muted-foreground hover:border-muted-foreground",
   },
   {
     kind: "link",
     label: "Nova conta",
     icon: Wallet,
     href: "/accounts",
-    className: "bg-accent text-accent-foreground hover:bg-accent/90",
+    className: "border-border bg-transparent text-muted-foreground hover:border-muted-foreground",
   },
   {
     kind: "link",
     label: "Novo parcelamento",
     icon: Layers3,
     href: "/installments",
-    className: "bg-accent text-accent-foreground hover:bg-accent/90",
+    className: "border-border bg-transparent text-muted-foreground hover:border-muted-foreground",
   },
 ];
 
@@ -72,20 +77,23 @@ export function QuickActions() {
   const { openTransactionModal } = useShell();
 
   return (
-    <div className="flex flex-wrap gap-2.5">
+    <div className="flex flex-wrap gap-[10px]">
       {ACTIONS.map((action) => (
-        <Button
+        <button
           key={action.label}
           type="button"
-          size="lg"
           onClick={() =>
             action.kind === "modal" ? openTransactionModal(action.type) : router.push(action.href)
           }
-          className={cn(action.className)}
+          className={cn(
+            "inline-flex h-9 items-center gap-[7px] rounded-[10px] border px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors duration-100 ease-pf-out",
+            action.className,
+            FOCUS_RING_CLASS,
+          )}
         >
-          <action.icon className="size-4" aria-hidden="true" />
+          <action.icon className="size-[15px]" strokeWidth={action.strokeWidth ?? 2} aria-hidden="true" />
           {action.label}
-        </Button>
+        </button>
       ))}
     </div>
   );

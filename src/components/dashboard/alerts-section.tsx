@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { BellOff } from "lucide-react";
 
 import { AlertCard, type AlertCardData } from "@/components/shared/alert-card";
-import { EmptyState } from "@/components/shared/empty-state";
 import { markReadAction } from "@/modules/alerts/actions";
+
+const MAX_VISIBLE_ALERTS = 6;
 
 type AlertsSectionProps = {
   alerts: AlertCardData[];
@@ -16,7 +16,11 @@ type AlertsSectionProps = {
  * Alertas Ativos"): só ANOMALY/GREEN — WEEKLY_SUMMARY já tem seu próprio box
  * dedicado acima, mostrar os dois seria duplicar a mesma informação
  * (docs/29-ALERTS.md, "Interface no Dashboard" lista só anomalia/verde
- * aqui). Clique marca como lido — remoção otimista da lista local, já que
+ * aqui). Grid lado a lado (não full-width), até
+ * `MAX_VISIBLE_ALERTS` — visão completa continua em `/alerts`
+ * (design/Personal Finance App.dc.html, "alertas ativos"). Sem empty state
+ * aqui: nenhum alerta novo é o caso comum, não uma ausência a comunicar.
+ * Clique marca como lido — remoção otimista da lista local, já que
  * `markReadAction` também revalida a rota (`revalidatePath`) por trás.
  */
 export function AlertsSection({ alerts }: AlertsSectionProps) {
@@ -28,18 +32,12 @@ export function AlertsSection({ alerts }: AlertsSectionProps) {
   }
 
   if (activeAlerts.length === 0) {
-    return (
-      <EmptyState
-        icon={BellOff}
-        title="Nenhum alerta novo esta semana"
-        description="Continue assim! Alertas de anomalia e economia aparecem aqui."
-      />
-    );
+    return null;
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
-      {activeAlerts.map((alert) => (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {activeAlerts.slice(0, MAX_VISIBLE_ALERTS).map((alert) => (
         <AlertCard key={alert.id} alert={alert} onMarkAsRead={handleMarkAsRead} />
       ))}
     </div>

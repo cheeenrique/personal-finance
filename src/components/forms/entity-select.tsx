@@ -29,6 +29,9 @@ type EntitySelectProps = {
   emptyMessage?: string;
   disabled?: boolean;
   className?: string;
+  /** Repassado ao trigger — permite `<Label htmlFor>` apontar pra ele, igual um input nativo. */
+  id?: string;
+  "aria-label"?: string;
   /** `createOnTheFly` — cria a opção direto no fluxo (docs/06-SCREENS.md, "EntitySelect"). */
   onCreate?: (label: string) => void;
   createLabel?: (query: string) => string;
@@ -48,6 +51,8 @@ export function EntitySelect({
   emptyMessage = "Nada encontrado.",
   disabled,
   className,
+  id,
+  "aria-label": ariaLabel,
   onCreate,
   createLabel = (query) => `Criar "${query}"`,
 }: EntitySelectProps) {
@@ -73,6 +78,8 @@ export function EntitySelect({
         render={
           <button
             type="button"
+            id={id}
+            aria-label={ariaLabel}
             className={cn(
               "flex h-10 w-full items-center justify-between gap-2 rounded-[10px] border border-border bg-input px-3 text-sm outline-none transition-colors focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/28 disabled:cursor-not-allowed disabled:opacity-50",
               className,

@@ -21,8 +21,9 @@ type CardsSummaryProps = {
 
 /**
  * Bloco "Cartões e Dívidas" (docs/11-DASHBOARD.md, "3. Cartões e Dívidas"):
- * nome, limite total/usado, fatura atual, barra de progresso. Clique leva
- * para `/cards` (detalhe por cartão ainda não tem rota própria).
+ * nome, limite usado/total, barra de progresso — layout de linha única
+ * (sem card por item), igual ao demo (design/Personal Finance App.dc.html,
+ * "Cartões e dívidas"). Clique vai direto pro detalhe do cartão (`/cards/[id]`).
  */
 export function CardsSummary({ cards }: CardsSummaryProps) {
   if (cards.length === 0) {
@@ -42,23 +43,19 @@ export function CardsSummary({ cards }: CardsSummaryProps) {
   }
 
   return (
-    <SectionCard title="Cartões e dívidas" action={{ label: "Ver todos", href: "/cards" }}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <SectionCard title="Cartões e dívidas" action={{ label: "Ver cartões", href: "/cards" }}>
+      <div className="flex flex-col gap-4">
         {cards.map((card) => {
           const limit = card.limit.toNumber();
           const outstanding = card.outstandingBalance.toNumber();
           const percent = limit > 0 ? (outstanding / limit) * 100 : 0;
 
           return (
-            <Link
-              key={card.id}
-              href="/cards"
-              className="flex flex-col gap-2.5 rounded-lg border border-border p-3.5 transition-colors hover:border-primary/50"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-sm font-extrabold text-foreground">{card.name}</span>
-                <span className="font-mono text-xs font-semibold text-muted-foreground">
-                  {formatBRL(card.currentInvoiceTotal.toNumber())}
+            <Link key={card.id} href={`/cards/${card.id}`} className="block">
+              <div className="mb-[7px] flex items-center justify-between gap-2">
+                <span className="truncate text-[13px] font-extrabold text-foreground">{card.name}</span>
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                  {formatBRL(outstanding)} / {formatBRL(limit)}
                 </span>
               </div>
 
@@ -66,6 +63,8 @@ export function CardsSummary({ cards }: CardsSummaryProps) {
                 percent={percent}
                 tone={toneForUsage(percent)}
                 label={`${formatBRL(outstanding)} / ${formatBRL(limit)}`}
+                showLabel={false}
+                className="space-y-0"
               />
             </Link>
           );

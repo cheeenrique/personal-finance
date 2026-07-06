@@ -57,8 +57,11 @@ export function TransactionFiltersBar(props: TransactionFiltersBarProps) {
 
   return (
     <>
-      <div className="hidden flex-wrap items-center gap-2 lg:flex">
-        <FilterControls {...props} />
+      <div className="hidden items-start justify-between gap-3 rounded-[10px] border border-border bg-secondary/30 p-2 lg:flex">
+        <div className="flex flex-1 flex-wrap items-center gap-2">
+          <FilterControls {...props} />
+        </div>
+        <ClearFiltersButton hasActiveFilters={props.hasActiveFilters} onClear={props.onClear} className="shrink-0" />
       </div>
 
       <div className="lg:hidden">
@@ -75,11 +78,53 @@ export function TransactionFiltersBar(props: TransactionFiltersBarProps) {
             </SheetHeader>
             <div className="flex flex-col gap-2 px-4 pb-4">
               <FilterControls {...props} />
+              {props.hasActiveFilters && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={props.onClear}
+                  className="mt-1 gap-1.5 text-muted-foreground"
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                  Limpar filtros
+                </Button>
+              )}
             </div>
           </SheetContent>
         </Sheet>
       </div>
     </>
+  );
+}
+
+/**
+ * Sempre montado (mesmo sem filtro ativo) e só fica `invisible` — reserva o
+ * próprio espaço o tempo todo, então selecionar/limpar um filtro nunca
+ * empurra o resto da barra pra quebrar linha (o bug relatado). Fica fora do
+ * grupo `flex-wrap` dos selects, fixo na ponta direita.
+ */
+function ClearFiltersButton({
+  hasActiveFilters,
+  onClear,
+  className,
+}: {
+  hasActiveFilters: boolean;
+  onClear: () => void;
+  className?: string;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={onClear}
+      tabIndex={hasActiveFilters ? 0 : -1}
+      aria-hidden={!hasActiveFilters}
+      className={cn("gap-1 text-muted-foreground", !hasActiveFilters && "invisible", className)}
+    >
+      <X className="size-3.5" aria-hidden="true" />
+      Limpar filtros
+    </Button>
   );
 }
 
@@ -97,8 +142,6 @@ function FilterControls({
   isPaid,
   onIsPaidChange,
   referenceData,
-  hasActiveFilters,
-  onClear,
 }: TransactionFiltersBarProps) {
   return (
     <>
@@ -155,13 +198,6 @@ function FilterControls({
           </button>
         ))}
       </div>
-
-      {hasActiveFilters && (
-        <Button type="button" variant="ghost" size="sm" onClick={onClear} className="gap-1 text-muted-foreground">
-          <X className="size-3.5" aria-hidden="true" />
-          Limpar filtros
-        </Button>
-      )}
     </>
   );
 }

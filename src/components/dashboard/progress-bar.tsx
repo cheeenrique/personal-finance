@@ -6,6 +6,10 @@ type ProgressBarProps = {
   label: string;
   tone?: "neutral" | "warning" | "danger" | "accent";
   className?: string;
+  /** `false` quando o valor já aparece em outro lugar da linha (ex.: resumos
+   * compactos do Dashboard — design/Personal Finance App.dc.html, "Cartões e
+   * dívidas"/"Parcelamentos ativos": só a barra, sem legenda embaixo). */
+  showLabel?: boolean;
 };
 
 const TONE_CLASSES: Record<NonNullable<ProgressBarProps["tone"]>, string> = {
@@ -21,7 +25,7 @@ const TONE_CLASSES: Record<NonNullable<ProgressBarProps["tone"]>, string> = {
  * desenho: quem chama decide o `percent` e o `tone` (limite >100% = "danger",
  * ver `cards-summary.tsx`).
  */
-export function ProgressBar({ percent, label, tone = "neutral", className }: ProgressBarProps) {
+export function ProgressBar({ percent, label, tone = "neutral", className, showLabel = true }: ProgressBarProps) {
   const clamped = Math.min(Math.max(percent, 0), 100);
 
   return (
@@ -39,7 +43,7 @@ export function ProgressBar({ percent, label, tone = "neutral", className }: Pro
           style={{ width: `${clamped}%` }}
         />
       </div>
-      <p className="text-[11.5px] font-semibold text-muted-foreground">{label}</p>
+      {showLabel && <p className="text-[11.5px] font-semibold text-muted-foreground">{label}</p>}
     </div>
   );
 }

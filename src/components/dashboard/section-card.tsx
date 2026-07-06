@@ -22,12 +22,12 @@ export function SectionCard({ title, action, children, className }: SectionCardP
       <div className="flex items-center justify-between gap-3 border-b border-border px-[18px] py-[15px]">
         <h3 className="text-sm font-extrabold text-foreground">{title}</h3>
         {action && (
-          <Link href={action.href} className="text-[12.5px] font-bold text-primary hover:underline">
+          <Link href={action.href} className="text-[12.5px] font-bold text-on-primary transition-opacity hover:opacity-80">
             {action.label}
           </Link>
         )}
       </div>
-      <div className="p-[18px]">{children}</div>
+      <div className="px-[18px] py-4">{children}</div>
     </div>
   );
 }

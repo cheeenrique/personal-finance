@@ -60,7 +60,12 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+        {/* `Command` (raiz do cmdk) provê o store via contexto — sem ele,
+         * `CommandInput`/`CommandList`/`CommandItem` quebram tentando ler
+         * contexto `undefined` ("Cannot read properties of undefined
+         * (reading 'subscribe')"). `rounded-none!`/`bg-transparent!` evitam
+         * dupla caixa dentro do `DialogContent`, que já tem o próprio raio e fundo. */}
+        <Command className="rounded-none! bg-transparent!">{children}</Command>
       </DialogContent>
     </Dialog>
   )

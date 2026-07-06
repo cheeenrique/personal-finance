@@ -31,6 +31,11 @@
   --color-on-transfer: var(--on-transfer);
   --color-asset: var(--asset);
   --color-on-asset: var(--on-asset);
+  --color-on-success: var(--on-success);
+  --color-on-danger: var(--on-danger);
+  --color-on-warning: var(--on-warning);
+  --color-on-primary: var(--on-primary);
+  --color-on-accent: var(--on-accent);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -87,13 +92,20 @@
 
   /* Cores financeiras (design/PERSONAL_FINANCE_DS_HANDOFF.md, "Accents &
    * Semantic (ambos os temas)") — transferência (ciano) e patrimônio (roxo).
-   * `on-transfer`/`on-asset` são constantes nos dois temas (o handoff só as
-   * lista uma vez, fora da seção "Tema Claro"); `transfer`/`asset` (a base)
-   * já variam por tema, redefinidos abaixo em `.light`. */
+   * `on-transfer`/`on-asset`/`on-success`/`on-danger` são constantes nos dois
+   * temas (o handoff só as lista uma vez, fora da seção "Tema Claro");
+   * `transfer`/`asset` (a base) já variam por tema, redefinidos abaixo em
+   * `.light`. Usados nos botões "outline + tint" (ex.: Ações Rápidas do
+   * Dashboard — design/Personal Finance App.dc.html). */
   --transfer: #38bdf8;
   --on-transfer: #7dd3fc;
   --asset: #a855f7;
   --on-asset: #c99df6;
+  --on-success: #4ade80;
+  --on-danger: #f87171;
+  --on-warning: #fbbf24;
+  --on-primary: #8fabff;
+  --on-accent: #fb923c;
 }
 
 /*

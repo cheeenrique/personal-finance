@@ -32,16 +32,16 @@ export function Sidebar({ name, email }: SidebarProps) {
         collapsed ? "w-[74px]" : "w-[248px]",
       )}
     >
-      <div className="flex h-14 items-center gap-2.5 px-3">
-        <span className="flex size-[38px] shrink-0 items-center justify-center rounded-[11px] bg-gradient-to-br from-primary to-blue-600">
+      <div className="flex h-14 items-center gap-2.5 border-b border-border px-3">
+        <span className="flex size-[38px] shrink-0 items-center justify-center rounded-[9px] bg-[linear-gradient(135deg,#1E40AF_0%,#0F2A5F_100%)]">
           <TrendingUp className="size-5 text-accent" aria-hidden="true" />
         </span>
         {!collapsed && (
-          <span className="min-w-0 leading-tight">
-            <span className="block truncate text-[13px] font-extrabold text-foreground">
+          <span className="flex min-w-0 flex-col leading-none">
+            <span className="truncate text-base font-black tracking-[-0.02em] text-foreground">
               Personal
             </span>
-            <span className="block truncate text-[13px] font-extrabold text-foreground">
+            <span className="mt-[3px] truncate text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
               Finance
             </span>
           </span>

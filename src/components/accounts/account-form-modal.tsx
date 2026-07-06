@@ -7,13 +7,7 @@ import { FormModal } from "@/components/shared/form-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { EntitySelect } from "@/components/forms/entity-select";
 import { CurrencyInput } from "@/components/forms/currency-input";
 import { createAccountAction, updateAccountAction } from "@/modules/accounts/actions";
 import { AccountType } from "@/generated/prisma/enums";
@@ -120,22 +114,15 @@ export function AccountFormModal({ open, onOpenChange, account }: AccountFormMod
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="account-type">Tipo</Label>
-          <Select
+          <EntitySelect
+            id="account-type"
+            options={ACCOUNT_TYPE_OPTIONS}
             value={type}
             onValueChange={(value) => setType(value as AccountType)}
+            placeholder="Selecione o tipo"
             disabled={isPending}
-          >
-            <SelectTrigger id="account-type" className="w-full">
-              <SelectValue placeholder="Selecione o tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              {ACCOUNT_TYPE_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            className="w-full"
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">

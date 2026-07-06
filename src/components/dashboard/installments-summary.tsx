@@ -14,8 +14,11 @@ type InstallmentsSummaryProps = {
 
 /**
  * Bloco "Parcelamentos Ativos" (docs/11-DASHBOARD.md, "4. Parcelamentos
- * Ativos"; docs/23-INSTALLMENTS.md, "Visual no Dashboard"): 1 card por
- * compra, progresso de parcelas — nunca lista parcelas soltas.
+ * Ativos"; docs/23-INSTALLMENTS.md, "Visual no Dashboard"): 1 linha por
+ * compra, progresso de parcelas — nunca lista parcelas soltas. Layout igual
+ * ao demo (design/Personal Finance App.dc.html, "Parcelamentos ativos").
+ * Clique vai direto pro modal de detalhes daquela compra em `/installments`
+ * (`?open=<id>`, lido por `InstallmentsBoard`).
  */
 export function InstallmentsSummary({ purchases }: InstallmentsSummaryProps) {
   if (purchases.length === 0) {
@@ -36,20 +39,21 @@ export function InstallmentsSummary({ purchases }: InstallmentsSummaryProps) {
 
   return (
     <SectionCard title="Parcelamentos ativos" action={{ label: "Ver todos", href: "/installments" }}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="flex flex-col gap-4">
         {purchases.map((purchase) => {
           const percent = (purchase.paidCount / purchase.installmentsCount) * 100;
 
           return (
-            <Link
-              key={purchase.id}
-              href="/installments"
-              className="flex flex-col gap-2.5 rounded-lg border border-border p-3.5 transition-colors hover:border-primary/50"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-sm font-extrabold text-foreground">{purchase.description}</span>
-                <span className="font-mono text-xs font-semibold text-muted-foreground">
-                  {purchase.paidCount}/{purchase.installmentsCount}
+            <Link key={purchase.id} href={`/installments?open=${purchase.id}`} className="block">
+              <div className="mb-[7px] flex items-center justify-between gap-2">
+                <span className="truncate text-[13px] font-extrabold text-foreground">
+                  {purchase.description}{" "}
+                  <span className="font-mono text-[11px] font-normal text-on-accent">
+                    {purchase.paidCount}/{purchase.installmentsCount}
+                  </span>
+                </span>
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                  restam {formatBRL(purchase.remainingAmount.toNumber())}
                 </span>
               </div>
 
@@ -57,9 +61,9 @@ export function InstallmentsSummary({ purchases }: InstallmentsSummaryProps) {
                 percent={percent}
                 tone="accent"
                 label={`${formatBRL(purchase.paidAmount.toNumber())} pagos · ${formatBRL(purchase.remainingAmount.toNumber())} restantes`}
+                showLabel={false}
+                className="space-y-0"
               />
-
-              <span className="truncate text-[11.5px] font-semibold text-muted-foreground">{purchase.cardName}</span>
             </Link>
           );
         })}

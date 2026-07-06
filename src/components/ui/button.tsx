@@ -16,8 +16,10 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         // "Accent" — ações que movem dinheiro (nova transação, CTAs), nunca navegação
-        // (design/PERSONAL_FINANCE_DS_HANDOFF.md, "Button" > "Accent").
-        accent: "bg-accent text-accent-foreground hover:bg-accent/90",
+        // (design/PERSONAL_FINANCE_DS_HANDOFF.md, "Button" > "Accent"). Texto branco
+        // extrabold, não `accent-foreground` (navy) — é o que o demo (.dc.html) e o
+        // botão "Nova transação" do header de fato usam em todo CTA laranja.
+        accent: "bg-accent text-white font-extrabold hover:bg-accent/90",
         // "Danger" — sempre com ConfirmDialog antes de executar (mesmo handoff, "Danger").
         destructive: "bg-destructive text-white hover:bg-destructive/90",
         link: "text-primary underline-offset-4 hover:underline",

@@ -12,6 +12,16 @@ export function formatDateSaoPaulo(value: Date | string): string {
   return new Intl.DateTimeFormat("pt-BR", { timeZone: TIMEZONE }).format(date);
 }
 
+/** `DD/MM` — formato curto sem ano, usado em listas compactas (ex.: preview do Dashboard). */
+export function formatDateShortSaoPaulo(value: Date | string): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: TIMEZONE,
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+}
+
 /** `06 de julho de 2026` — leitura por extenso (docs/04-DESIGN_SYSTEM.md, "Data"). */
 export function formatDateLongSaoPaulo(value: Date | string): string {
   const date = typeof value === "string" ? new Date(value) : value;

@@ -53,6 +53,15 @@ type DataTableProps<T> = {
   bulkActions?: (selectedIds: string[]) => ReactNode;
   /** Paginação server-side — só ligar em `/transactions` (única lista sem limite, docs/04-DESIGN_SYSTEM.md). */
   pagination?: PaginationState & { onPageChange: (page: number) => void };
+  /**
+   * Opt-in: estica a tabela pra altura disponível do container pai (que
+   * precisa ter altura definida, ex.: `flex-1` num pai `h-full`) com a
+   * paginação fixada na base — em vez do card encolher pro tamanho do
+   * conteúdo. Só usado em `/transactions` (única tela full-page com
+   * `DataTable`); as demais (embutidas em cards/modais) ficam com o
+   * comportamento padrão de altura por conteúdo.
+   */
+  fillHeight?: boolean;
 };
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -80,6 +89,7 @@ export function DataTable<T>({
   rowActions,
   bulkActions,
   pagination,
+  fillHeight = false,
 }: DataTableProps<T>) {
   const [searchInput, setSearchInput] = useState(search?.value ?? "");
 
@@ -112,37 +122,42 @@ export function DataTable<T>({
   const columnCount = columns.length + (hasSelection ? 1 : 0) + (rowActions ? 1 : 0);
 
   return (
-    <div className="flex flex-col gap-3">
-      {(search || filters) && (
-        <div className="flex flex-wrap items-center gap-2">
-          {search && (
-            <div className="relative min-w-[220px] max-w-[340px] flex-1">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-3 size-[15px] -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder={search.placeholder ?? "Buscar…"}
-                className="h-[38px] rounded-[10px] pl-9"
-              />
-            </div>
-          )}
-          {filters}
+    <div className={cn("flex flex-col gap-3", fillHeight && "h-full min-h-0")}>
+      {search && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="relative min-w-[220px] max-w-[340px] flex-1">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 size-[15px] -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder={search.placeholder ?? "Buscar…"}
+              className="h-[38px] rounded-[10px] pl-9"
+            />
+          </div>
         </div>
       )}
 
+      {/* Filtros numa linha própria (separada da busca): evita que os dois disputem o mesmo espaço e quebrem de forma confusa quando muitos filtros ficam ativos ao mesmo tempo. O agrupamento visual (painel) é decisão de quem preenche o slot, não do DataTable. */}
+      {filters && <div className="shrink-0">{filters}</div>}
+
       {hasSelection && selection!.selectedIds.length > 0 && bulkActions && (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm">
+        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm">
           <span className="font-semibold">{selection!.selectedIds.length} selecionada(s)</span>
           <div className="ml-auto flex items-center gap-2">{bulkActions(selection!.selectedIds)}</div>
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
+      <div
+        className={cn(
+          "rounded-xl border border-border bg-card",
+          fillHeight ? "min-h-0 flex-1 overflow-auto" : "overflow-x-auto",
+        )}
+      >
         <table className="w-full border-collapse text-left">
-          <thead className="bg-background">
+          <thead className={cn("bg-background", fillHeight && "sticky top-0 z-10")}>
             <tr>
               {hasSelection && (
                 <th scope="col" className="w-10 px-4 py-[11px]">
@@ -248,7 +263,9 @@ export function DataTable<T>({
       </div>
 
       {pagination && !loading && !error && data.length > 0 && (
-        <DataTablePagination {...pagination} />
+        <div className="shrink-0">
+          <DataTablePagination {...pagination} />
+        </div>
       )}
     </div>
   );

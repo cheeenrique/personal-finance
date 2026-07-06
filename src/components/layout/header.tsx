@@ -4,9 +4,8 @@ import { usePathname } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 
 import { findNavItemByPathname } from "./nav-config";
-import { ThemeToggle } from "./theme-toggle";
+import { HeaderThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
-import { Button } from "@/components/ui/button";
 import { useShell } from "@/components/providers/shell-provider";
 import { FOCUS_RING_CLASS, cn } from "@/lib/utils";
 
@@ -25,12 +24,12 @@ export function Header({ name, email }: HeaderProps) {
   const navItem = findNavItemByPathname(pathname);
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-5 border-b border-border bg-background/82 px-4 py-3.5 backdrop-blur-[14px] sm:px-7">
+    <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-border bg-background/82 px-4 py-3.5 backdrop-blur-[14px] sm:px-7">
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-[20px] font-black tracking-[-0.02em] text-foreground">
+        <h1 className="truncate text-[20px] leading-none font-black tracking-[-0.02em] text-foreground">
           {navItem?.label ?? "Personal Finance"}
         </h1>
-        <p className="mt-0.5 truncate text-[12.5px] font-semibold text-muted-foreground">
+        <p className="mt-[2px] truncate text-[12.5px] leading-none font-semibold text-muted-foreground">
           {navItem?.description ?? ""}
         </p>
       </div>
@@ -39,14 +38,14 @@ export function Header({ name, email }: HeaderProps) {
         type="button"
         onClick={openCommandPalette}
         className={cn(
-          "hidden h-[38px] min-w-[200px] max-w-[340px] flex-1 items-center gap-2 rounded-[10px] border border-border bg-input px-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 sm:flex",
+          "hidden h-[38px] w-[220px] items-center gap-2.5 rounded-[10px] border border-border bg-input px-3 text-[13px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 sm:flex",
           FOCUS_RING_CLASS,
         )}
       >
         <Search className="size-[15px] shrink-0" aria-hidden="true" />
-        <span className="truncate">Buscar…</span>
-        <kbd className="ml-auto hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground lg:inline">
-          Ctrl K
+        <span className="flex-1 truncate text-left">Buscar…</span>
+        <kbd className="shrink-0 rounded-[6px] bg-secondary px-1.5 py-0.5 font-mono text-[11px] font-normal text-muted-foreground">
+          ⌘K
         </kbd>
       </button>
 
@@ -62,19 +61,20 @@ export function Header({ name, email }: HeaderProps) {
         <Search className="size-[17px]" aria-hidden="true" />
       </button>
 
-      <Button
+      <button
         type="button"
-        variant="accent"
-        size="lg"
         onClick={() => openTransactionModal()}
-        className="shrink-0 rounded-[11px]"
+        className={cn(
+          "inline-flex h-[38px] shrink-0 items-center gap-2 rounded-[10px] bg-accent px-4 text-[13.5px] font-extrabold text-white shadow-[0_6px_16px_rgba(234,88,12,0.38)] transition-[filter] duration-150 ease-pf-out hover:brightness-[1.06]",
+          FOCUS_RING_CLASS,
+        )}
       >
-        <Plus className="size-[15px]" aria-hidden="true" />
+        <Plus className="size-4" aria-hidden="true" />
         <span className="hidden sm:inline">Nova transação</span>
-      </Button>
+      </button>
 
       <div className="hidden sm:block">
-        <ThemeToggle />
+        <HeaderThemeToggle />
       </div>
 
       <UserMenu name={name} email={email} />
