@@ -4,7 +4,7 @@
 
 Este documento define toda a identidade visual da aplicação.
 
-Fonte visual: `design/design-system.html` (protótipo interativo com os tokens reais, temas claro/escuro e componentes). Onde este documento e o protótipo divergirem, **o protótipo é a fonte da verdade**.
+Fonte visual: `design/PERSONAL_FINANCE_LAYOUT_HANDOFF.md` (protótipo interativo com os tokens reais, temas claro/escuro e componentes). Onde este documento e o protótipo divergirem, **o protótipo é a fonte da verdade**.
 
 O objetivo é criar uma interface limpa, moderna e extremamente rápida de utilizar.
 
@@ -47,7 +47,7 @@ Apenas utilizar os conceitos de simplicidade e organização.
 
 # Paleta
 
-> Correção: a versão anterior deste documento invertia os papéis (laranja como primária, azul como secundária). O Design System real (`design-system.html`) define o oposto — segue abaixo.
+> Correção: a versão anterior deste documento invertia os papéis (laranja como primária, azul como secundária). O Design System real (`PERSONAL_FINANCE_LAYOUT_HANDOFF.md`) define o oposto — segue abaixo.
 
 ## Primária
 
@@ -84,7 +84,7 @@ As cores devem aparecer apenas quando agregarem significado.
 
 # Tokens (dark + light)
 
-Tabela mapeada 1:1 pros nomes do shadcn/ui. Cola direto no `globals.css` do projeto (ver `design/design-system.html` para os valores aplicados ao vivo).
+Tabela mapeada 1:1 pros nomes do shadcn/ui. Cola direto no `globals.css` do projeto (ver `design/PERSONAL_FINANCE_LAYOUT_HANDOFF.md` para os valores aplicados ao vivo).
 
 | Token shadcn | Uso | Dark (padrão) | Light |
 |---|---|---|---|
@@ -134,7 +134,7 @@ Duas famílias, cada uma com um papel fixo (substitui a regra anterior de "uma f
 * **Nunito** (400/500/600/700/800/900) — toda a UI: títulos, labels, corpo de texto, botões. Arredondada, amistosa, legível.
 * **JetBrains Mono** (400/500/600) — **todo dado financeiro**: saldos, valores em R$, datas, percentuais. Regra fixa: número, dinheiro ou data sempre em mono, nunca em Nunito.
 
-Escala (conforme `design-system.html`):
+Escala (conforme `PERSONAL_FINANCE_LAYOUT_HANDOFF.md`):
 
 | Papel | Peso | Tamanho | Observação |
 |---|---|---|---|
