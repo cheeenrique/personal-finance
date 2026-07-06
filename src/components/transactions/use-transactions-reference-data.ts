@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { listAccountOptionsAction, listCardOptionsAction } from "@/components/shared/entity-options-actions";
 import { listCategoryTreeAction } from "@/modules/categories/actions";
@@ -37,8 +37,7 @@ export type TransactionsReferenceData = {
   cardNameById: Map<string, string>;
 };
 
-const EMPTY: TransactionsReferenceData = {
-  loading: true,
+const EMPTY: Omit<TransactionsReferenceData, "loading"> = {
   categoryOptions: [],
   originOptions: [],
   tags: [],
@@ -47,46 +46,50 @@ const EMPTY: TransactionsReferenceData = {
   cardNameById: new Map(),
 };
 
+/** Query key exportada — outras telas que criam cadastro (categoria/conta/cartão/tag) no fluxo de Transações podem invalidar este cache junto (nenhum fluxo desses existe hoje em `/transactions`, ver `entity-select.tsx`: `onCreate` não é usado aqui). */
+export const TRANSACTIONS_REFERENCE_DATA_QUERY_KEY = ["transactions-reference-data"];
+
+async function fetchTransactionsReferenceData(): Promise<Omit<TransactionsReferenceData, "loading">> {
+  const [categoryResult, accountResult, cardResult, tagResult] = await Promise.all([
+    listCategoryTreeAction(),
+    listAccountOptionsAction(),
+    listCardOptionsAction(),
+    listTagsAction(),
+  ]);
+
+  const categories = categoryResult.success ? categoryResult.data : [];
+  const accounts = accountResult.success ? accountResult.data : [];
+  const cards = cardResult.success ? cardResult.data : [];
+  const tags = tagResult.success ? tagResult.data : [];
+
+  return {
+    categoryOptions: flattenCategories(categories),
+    originOptions: [
+      ...accounts.map((account) => ({ value: `account:${account.id}`, label: account.name, group: "Contas" })),
+      ...cards.map((card) => ({ value: `card:${card.id}`, label: card.name, group: "Cartões" })),
+    ],
+    tags,
+    categoryById: new Map(flattenCategoryRefs(categories)),
+    accountNameById: new Map(accounts.map((account) => [account.id, account.name])),
+    cardNameById: new Map(cards.map((card) => [card.id, card.name])),
+  };
+}
+
 /**
  * Dados de apoio (categorias/contas/cartões/tags) da tela de Transações —
  * usados tanto nos dropdowns de filtro quanto na resolução de nome nas
  * colunas da tabela (a listagem só traz IDs, ver `modules/transactions/repository.ts`).
- * Carregado uma vez; a tela raramente muda esses cadastros durante o uso.
+ *
+ * Cache via TanStack Query com `staleTime` próprio (5min — mais alto que o
+ * default de `QueryProvider`) porque categorias/contas/cartões/tags mudam
+ * raramente durante uma sessão, diferente da lista de transações.
  */
 export function useTransactionsReferenceData(): TransactionsReferenceData {
-  const [data, setData] = useState<TransactionsReferenceData>(EMPTY);
+  const query = useQuery({
+    queryKey: TRANSACTIONS_REFERENCE_DATA_QUERY_KEY,
+    queryFn: fetchTransactionsReferenceData,
+    staleTime: 5 * 60_000,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-
-    Promise.all([listCategoryTreeAction(), listAccountOptionsAction(), listCardOptionsAction(), listTagsAction()]).then(
-      ([categoryResult, accountResult, cardResult, tagResult]) => {
-        if (cancelled) return;
-
-        const categories = categoryResult.success ? categoryResult.data : [];
-        const accounts = accountResult.success ? accountResult.data : [];
-        const cards = cardResult.success ? cardResult.data : [];
-        const tags = tagResult.success ? tagResult.data : [];
-
-        setData({
-          loading: false,
-          categoryOptions: flattenCategories(categories),
-          originOptions: [
-            ...accounts.map((account) => ({ value: `account:${account.id}`, label: account.name, group: "Contas" })),
-            ...cards.map((card) => ({ value: `card:${card.id}`, label: card.name, group: "Cartões" })),
-          ],
-          tags,
-          categoryById: new Map(flattenCategoryRefs(categories)),
-          accountNameById: new Map(accounts.map((account) => [account.id, account.name])),
-          cardNameById: new Map(cards.map((card) => [card.id, card.name])),
-        });
-      },
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return data;
+  return { loading: query.isLoading, ...(query.data ?? EMPTY) };
 }

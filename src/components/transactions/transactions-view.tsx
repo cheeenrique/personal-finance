@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useShell } from "@/components/providers/shell-provider";
+import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
 
 import { TransactionFiltersBar } from "./transaction-filters-bar";
 import { buildTransactionColumns } from "./transaction-columns";
@@ -61,20 +62,29 @@ export function TransactionsView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-medium text-muted-foreground">
-          {loading ? "Carregando…" : `${page.total} transação(ões) encontrada(s)`}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => setInstallmentOpen(true)} className="gap-1.5">
-            <Layers3 className="size-3.5" aria-hidden="true" />
-            Nova compra parcelada
-          </Button>
-          <Button type="button" variant="outline" onClick={() => setTransferOpen(true)} className="gap-1.5">
-            <ArrowLeftRight className="size-3.5" aria-hidden="true" />
-            Nova transferência
-          </Button>
-        </div>
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setInstallmentOpen(true)}
+          className={cn(
+            "inline-flex h-9 items-center gap-2 rounded-[10px] border border-border bg-transparent px-3.5 text-[13px] font-bold text-muted-foreground transition-colors duration-100 ease-pf-out hover:border-muted-foreground",
+            FOCUS_RING_CLASS,
+          )}
+        >
+          <Layers3 className="size-[15px]" aria-hidden="true" />
+          Nova compra parcelada
+        </button>
+        <button
+          type="button"
+          onClick={() => setTransferOpen(true)}
+          className={cn(
+            "inline-flex h-9 items-center gap-2 rounded-[10px] border border-border bg-transparent px-3.5 text-[13px] font-bold text-muted-foreground transition-colors duration-100 ease-pf-out hover:border-muted-foreground",
+            FOCUS_RING_CLASS,
+          )}
+        >
+          <ArrowLeftRight className="size-[15px]" aria-hidden="true" />
+          Nova transferência
+        </button>
       </div>
 
       <DataTable
