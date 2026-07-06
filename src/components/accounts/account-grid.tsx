@@ -5,9 +5,9 @@ import { Wallet } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { Button } from "@/components/ui/button";
 import { deleteAccountAction } from "@/modules/accounts/actions";
 import { notifySuccess } from "@/lib/toast";
+import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
 import { AccountCard, NewAccountTile } from "./account-card";
 import { AccountFormModal } from "./account-form-modal";
 import { TransferModal } from "./transfer-modal";
@@ -66,13 +66,20 @@ export function AccountGrid({ accounts }: AccountGridProps) {
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         {accounts.length >= 2 && (
-          <Button type="button" variant="outline" onClick={() => setTransferOpen(true)}>
+          <button
+            type="button"
+            onClick={() => setTransferOpen(true)}
+            className={cn(
+              "inline-flex h-9 items-center gap-2 rounded-[10px] border border-border bg-transparent px-3.5 text-[13px] font-bold text-muted-foreground transition-colors duration-100 ease-pf-out hover:border-muted-foreground",
+              FOCUS_RING_CLASS,
+            )}
+          >
             Transferir
-          </Button>
+          </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {accounts.map((account) => (
           <AccountCard
             key={account.id}

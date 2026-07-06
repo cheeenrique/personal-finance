@@ -87,18 +87,18 @@ export function AccountCard({ account, onEdit, onDelete }: AccountCardProps) {
   );
 }
 
-/** Tile "+ Nova Conta" — empty state dashed dentro do grid (handoff, "Contas"). */
+/** Tile "+ Nova Conta" — mesmo padrão de `NewCardTile`/`NewInstallmentTile` (ícone size-10/size-5, rounded-xl). */
 export function NewAccountTile({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+      className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-muted-foreground transition-colors hover:border-accent hover:text-accent"
     >
-      <span className="flex size-9 items-center justify-center rounded-[11px] bg-accent/16 text-accent">
-        <Plus className="size-[18px]" aria-hidden="true" />
+      <span className="flex size-10 items-center justify-center rounded-[11px] bg-accent/16">
+        <Plus className="size-5 text-accent" aria-hidden="true" />
       </span>
-      <span className="text-sm font-bold">+ Nova Conta</span>
+      <span className="text-sm font-bold">Nova Conta</span>
     </button>
   );
 }
