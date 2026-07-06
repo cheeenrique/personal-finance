@@ -19,7 +19,7 @@ type IconActionButtonProps = {
 };
 
 const TONE_HOVER_CLASSES: Record<IconActionButtonTone, string> = {
-  default: "hover:border-primary hover:text-foreground",
+  default: "hover:border-primary hover:text-primary",
   danger: "hover:border-destructive hover:text-destructive",
 };
 

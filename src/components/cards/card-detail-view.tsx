@@ -76,7 +76,7 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
             type="button"
             onClick={() => setEditOpen(true)}
             aria-label={`Editar ${card.name}`}
-            className="flex size-9 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+            className="flex size-9 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
           >
             <Pencil className="size-4" aria-hidden="true" />
           </button>
