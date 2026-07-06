@@ -32,3 +32,19 @@ export class InvalidInvoiceError extends CardDomainError {
     super(message, "INVALID_INVOICE", undefined, context);
   }
 }
+
+/**
+ * Pagamento maior que o saldo devedor atual do cartão (docs/22-CREDIT_CARDS.md,
+ * Regra 1: "Cartão nunca pode ter saldo positivo") — pagar mais do que o
+ * devedor deixaria o cartão credor, o que a regra proíbe.
+ */
+export class PaymentExceedsBalanceError extends CardDomainError {
+  constructor(amount: string, outstandingBalance: string, cardId: string) {
+    super(
+      `Valor do pagamento (${amount}) excede o saldo devedor do cartão (${outstandingBalance})`,
+      "PAYMENT_EXCEEDS_BALANCE",
+      undefined,
+      { cardId, amount, outstandingBalance },
+    );
+  }
+}

@@ -2,6 +2,9 @@ import { prisma } from "@/lib/db/client";
 import { Prisma, type Card } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 
+/** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `pay-invoice.ts`). */
+type Db = Prisma.TransactionClient;
+
 export type CreateCardData = {
   name: string;
   brand: string;
@@ -35,8 +38,8 @@ export type InvoiceItemRow = {
  * docs/03-DATABASE.md, "Princípio Principal": isolamento total por usuário).
  */
 
-async function findById(userId: string, id: string): Promise<Card | null> {
-  return prisma.card.findFirst({ where: { id, userId, deletedAt: null } });
+async function findById(userId: string, id: string, db: Db = prisma): Promise<Card | null> {
+  return db.card.findFirst({ where: { id, userId, deletedAt: null } });
 }
 
 async function list(userId: string): Promise<Card[]> {
@@ -162,11 +165,15 @@ async function listExpensesForCards(userId: string, cardIds: string[]): Promise<
  * total - fatura atual" / Regra 2). Não filtra data — o devedor do cartão
  * considera TODAS as compras já lançadas (inclusive parcelas futuras, que já
  * reservam limite desde a criação, docs/23-INSTALLMENTS.md).
+ *
+ * Aceita `db` opcional (client padrão ou de uma `$transaction` interativa) —
+ * usado por `pay-invoice.ts` pra ler o devedor dentro da MESMA transação que
+ * grava o pagamento, evitando TOCTOU entre o cálculo do saldo e o INSERT.
  */
-async function sumByCardAndType(userId: string, cardIds: string[]): Promise<CardTypeSum[]> {
+async function sumByCardAndType(userId: string, cardIds: string[], db: Db = prisma): Promise<CardTypeSum[]> {
   if (cardIds.length === 0) return [];
 
-  const rows = await prisma.transaction.groupBy({
+  const rows = await db.transaction.groupBy({
     by: ["cardId", "type"],
     where: {
       userId,

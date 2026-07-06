@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db/client";
+import { Prisma } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 import { cardRepository } from "./repository";
 import { cardOwnership } from "./ownership";
-import { CardNotFoundError, InvalidInvoiceError } from "./errors";
+import { cardService } from "./service";
+import { CardNotFoundError, InvalidInvoiceError, PaymentExceedsBalanceError } from "./errors";
 import type { PayInvoiceInput } from "./schemas";
 import type { PayInvoiceResult } from "./types";
 
@@ -20,42 +22,55 @@ import type { PayInvoiceResult } from "./types";
  *
  * Efeito: reduz o saldo da conta e abate o devedor do cartão — ambos
  * DERIVADOS (`accountService.getBalance`, `cardService.outstandingBalance`);
- * esta função só cria a linha. `prisma.transaction.create` é um único INSERT
- * — atômico por natureza, sem necessidade de `$transaction` (que só se
- * justifica para múltiplas escritas coordenadas, ver
- * `modules/accounts/transfer.ts` e `modules/transactions/installments.ts`
- * para exemplos de quando isso é necessário).
+ * esta função só cria a linha.
+ *
+ * Guard (docs/22-CREDIT_CARDS.md, Regra 1: "Cartão nunca pode ter saldo
+ * positivo"): `amount` não pode exceder o devedor atual do cartão. Ler o
+ * devedor e gravar o pagamento fora de uma mesma transação abriria uma janela
+ * de TOCTOU (duas requisições concorrentes de pagamento, ou uma compra nova
+ * entrando entre a leitura e o INSERT, poderiam deixar o cartão credor) — por
+ * isso todo o fluxo roda dentro de um `$transaction` interativo (mesmo padrão
+ * de `modules/transactions/installments.ts`), com `outstandingBalance` lendo
+ * no client `tx`, não no `prisma` padrão.
  */
 export async function payInvoice(userId: string, input: PayInvoiceInput): Promise<PayInvoiceResult> {
-  const [card, accountExists] = await Promise.all([
-    cardRepository.findById(userId, input.cardId),
-    cardOwnership.accountExists(userId, input.accountId),
-  ]);
+  return prisma.$transaction(async (tx) => {
+    const [card, accountExists] = await Promise.all([
+      cardRepository.findById(userId, input.cardId, tx),
+      cardOwnership.accountExists(userId, input.accountId, tx),
+    ]);
 
-  if (!card) throw new CardNotFoundError(input.cardId);
-  if (!accountExists) {
-    throw new InvalidInvoiceError("Conta não encontrada", { accountId: input.accountId });
-  }
+    if (!card) throw new CardNotFoundError(input.cardId);
+    if (!accountExists) {
+      throw new InvalidInvoiceError("Conta não encontrada", { accountId: input.accountId });
+    }
 
-  const transaction = await prisma.transaction.create({
-    data: {
-      userId,
-      description: input.description ?? `Pagamento fatura ${card.name}`,
-      type: TransactionType.CARD_PAYMENT,
-      amount: input.amount,
-      accountId: input.accountId,
+    const outstanding = await cardService.outstandingBalance(userId, input.cardId, tx);
+    const amount = new Prisma.Decimal(input.amount);
+    if (amount.greaterThan(outstanding)) {
+      throw new PaymentExceedsBalanceError(input.amount, outstanding.toString(), input.cardId);
+    }
+
+    const transaction = await tx.transaction.create({
+      data: {
+        userId,
+        description: input.description ?? `Pagamento fatura ${card.name}`,
+        type: TransactionType.CARD_PAYMENT,
+        amount: input.amount,
+        accountId: input.accountId,
+        cardId: input.cardId,
+        categoryId: null,
+        date: input.date,
+        isPaid: true,
+      },
+    });
+
+    return {
+      transactionId: transaction.id,
       cardId: input.cardId,
-      categoryId: null,
-      date: input.date,
-      isPaid: true,
-    },
+      accountId: input.accountId,
+      amount: transaction.amount,
+      date: transaction.date,
+    };
   });
-
-  return {
-    transactionId: transaction.id,
-    cardId: input.cardId,
-    accountId: input.accountId,
-    amount: transaction.amount,
-    date: transaction.date,
-  };
 }

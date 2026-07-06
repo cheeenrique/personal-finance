@@ -1,10 +1,14 @@
 import { Prisma, type Card } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
+import { prisma } from "@/lib/db/client";
 import { nowInSaoPaulo } from "@/lib/date/timezone";
 import { cardRepository, type CreateCardData, type UpdateCardData, type InvoiceItemRow } from "./repository";
 import { cycleContaining, cycleForClosingMonth, type CardCycle } from "./cycle";
 import { CardNotFoundError } from "./errors";
 import type { CardWithSummary, Invoice, Money } from "./types";
+
+/** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `pay-invoice.ts`). */
+type Db = Prisma.TransactionClient;
 
 function sumAmounts(rows: Array<{ amount: Prisma.Decimal }>): Prisma.Decimal {
   return rows.reduce((total, row) => total.plus(row.amount), new Prisma.Decimal(0));
@@ -35,8 +39,8 @@ async function deleteCard(userId: string, id: string): Promise<void> {
   if (!deleted) throw new CardNotFoundError(id);
 }
 
-async function getCard(userId: string, id: string): Promise<Card> {
-  const card = await cardRepository.findById(userId, id);
+async function getCard(userId: string, id: string, db: Db = prisma): Promise<Card> {
+  const card = await cardRepository.findById(userId, id, db);
   if (!card) throw new CardNotFoundError(id);
   return card;
 }
@@ -84,10 +88,14 @@ async function invoiceFor(userId: string, cardId: string, year: number, month: n
  * futuras, que já reservam limite desde a criação (docs/23-INSTALLMENTS.md,
  * "impacta o limite apenas uma vez") — menos o total já pago via
  * CARD_PAYMENT. NÃO é escopado ao ciclo/fatura atual (é o "usado" do limite).
+ *
+ * Aceita `db` opcional (client padrão ou de uma `$transaction` interativa) —
+ * `pay-invoice.ts` passa o `tx` da transação de pagamento pra ler o devedor
+ * no mesmo snapshot em que o INSERT do pagamento acontece (evita TOCTOU).
  */
-async function outstandingBalance(userId: string, cardId: string): Promise<Money> {
-  await getCard(userId, cardId); // valida ownership/existência
-  const sums = await cardRepository.sumByCardAndType(userId, [cardId]);
+async function outstandingBalance(userId: string, cardId: string, db: Db = prisma): Promise<Money> {
+  await getCard(userId, cardId, db); // valida ownership/existência
+  const sums = await cardRepository.sumByCardAndType(userId, [cardId], db);
   return computeOutstanding(sums);
 }
 
