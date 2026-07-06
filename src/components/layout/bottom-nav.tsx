@@ -24,7 +24,7 @@ export function BottomNav() {
 
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-center justify-between border-t border-border bg-card xl:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-center justify-between border-t border-border bg-card lg:hidden">
         <BottomNavLink item={dashboardItem} pathname={pathname} />
         <BottomNavLink item={transactionsItem} pathname={pathname} />
 

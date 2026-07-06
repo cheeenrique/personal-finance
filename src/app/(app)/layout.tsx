@@ -26,7 +26,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
         <div className="flex min-h-svh flex-1 flex-col">
           <Header name={name} email={email} />
-          <main className="flex-1 px-4 py-5 pb-28 sm:px-7 xl:pb-6">{children}</main>
+          <main className="flex-1 px-4 py-5 pb-28 sm:px-7 lg:pb-6">{children}</main>
         </div>
       </div>
 

@@ -28,7 +28,7 @@ export function Sidebar({ name, email }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-svh shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 ease-in-out xl:flex",
+        "sticky top-0 hidden h-svh shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 ease-in-out lg:flex",
         collapsed ? "w-[74px]" : "w-[248px]",
       )}
     >
