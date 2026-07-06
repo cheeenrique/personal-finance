@@ -27,6 +27,10 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-transfer: var(--transfer);
+  --color-on-transfer: var(--on-transfer);
+  --color-asset: var(--asset);
+  --color-on-asset: var(--on-asset);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -38,6 +42,14 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Easing — design/PERSONAL_FINANCE_DS_HANDOFF.md, "Animações & Motion".
+   * `ease-in-out` do Tailwind já é byte-a-byte igual ao cubic-bezier daqui
+   * (é a própria definição CSS do keyword) — só ease-out/ease-in precisam de
+   * token próprio, pois divergem do keyword nativo do Tailwind. */
+  --ease-pf-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-pf-in-out: cubic-bezier(0.42, 0, 0.58, 1);
+  --ease-pf-in: cubic-bezier(0.7, 0, 0.84, 0);
 }
 
 /*
@@ -72,21 +84,46 @@
   --input: rgba(255, 255, 255, 0.03);
   --ring: #1e40af;
   --radius: 0.625rem;
+
+  /* Cores financeiras (design/PERSONAL_FINANCE_DS_HANDOFF.md, "Accents &
+   * Semantic (ambos os temas)") — transferência (ciano) e patrimônio (roxo).
+   * `on-transfer`/`on-asset` são constantes nos dois temas (o handoff só as
+   * lista uma vez, fora da seção "Tema Claro"); `transfer`/`asset` (a base)
+   * já variam por tema, redefinidos abaixo em `.light`. */
+  --transfer: #38bdf8;
+  --on-transfer: #7dd3fc;
+  --asset: #a855f7;
+  --on-asset: #c99df6;
 }
 
+/*
+ * Tema claro — valores exatos de
+ * design/PERSONAL_FINANCE_DS_HANDOFF.md, "Paleta de Cores" > "Tema Claro".
+ * Esse handoff é mais preciso que o de layout pra tokens de cor; onde
+ * divergir, ele manda.
+ */
 .light {
-  --background: #f5f7fb;
-  --foreground: #0f1b2e;
-  --card: #ffffff;
-  --card-foreground: #0f1b2e;
-  --popover: #ffffff;
-  --popover-foreground: #0f1b2e;
-  --secondary: #eef2f8;
-  --secondary-foreground: #0f1b2e;
-  --muted: #eef2f8;
-  --muted-foreground: #5b6b82;
-  --border: #e3e8f0;
-  --input: #ffffff;
+  --background: #ffffff;
+  --foreground: #0b1223;
+  --card: #f8fafc;
+  --card-foreground: #0b1223;
+  --popover: #f1f5f9;
+  --popover-foreground: #0b1223;
+  --primary: #2563eb;
+  --secondary: #e2e8f0;
+  --secondary-foreground: #0b1223;
+  --muted: #e2e8f0;
+  --muted-foreground: #64748b;
+  --accent: #d97316;
+  --success: #22c55e;
+  --warning: #fbbf24;
+  --destructive: #f87171;
+  --border: #cbd5e1;
+  --input: rgba(0, 0, 0, 0.04);
+  --ring: #2563eb;
+
+  --transfer: #06b6d4;
+  --asset: #d946ef;
 }
 
 @layer base {
@@ -98,5 +135,17 @@
   }
   html {
     @apply font-sans;
+  }
+
+  /* design/PERSONAL_FINANCE_DS_HANDOFF.md, "Prefers Reduced Motion". */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
