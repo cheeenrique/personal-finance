@@ -17,6 +17,7 @@ import type {
   ActiveInstallmentPurchase,
   Category,
   CategoryExpenseTotal,
+  InstallmentPurchaseWithProgress,
   Money,
   PaginatedResult,
   RecentTransactionRow,
@@ -247,40 +248,72 @@ async function listRecentForDashboard(userId: string, limit: number): Promise<Re
 }
 
 /**
- * Compras parceladas ATIVAS (parcelas restantes > 0) + progresso derivado —
- * nada persistido além de `InstallmentPurchase`/`Transaction`
- * (docs/23-INSTALLMENTS.md, "Valores Derivados"). Uma parcela é "paga"
- * quando sua data de vencimento já passou (`date <= agora`) — mesma regra de
- * compra confirmada no cartão, não existe pagamento manual de parcela
- * individual.
+ * Compras parceladas do usuário — TODAS (ativas ou finalizadas) — com
+ * progresso derivado + as N parcelas em detalhe (insumo de `/installments`,
+ * docs/23-INSTALLMENTS.md, "Listagem de Parcelamentos"). Nada persistido além
+ * de `InstallmentPurchase`/`Transaction` (docs/23-INSTALLMENTS.md, "Valores
+ * Derivados"). Uma parcela é "paga" quando sua data de vencimento já passou
+ * (`date <= agora`) — mesma regra de compra confirmada no cartão, não existe
+ * pagamento manual de parcela individual.
+ */
+async function listInstallmentPurchasesWithProgress(
+  userId: string,
+  refDate: Date = new Date(),
+): Promise<InstallmentPurchaseWithProgress[]> {
+  const purchases = await transactionRepository.listInstallmentPurchasesWithTransactions(userId);
+
+  return purchases.map((purchase) => {
+    const paid = purchase.transactions.filter((transaction) => transaction.date.getTime() <= refDate.getTime());
+    const upcoming = purchase.transactions.filter((transaction) => transaction.date.getTime() > refDate.getTime());
+    const paidAmount = paid.reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
+
+    return {
+      id: purchase.id,
+      description: purchase.description,
+      cardName: purchase.cardName,
+      totalAmount: purchase.totalAmount,
+      installmentsCount: purchase.installmentsCount,
+      paidCount: paid.length,
+      paidAmount,
+      remainingAmount: purchase.totalAmount.minus(paidAmount),
+      nextDueDate: upcoming[0]?.date ?? null,
+      installments: purchase.transactions.map((transaction) => ({
+        // `installmentNumber` é sempre preenchido nas Transactions de uma InstallmentPurchase
+        // (ver installments.ts `createInstallmentPurchase`) — null só existe no tipo por ele
+        // ser compartilhado com Transaction "solta" (docs/03-DATABASE.md).
+        installmentNumber: transaction.installmentNumber ?? 0,
+        amount: transaction.amount,
+        date: transaction.date,
+        isPaid: transaction.date.getTime() <= refDate.getTime(),
+      })),
+    };
+  });
+}
+
+/**
+ * Compras parceladas ATIVAS (parcelas restantes > 0) — subconjunto de
+ * `listInstallmentPurchasesWithProgress` sem o detalhe das parcelas (insumo
+ * do Dashboard, docs/11-DASHBOARD.md, "Parcelamentos Ativos").
  */
 async function listActiveInstallmentPurchases(
   userId: string,
   refDate: Date = new Date(),
 ): Promise<ActiveInstallmentPurchase[]> {
-  const purchases = await transactionRepository.listInstallmentPurchasesWithTransactions(userId);
+  const purchases = await listInstallmentPurchasesWithProgress(userId, refDate);
 
   return purchases
-    .map((purchase) => {
-      const paid = purchase.transactions.filter((transaction) => transaction.date.getTime() <= refDate.getTime());
-      const upcoming = purchase.transactions.filter(
-        (transaction) => transaction.date.getTime() > refDate.getTime(),
-      );
-      const paidAmount = paid.reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
-
-      return {
-        id: purchase.id,
-        description: purchase.description,
-        cardName: purchase.cardName,
-        totalAmount: purchase.totalAmount,
-        installmentsCount: purchase.installmentsCount,
-        paidCount: paid.length,
-        paidAmount,
-        remainingAmount: purchase.totalAmount.minus(paidAmount),
-        nextDueDate: upcoming[0]?.date ?? null,
-      };
-    })
-    .filter((purchase) => purchase.paidCount < purchase.installmentsCount);
+    .filter((purchase) => purchase.paidCount < purchase.installmentsCount)
+    .map((purchase) => ({
+      id: purchase.id,
+      description: purchase.description,
+      cardName: purchase.cardName,
+      totalAmount: purchase.totalAmount,
+      installmentsCount: purchase.installmentsCount,
+      paidCount: purchase.paidCount,
+      paidAmount: purchase.paidAmount,
+      remainingAmount: purchase.remainingAmount,
+      nextDueDate: purchase.nextDueDate,
+    }));
 }
 
 /** `installmentsCount` por `installmentPurchaseId` — insumo do badge "N/total" na listagem (ver actions.ts `getInstallmentTotalsAction`). */
@@ -302,5 +335,6 @@ export const transactionService = {
   expensesByCategory,
   listRecentForDashboard,
   listActiveInstallmentPurchases,
+  listInstallmentPurchasesWithProgress,
   installmentTotals,
 };

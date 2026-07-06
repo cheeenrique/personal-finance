@@ -59,20 +59,30 @@ export type RecentTransactionRow = {
   /** Não-nulo ⇒ é uma perna de transferência — exibida como badge "Transferência", nunca como INCOME/EXPENSE cru (docs/06-SCREENS.md). */
   transferId: string | null;
   categoryName: string | null;
+  /** Hex opcional (`Category.color`) — bolinha colorida ao lado do nome (docs/04-DESIGN_SYSTEM.md, "Categoria"). */
+  categoryColor: string | null;
   accountName: string | null;
   cardName: string | null;
   installmentNumber: number | null;
   installmentsCount: number | null;
 };
 
-/** Compra parcelada + parcelas cruas (pré-derivação) — insumo de `listActiveInstallmentPurchases`. */
+/**
+ * `RecentTransactionRow` com `amount` já convertido pra string — forma que
+ * cruza a fronteira Server Component → Client Component (mesma regra de
+ * `ClientTransaction` acima: `Prisma.Decimal` não sobrevive à serialização
+ * de Server Components sem essa conversão explícita).
+ */
+export type RecentTransactionRowClient = Omit<RecentTransactionRow, "amount"> & { amount: string };
+
+/** Compra parcelada + parcelas cruas (pré-derivação) — insumo de `listInstallmentPurchasesWithProgress`. */
 export type InstallmentPurchaseRow = {
   id: string;
   description: string;
   totalAmount: Money;
   installmentsCount: number;
   cardName: string;
-  transactions: Array<{ amount: Money; date: Date }>;
+  transactions: Array<{ installmentNumber: number | null; amount: Money; date: Date }>;
 };
 
 /** Compra parcelada ATIVA (parcelas restantes > 0) + progresso derivado (docs/23-INSTALLMENTS.md, "Visual no Dashboard"). */
@@ -86,4 +96,23 @@ export type ActiveInstallmentPurchase = {
   paidAmount: Money;
   remainingAmount: Money;
   nextDueDate: Date | null;
+};
+
+/** Uma parcela dentro da lista de "Detalhes" de uma compra parcelada (docs/23-INSTALLMENTS.md, "Parcelas Futuras"). */
+export type InstallmentLineItem = {
+  installmentNumber: number;
+  amount: Money;
+  date: Date;
+  /** `date <= refDate` — mesma regra de "paga" usada no progresso derivado (docs/23-INSTALLMENTS.md, "Valores Derivados"). */
+  isPaid: boolean;
+};
+
+/**
+ * Compra parcelada (TODAS, ativas ou finalizadas) + progresso derivado + as N
+ * parcelas em detalhe — insumo da tela `/installments` (docs/23-INSTALLMENTS.md,
+ * "Listagem de Parcelamentos"). Superset de `ActiveInstallmentPurchase`
+ * (mesmos campos derivados) + `installments` para o drill-down "Detalhes".
+ */
+export type InstallmentPurchaseWithProgress = ActiveInstallmentPurchase & {
+  installments: InstallmentLineItem[];
 };

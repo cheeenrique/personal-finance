@@ -322,7 +322,7 @@ async function listRecentForDashboard(userId: string, limit: number): Promise<Re
       isPaid: true,
       transferId: true,
       installmentNumber: true,
-      category: { select: { name: true } },
+      category: { select: { name: true, color: true } },
       account: { select: { name: true } },
       card: { select: { name: true } },
       installmentPurchase: { select: { installmentsCount: true } },
@@ -338,6 +338,7 @@ async function listRecentForDashboard(userId: string, limit: number): Promise<Re
     isPaid: row.isPaid,
     transferId: row.transferId,
     categoryName: row.category?.name ?? null,
+    categoryColor: row.category?.color ?? null,
     accountName: row.account?.name ?? null,
     cardName: row.card?.name ?? null,
     installmentNumber: row.installmentNumber,
@@ -346,11 +347,12 @@ async function listRecentForDashboard(userId: string, limit: number): Promise<Re
 }
 
 /**
- * Compras parceladas do usuário + parcelas (`Transaction`) não deletadas +
- * nome do cartão — insumo do progresso derivado (ver service.ts
- * `listActiveInstallmentPurchases`, docs/23-INSTALLMENTS.md "Valores
- * Derivados"). Sem agregação aqui: a derivação (paga/restante) depende de
- * "hoje", que é regra do service, não do acesso a dados.
+ * Compras parceladas do usuário (TODAS, ativas ou finalizadas) + parcelas
+ * (`Transaction`) não deletadas + nome do cartão — insumo do progresso
+ * derivado (ver service.ts `listInstallmentPurchasesWithProgress`,
+ * docs/23-INSTALLMENTS.md "Valores Derivados"). Sem agregação aqui: a
+ * derivação (paga/restante) depende de "hoje", que é regra do service, não
+ * do acesso a dados.
  */
 async function listInstallmentPurchasesWithTransactions(userId: string): Promise<InstallmentPurchaseRow[]> {
   const purchases = await prisma.installmentPurchase.findMany({
@@ -364,7 +366,7 @@ async function listInstallmentPurchasesWithTransactions(userId: string): Promise
       card: { select: { name: true } },
       transactions: {
         where: { deletedAt: null },
-        select: { amount: true, date: true },
+        select: { installmentNumber: true, amount: true, date: true },
         orderBy: { date: "asc" },
       },
     },
