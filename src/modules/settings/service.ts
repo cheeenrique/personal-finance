@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { UserSettings } from "@/generated/prisma/client";
 import { settingsRepository, type UpdateSettingsData } from "./repository";
-import type { TelegramLinkCode } from "./types";
+import type { ClientUserSettings, TelegramLinkCode } from "./types";
 
 /** Lazy-create idempotente — garante UserSettings mesmo se o seed não rodou pra esse usuário (docs/12-SETTINGS.md, "Regra 1"). */
 async function getSettings(userId: string): Promise<UserSettings> {
@@ -66,16 +66,37 @@ function activeTelegramLinkCode(
 }
 
 /**
+ * `UserSettings` → `ClientUserSettings`: converte os 3 campos `Decimal` de
+ * threshold para `string`. Fica aqui (não em `actions.ts`, ao contrário de
+ * `toClientTransaction` em `modules/transactions/actions.ts`) porque 3
+ * Server Actions diferentes (`getSettingsAction`, `updateSettingsAction`,
+ * `unlinkTelegramAction`) precisam da mesma conversão antes de cruzar a
+ * fronteira Server → Client — `Prisma.Decimal` não sobrevive a essa
+ * serialização sem conversão explícita.
+ */
+export function toClientUserSettings(settings: UserSettings): ClientUserSettings {
+  return {
+    ...settings,
+    alertAnomalyMultiplier: settings.alertAnomalyMultiplier.toString(),
+    alertMinimumAmount: settings.alertMinimumAmount.toString(),
+    alertGreenMultiplier: settings.alertGreenMultiplier.toString(),
+  };
+}
+
+/**
  * Versão de `getSettings` segura para sair do backend via Server Action: um
  * código de vínculo expirado nunca aparece pro client como se ainda fosse
  * válido — a lógica de expiração é regra de negócio, então vive aqui (não em
- * `actions.ts`, docs/99-CLAUDE.md "Regra de Ouro").
+ * `actions.ts`, docs/99-CLAUDE.md "Regra de Ouro"). Já retorna
+ * `ClientUserSettings` (100% serializável) — ver `toClientUserSettings`.
  */
-async function getSettingsForClient(userId: string): Promise<UserSettings> {
+async function getSettingsForClient(userId: string): Promise<ClientUserSettings> {
   const settings = await getSettings(userId);
-  if (activeTelegramLinkCode(settings)) return settings;
+  const sanitized = activeTelegramLinkCode(settings)
+    ? settings
+    : { ...settings, telegramLinkCode: null, telegramLinkCodeExpiresAt: null };
 
-  return { ...settings, telegramLinkCode: null, telegramLinkCodeExpiresAt: null };
+  return toClientUserSettings(sanitized);
 }
 
 export const settingsService = {

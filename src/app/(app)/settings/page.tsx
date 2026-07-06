@@ -12,9 +12,12 @@ import { SessionCard } from "@/components/settings/session-card";
  * `/settings` (docs/12-SETTINGS.md). Server Component: lê `UserSettings`
  * direto do service, sem passar por Server Action — mesma convenção de
  * `/accounts` (Server Actions aqui só existem para mutations disparadas
- * pelo client, docs/99-CLAUDE.md "Regra de Ouro"). `Prisma.Decimal` vira
- * string na borda antes de descer pros Client Components (RSC não
- * serializa instância de classe).
+ * pelo client, docs/99-CLAUDE.md "Regra de Ouro"). Usa
+ * `getSettingsForClient` (não `getSettings`) — já devolve
+ * `ClientUserSettings` (3 campos `Decimal` de threshold já em `string`), a
+ * mesma conversão que `getSettingsAction`/`updateSettingsAction` aplicam
+ * antes de cruzar a fronteira Server → Client (ver `modules/settings/service.ts`
+ * `toClientUserSettings`) — evita repetir `.toString()` aqui.
  *
  * Telegram: vínculo é 100% DB-backed agora (`UserSettings.telegramChatId`,
  * self-service via código — ver `telegram-card.tsx`). O fallback env
@@ -34,7 +37,7 @@ export default async function SettingsPage() {
   if (!userId) return null;
 
   const [settings, user] = await Promise.all([
-    settingsService.getSettings(userId),
+    settingsService.getSettingsForClient(userId),
     findUserById(userId),
   ]);
   if (!user) return null;
@@ -53,9 +56,9 @@ export default async function SettingsPage() {
         <PreferencesCard currency={settings.currency} timezone={settings.timezone} />
 
         <AlertsCard
-          alertAnomalyMultiplier={settings.alertAnomalyMultiplier.toString()}
-          alertMinimumAmount={settings.alertMinimumAmount.toString()}
-          alertGreenMultiplier={settings.alertGreenMultiplier.toString()}
+          alertAnomalyMultiplier={settings.alertAnomalyMultiplier}
+          alertMinimumAmount={settings.alertMinimumAmount}
+          alertGreenMultiplier={settings.alertGreenMultiplier}
         />
 
         <TelegramCard chatId={settings.telegramChatId} pendingCode={pendingCode} />

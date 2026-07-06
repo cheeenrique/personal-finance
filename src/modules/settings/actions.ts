@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { settingsService } from "./service";
+import { settingsService, toClientUserSettings } from "./service";
 import { updateSettingsSchema } from "./schemas";
 import { SettingsDomainError } from "./errors";
-import type { UserSettings, ActionResult, TelegramLinkCode } from "./types";
+import type { ActionResult, ClientUserSettings, TelegramLinkCode } from "./types";
 
 const SETTINGS_PATH = "/settings";
 
@@ -30,7 +30,7 @@ function toActionError(error: unknown): { success: false; error: { code: string;
   };
 }
 
-export async function getSettingsAction(): Promise<ActionResult<UserSettings>> {
+export async function getSettingsAction(): Promise<ActionResult<ClientUserSettings>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
@@ -43,7 +43,7 @@ export async function getSettingsAction(): Promise<ActionResult<UserSettings>> {
   }
 }
 
-export async function updateSettingsAction(input: unknown): Promise<ActionResult<UserSettings>> {
+export async function updateSettingsAction(input: unknown): Promise<ActionResult<ClientUserSettings>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
@@ -58,7 +58,7 @@ export async function updateSettingsAction(input: unknown): Promise<ActionResult
   try {
     const settings = await settingsService.updateSettings(userId, parsed.data);
     revalidatePath(SETTINGS_PATH);
-    return { success: true, data: settings };
+    return { success: true, data: toClientUserSettings(settings) };
   } catch (error) {
     return toActionError(error);
   }
@@ -77,14 +77,14 @@ export async function generateTelegramLinkCodeAction(): Promise<ActionResult<Tel
   }
 }
 
-export async function unlinkTelegramAction(): Promise<ActionResult<UserSettings>> {
+export async function unlinkTelegramAction(): Promise<ActionResult<ClientUserSettings>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
   try {
     const settings = await settingsService.unlinkTelegram(userId);
     revalidatePath(SETTINGS_PATH);
-    return { success: true, data: settings };
+    return { success: true, data: toClientUserSettings(settings) };
   } catch (error) {
     return toActionError(error);
   }
