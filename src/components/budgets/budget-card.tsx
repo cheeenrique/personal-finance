@@ -1,0 +1,74 @@
+"use client";
+
+import { Pencil, Trash2 } from "lucide-react";
+
+import { formatBRL } from "@/lib/money/format";
+import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
+import { BudgetProgressBar, budgetStatusTextClass } from "./budget-progress";
+import type { BudgetCardData } from "./types";
+
+type BudgetCardProps = {
+  budget: BudgetCardData;
+  onEdit: (budget: BudgetCardData) => void;
+  onDelete: (budget: BudgetCardData) => void;
+};
+
+/**
+ * Card de orçamento por categoria (docs/26-BUDGETS.md, "Card de Budget"):
+ * planejado/gasto em mono, barra de progresso, restante. Mesmo layout de
+ * cartão/ação (`components/cards/card-tile.tsx`), sem o link de detalhe —
+ * orçamento não tem tela própria de drill-down (docs/26-BUDGETS.md não define
+ * uma).
+ */
+export function BudgetCard({ budget, onEdit, onDelete }: BudgetCardProps) {
+  const isOver = budget.status === "OVER";
+
+  return (
+    <div className={cn("flex flex-col gap-3 rounded-xl border border-border bg-card p-5", CARD_SHADOW_CLASS)}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="truncate text-[15px] font-extrabold text-foreground">{budget.categoryName}</p>
+
+        <div className="flex shrink-0 gap-1.5">
+          <button
+            type="button"
+            onClick={() => onEdit(budget)}
+            aria-label={`Editar orçamento de ${budget.categoryName}`}
+            className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+          >
+            <Pencil className="size-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(budget)}
+            aria-label={`Excluir orçamento de ${budget.categoryName}`}
+            className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+          >
+            <Trash2 className="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-baseline justify-between">
+          <p className="font-mono text-sm font-bold text-foreground">
+            {formatBRL(budget.spentAmount)}{" "}
+            <span className="font-sans text-xs font-medium text-muted-foreground">
+              / {formatBRL(budget.plannedAmount)}
+            </span>
+          </p>
+          <p className={cn("font-mono text-xs font-bold", budgetStatusTextClass(budget.status))}>
+            {Math.round(budget.progress)}%
+          </p>
+        </div>
+        <BudgetProgressBar progress={budget.progress} status={budget.status} />
+      </div>
+
+      <p className="text-xs font-semibold text-muted-foreground">
+        {isOver ? "Estourou em " : "Restante: "}
+        <span className={cn("font-mono font-bold", isOver ? "text-destructive" : "text-foreground")}>
+          {formatBRL(isOver ? String(Math.abs(Number(budget.remainingAmount))) : budget.remainingAmount)}
+        </span>
+      </p>
+    </div>
+  );
+}
