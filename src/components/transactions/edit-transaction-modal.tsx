@@ -225,7 +225,7 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
           <div>
             <Label htmlFor="edit-tx-ispaid">Já paga</Label>
             <p className="text-[12px] font-medium text-muted-foreground">
-              Desligue para lançamentos previstos ainda não liquidados.
+              Desative se ainda não foi paga — ela entra como previsto/a pagar.
             </p>
           </div>
           <Switch id="edit-tx-ispaid" checked={isPaid} onCheckedChange={setIsPaid} disabled={isPending} />
