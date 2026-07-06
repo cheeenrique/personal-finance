@@ -1,0 +1,281 @@
+import { prisma } from "@/lib/db/client";
+import { Prisma, type Category } from "@/generated/prisma/client";
+import { TransactionType } from "@/generated/prisma/enums";
+import type { TransactionWithTags, TransactionSort, Transaction } from "./types";
+
+export type CreateTransactionData = {
+  description: string;
+  type: TransactionType;
+  amount: string;
+  categoryId: string | null;
+  accountId: string | null;
+  cardId: string | null;
+  date: Date;
+  notes: string | null;
+  isPaid: boolean;
+  tagIds: string[];
+};
+
+export type UpdateTransactionData = Partial<Omit<CreateTransactionData, "tagIds">> & {
+  tagIds?: string[];
+};
+
+export type TransactionListFilter = {
+  type?: TransactionType;
+  categoryId?: string;
+  accountId?: string;
+  cardId?: string;
+  tagId?: string;
+  isPaid?: boolean;
+  dateFrom?: Date;
+  dateTo?: Date;
+  amountMin?: string;
+  amountMax?: string;
+};
+
+export type TransactionListPage = {
+  page: number;
+  pageSize: number;
+  sort: TransactionSort;
+};
+
+export type ExpenseCategoryGroup = { categoryId: string | null; sum: Prisma.Decimal };
+
+const TAG_INCLUDE = { transactionTags: true } as const;
+
+/**
+ * Acesso a dados do módulo transactions. SEMPRE escopado por `userId` +
+ * `deletedAt: null` — nunca query sem essas duas condições (ver
+ * docs/03-DATABASE.md, "Princípio Principal": isolamento total por usuário).
+ */
+
+async function findById(userId: string, id: string): Promise<TransactionWithTags | null> {
+  return prisma.transaction.findFirst({
+    where: { id, userId, deletedAt: null },
+    include: TAG_INCLUDE,
+  });
+}
+
+/** Só para o fluxo de undo — busca uma transação JÁ soft-deletada (ver `restore`). */
+async function findDeletedById(userId: string, id: string): Promise<TransactionWithTags | null> {
+  return prisma.transaction.findFirst({
+    where: { id, userId, NOT: { deletedAt: null } },
+    include: TAG_INCLUDE,
+  });
+}
+
+async function create(userId: string, data: CreateTransactionData): Promise<TransactionWithTags> {
+  return prisma.transaction.create({
+    data: {
+      userId,
+      description: data.description,
+      type: data.type,
+      amount: data.amount,
+      categoryId: data.categoryId,
+      accountId: data.accountId,
+      cardId: data.cardId,
+      date: data.date,
+      notes: data.notes,
+      isPaid: data.isPaid,
+      transactionTags:
+        data.tagIds.length > 0 ? { create: data.tagIds.map((tagId) => ({ tagId })) } : undefined,
+    },
+    include: TAG_INCLUDE,
+  });
+}
+
+/**
+ * Verifica ownership (findById escopado) antes de atualizar — evita editar
+ * transação de outro usuário mesmo sabendo o `id` (docs/10-AUTH.md, "Regra
+ * Principal de Segurança"). Quando `tagIds` é enviado, substitui o conjunto
+ * inteiro (deleteMany + create) — não faz merge incremental.
+ */
+async function update(
+  userId: string,
+  id: string,
+  data: UpdateTransactionData,
+): Promise<TransactionWithTags | null> {
+  const existing = await findById(userId, id);
+  if (!existing) return null;
+
+  return prisma.transaction.update({
+    where: { id },
+    data: {
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.type !== undefined && { type: data.type }),
+      ...(data.amount !== undefined && { amount: data.amount }),
+      ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+      ...(data.accountId !== undefined && { accountId: data.accountId }),
+      ...(data.cardId !== undefined && { cardId: data.cardId }),
+      ...(data.date !== undefined && { date: data.date }),
+      ...(data.notes !== undefined && { notes: data.notes }),
+      ...(data.isPaid !== undefined && { isPaid: data.isPaid }),
+      ...(data.tagIds !== undefined && {
+        transactionTags: { deleteMany: {}, create: data.tagIds.map((tagId) => ({ tagId })) },
+      }),
+    },
+    include: TAG_INCLUDE,
+  });
+}
+
+/** Soft delete — nunca remove fisicamente (docs/20-TRANSACTIONS.md, "Soft Delete"). */
+async function softDelete(userId: string, id: string): Promise<TransactionWithTags | null> {
+  const existing = await findById(userId, id);
+  if (!existing) return null;
+
+  return prisma.transaction.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+    include: TAG_INCLUDE,
+  });
+}
+
+/** Undo do soft delete — limpa `deletedAt` (docs/20-TRANSACTIONS.md, "permitir undo"). */
+async function restore(userId: string, id: string): Promise<TransactionWithTags | null> {
+  const existing = await findDeletedById(userId, id);
+  if (!existing) return null;
+
+  return prisma.transaction.update({
+    where: { id },
+    data: { deletedAt: null },
+    include: TAG_INCLUDE,
+  });
+}
+
+function buildWhere(userId: string, filters: TransactionListFilter): Prisma.TransactionWhereInput {
+  return {
+    userId,
+    deletedAt: null,
+    ...(filters.type && { type: filters.type }),
+    ...(filters.categoryId && { categoryId: filters.categoryId }),
+    ...(filters.accountId && { accountId: filters.accountId }),
+    ...(filters.cardId && { cardId: filters.cardId }),
+    ...(filters.isPaid !== undefined && { isPaid: filters.isPaid }),
+    ...(filters.tagId && { transactionTags: { some: { tagId: filters.tagId } } }),
+    ...((filters.dateFrom || filters.dateTo) && {
+      date: {
+        ...(filters.dateFrom && { gte: filters.dateFrom }),
+        ...(filters.dateTo && { lte: filters.dateTo }),
+      },
+    }),
+    ...((filters.amountMin || filters.amountMax) && {
+      amount: {
+        ...(filters.amountMin && { gte: filters.amountMin }),
+        ...(filters.amountMax && { lte: filters.amountMax }),
+      },
+    }),
+  };
+}
+
+const SORT_MAP: Record<TransactionSort, Prisma.TransactionOrderByWithRelationInput> = {
+  date_desc: { date: "desc" },
+  date_asc: { date: "asc" },
+  amount_desc: { amount: "desc" },
+  amount_asc: { amount: "asc" },
+};
+
+/** Única listagem paginada do app (docs/01-STACK.md, "Performance") — findMany + count em paralelo, sem N+1. */
+async function list(
+  userId: string,
+  filters: TransactionListFilter,
+  page: TransactionListPage,
+): Promise<{ items: TransactionWithTags[]; total: number }> {
+  const where = buildWhere(userId, filters);
+  const skip = (page.page - 1) * page.pageSize;
+
+  const [items, total] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      include: TAG_INCLUDE,
+      orderBy: SORT_MAP[page.sort],
+      skip,
+      take: page.pageSize,
+    }),
+    prisma.transaction.count({ where }),
+  ]);
+
+  return { items, total };
+}
+
+/** Transação mais recente (por `date`, depois `createdAt`) de um tipo — base do default de cadastro rápido (docs/05-UX_RULES.md). */
+async function findMostRecentByType(
+  userId: string,
+  type: TransactionType,
+): Promise<(Transaction & { category: Category | null }) | null> {
+  return prisma.transaction.findFirst({
+    where: { userId, type, categoryId: { not: null }, deletedAt: null },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    include: { category: true },
+  });
+}
+
+/**
+ * Soma de Transactions por tipo numa janela de datas — insumo dos KPIs
+ * mensais (ver service.ts `monthlyExpenseTotal`/`monthlyIncomeTotal`).
+ * Exclui pernas de transferência (`transferId: null`) e considera só pagas.
+ */
+async function sumAmountByTypeInRange(
+  userId: string,
+  type: TransactionType,
+  range: { gte: Date; lt: Date },
+): Promise<Prisma.Decimal> {
+  const result = await prisma.transaction.aggregate({
+    where: {
+      userId,
+      deletedAt: null,
+      isPaid: true,
+      type,
+      transferId: null,
+      date: { gte: range.gte, lt: range.lt },
+    },
+    _sum: { amount: true },
+  });
+
+  return result._sum.amount ?? new Prisma.Decimal(0);
+}
+
+/** Agrupamento de despesas por categoria numa janela — insumo do gráfico de gastos por categoria. */
+async function groupExpensesByCategoryInRange(
+  userId: string,
+  range: { gte: Date; lt: Date },
+): Promise<ExpenseCategoryGroup[]> {
+  const rows = await prisma.transaction.groupBy({
+    by: ["categoryId"],
+    where: {
+      userId,
+      deletedAt: null,
+      isPaid: true,
+      type: TransactionType.EXPENSE,
+      transferId: null,
+      date: { gte: range.gte, lt: range.lt },
+    },
+    _sum: { amount: true },
+  });
+
+  return rows.map((row) => ({ categoryId: row.categoryId, sum: row._sum.amount ?? new Prisma.Decimal(0) }));
+}
+
+async function findCategoryNamesByIds(ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+
+  const categories = await prisma.category.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true },
+  });
+
+  return new Map(categories.map((category) => [category.id, category.name]));
+}
+
+export const transactionRepository = {
+  findById,
+  findDeletedById,
+  create,
+  update,
+  softDelete,
+  restore,
+  list,
+  findMostRecentByType,
+  sumAmountByTypeInRange,
+  groupExpensesByCategoryInRange,
+  findCategoryNamesByIds,
+};

@@ -80,7 +80,7 @@ Top categorias:
 Δ vs semana anterior: -12% em despesas
 ```
 
-`TRANSFER` nunca entra nesse cálculo — mesma regra dos KPIs mensais (ver seção 2).
+Transferências nunca entram nesse cálculo — mesma regra dos KPIs mensais (ver seção 2): excluídas filtrando `transferId IS NOT NULL`.
 
 ---
 
@@ -112,10 +112,11 @@ Exibidos no topo da tela, logo abaixo do Resumo Semanal.
 ## Regras de Cálculo
 
 ```text
-KPIs excluem transações TRANSFER
-  → transferência não é receita nem despesa, é só movimentação entre contas
+KPIs de receita/despesa excluem transferências filtrando `transferId IS NOT NULL`
+  → as 2 pernas de uma transferência são EXPENSE/INCOME com transferId compartilhado;
+    transferência não é receita nem despesa, é só movimentação entre contas
 
-"Despesas do mês" (por categoria) exclui TRANSFER e CARD_PAYMENT
+"Despesas do mês" (por categoria) exclui transferências (transferId IS NOT NULL) e CARD_PAYMENT
   → pagamento de fatura já foi contado como despesa no momento de cada compra (EXPENSE);
     contar de novo no pagamento duplicaria o gasto (ver 03-DATABASE.md, 22-CREDIT_CARDS.md)
 

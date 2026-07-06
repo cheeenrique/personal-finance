@@ -32,11 +32,11 @@ Nenhuma outra fonte é considerada primária.
 
 # Exclusão de Transfer e Pagamento de Fatura
 
-KPIs e relatórios de receita/despesa **excluem transações `type=TRANSFER` e `type=CARD_PAYMENT`**.
+KPIs e relatórios de receita/despesa excluem transferências filtrando `transferId IS NOT NULL` (as 2 pernas de uma transferência são `EXPENSE`/`INCOME` com `transferId` compartilhado — nunca existe `type=TRANSFER` persistido), e **excluem `type=CARD_PAYMENT`**.
 
 Transfer é movimentação entre contas próprias, não é ganho nem gasto. `CARD_PAYMENT` (pagamento de fatura) já foi contabilizado como despesa por categoria no momento de cada compra (`EXPENSE`) — contar de novo no pagamento duplicaria o gasto. Ver `03-DATABASE.md` e `22-CREDIT_CARDS.md`.
 
-Relatório de Fluxo de Caixa, Relatório por Categoria e demais totais de receita/despesa devem filtrar `type IN (INCOME, EXPENSE)`.
+Relatório de Fluxo de Caixa, Relatório por Categoria e demais totais de receita/despesa devem filtrar `type IN (INCOME, EXPENSE)` e `transferId IS NULL`.
 
 Relatório por Conta continua considerando Transfer e CARD_PAYMENT, pois ali o que importa é a movimentação da conta, não o ganho/gasto por categoria.
 

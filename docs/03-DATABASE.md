@@ -79,7 +79,7 @@ Tags **não** ficam inline em Transaction. Associação via junction `Transactio
 
 ### Transferências
 
-`type=TRANSFER` sempre gera **2 Transactions com o mesmo `transferId`**: uma `EXPENSE` na conta origem, uma `INCOME` na conta destino. `categoryId=null` nas duas pernas. Relatórios e KPIs excluem `TRANSFER` — é movimentação, não gasto nem ganho.
+`type=TRANSFER` sempre gera **2 Transactions com o mesmo `transferId`**: uma `EXPENSE` na conta origem, uma `INCOME` na conta destino. `categoryId=null` nas duas pernas. KPIs de receita/despesa excluem transferências filtrando `transferId IS NOT NULL` (as 2 pernas são EXPENSE/INCOME com transferId compartilhado), e excluem `type=CARD_PAYMENT` — é movimentação, não gasto nem ganho.
 
 ### Pagamento de Fatura (CARD_PAYMENT)
 

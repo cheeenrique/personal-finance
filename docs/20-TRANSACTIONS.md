@@ -278,7 +278,7 @@ Transaction 2: type=INCOME,  accountId=<destino>, categoryId=null, transferId=X
 
 Editar ou excluir uma perna deve propagar para a outra (as 2 formam uma unidade lógica).
 
-Transfers são **excluídas de receita e despesa nos KPIs** (Dashboard, Relatórios) — é movimentação entre contas, não ganho nem gasto. Ver 21-ACCOUNTS, 28-REPORTS, 11-DASHBOARD.
+KPIs de receita/despesa (Dashboard, Relatórios) excluem transferências filtrando `transferId IS NOT NULL` (as 2 pernas são EXPENSE/INCOME com transferId compartilhado), e excluem `type=CARD_PAYMENT` — é movimentação entre contas, não ganho nem gasto. Ver 21-ACCOUNTS, 28-REPORTS, 11-DASHBOARD.
 
 ---
 
@@ -323,7 +323,7 @@ Toda transação nasce `isPaid = true` por padrão. `isPaid = false` é usado pa
 * Despesa com `isPaid = false` **não entra** em "Despesas do mês" nem em "Saldo atual" — entra num bloco separado **"Previsto / A pagar"**.
 * Assim que marcada como paga (`isPaid = true`), passa a contar normalmente no mês da sua `date`.
 * Compras no cartão de crédito seguem regra própria — ver "Status de Pagamento no Cartão" em 22-CREDIT_CARDS.
-* TRANSFER nunca entra nesse cálculo (é excluída de receita/despesa independente de `isPaid`).
+* Transferências nunca entram nesse cálculo — KPIs de receita/despesa excluem filtrando `transferId IS NOT NULL`, independente de `isPaid`.
 
 ---
 
