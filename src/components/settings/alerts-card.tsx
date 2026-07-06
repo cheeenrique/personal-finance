@@ -72,39 +72,41 @@ export function AlertsCard({
 
       <form onSubmit={handleSubmit}>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="alert-anomaly">Multiplicador de atenção</Label>
-            <Input
-              id="alert-anomaly"
-              inputMode="decimal"
-              value={anomaly}
-              onChange={(event) => setAnomaly(event.target.value)}
-              disabled={isPending}
-              required
-            />
-          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="alert-anomaly">Multiplicador de atenção</Label>
+              <Input
+                id="alert-anomaly"
+                inputMode="decimal"
+                value={anomaly}
+                onChange={(event) => setAnomaly(event.target.value)}
+                disabled={isPending}
+                required
+              />
+            </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="alert-minimum">Valor mínimo para disparar alerta</Label>
-            <CurrencyInput
-              id="alert-minimum"
-              value={minimum}
-              onValueChange={setMinimum}
-              disabled={isPending}
-              required
-            />
-          </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="alert-minimum">Valor mínimo para disparar alerta</Label>
+              <CurrencyInput
+                id="alert-minimum"
+                value={minimum}
+                onValueChange={setMinimum}
+                disabled={isPending}
+                required
+              />
+            </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="alert-green">Multiplicador de economia</Label>
-            <Input
-              id="alert-green"
-              inputMode="decimal"
-              value={green}
-              onChange={(event) => setGreen(event.target.value)}
-              disabled={isPending}
-              required
-            />
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="alert-green">Multiplicador de economia</Label>
+              <Input
+                id="alert-green"
+                inputMode="decimal"
+                value={green}
+                onChange={(event) => setGreen(event.target.value)}
+                disabled={isPending}
+                required
+              />
+            </div>
           </div>
 
           <p className="rounded-lg bg-secondary/60 p-3 text-[13px] font-medium text-muted-foreground">

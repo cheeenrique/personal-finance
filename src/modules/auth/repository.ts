@@ -9,3 +9,8 @@ import { prisma } from "@/lib/db/client";
 export function findUserByEmail(email: string) {
   return prisma.user.findUnique({ where: { email } });
 }
+
+/** Só `createdAt` — usado pelo card de Perfil em `/settings` ("Membro desde", docs/12-SETTINGS.md). A sessão do NextAuth não expõe esse campo (`10-AUTH.md`). */
+export function findUserById(id: string) {
+  return prisma.user.findUnique({ where: { id }, select: { createdAt: true } });
+}

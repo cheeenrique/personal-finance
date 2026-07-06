@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { useHasMounted } from "@/hooks/use-has-mounted";
 import { updateSettingsAction } from "@/modules/settings/actions";
@@ -53,33 +52,55 @@ function usePersistThemeChange(): void {
   }, [theme, mounted]);
 }
 
+type PreferenceRowProps = {
+  label: string;
+  subtitle?: string;
+  children: ReactNode;
+};
+
+/** Linha label+subtítulo à esquerda / controle à direita — mesmo padrão nas 3 seções deste card. */
+function PreferenceRow({ label, subtitle, children }: PreferenceRowProps) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0">
+      <div>
+        <p className="text-sm font-bold text-foreground">{label}</p>
+        {subtitle && <p className="text-[13px] font-medium text-muted-foreground">{subtitle}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function PillValue({ children }: { children: ReactNode }) {
+  return (
+    <span className="shrink-0 rounded-lg border border-border bg-secondary px-3 py-1.5 font-mono text-sm font-semibold text-foreground">
+      {children}
+    </span>
+  );
+}
+
 export function PreferencesCard({ currency, timezone }: PreferencesCardProps) {
   usePersistThemeChange();
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Preferências</CardTitle>
+        <CardTitle>Preferências gerais</CardTitle>
         <CardDescription>Moeda e fuso horário são fixos nesta versão do app.</CardDescription>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label>Moeda</Label>
-          <p className="text-sm font-medium text-muted-foreground">
-            {currency === "BRL" ? "Real (BRL)" : currency}
-          </p>
-        </div>
+      <CardContent className="flex flex-col">
+        <PreferenceRow label="Moeda" subtitle="Real brasileiro · sem multi-moeda">
+          <PillValue>{currency === "BRL" ? "R$ · BRL" : currency}</PillValue>
+        </PreferenceRow>
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Timezone</Label>
-          <p className="font-mono text-sm font-medium text-muted-foreground">{timezone}</p>
-        </div>
+        <PreferenceRow label="Fuso horário" subtitle="Fixo">
+          <PillValue>{timezone}</PillValue>
+        </PreferenceRow>
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Tema</Label>
+        <PreferenceRow label="Tema">
           <ThemeToggle />
-        </div>
+        </PreferenceRow>
       </CardContent>
     </Card>
   );

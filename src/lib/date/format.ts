@@ -22,6 +22,12 @@ export function formatDateShortSaoPaulo(value: Date | string): string {
   }).format(date);
 }
 
+/** `2024` — só o ano, usado em "Membro desde" no card de Perfil (docs/12-SETTINGS.md). */
+export function formatYearSaoPaulo(value: Date | string): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: TIMEZONE, year: "numeric" }).format(date);
+}
+
 /** `06 de julho de 2026` — leitura por extenso (docs/04-DESIGN_SYSTEM.md, "Data"). */
 export function formatDateLongSaoPaulo(value: Date | string): string {
   const date = typeof value === "string" ? new Date(value) : value;

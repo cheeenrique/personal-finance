@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { settingsService } from "@/modules/settings/service";
+import { findUserById } from "@/modules/auth/repository";
 import { ProfileCard } from "@/components/settings/profile-card";
 import { PreferencesCard } from "@/components/settings/preferences-card";
 import { AlertsCard } from "@/components/settings/alerts-card";
@@ -21,19 +22,33 @@ import { SessionCard } from "@/components/settings/session-card";
  * (`modules/telegram/allowlist.ts`), nunca lido aqui — setups legados via
  * env aparecem como "não vinculado" nesta tela até o usuário gerar um código
  * e confirmar pelo bot.
+ *
+ * `memberSince` (card de Perfil): a sessão do NextAuth só expõe id/name/email
+ * (`10-AUTH.md`), então `User.createdAt` é buscado à parte via
+ * `modules/auth/repository` — mesmo ponto único de acesso ao Prisma que o
+ * módulo de auth já usa para login.
  */
 export default async function SettingsPage() {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return null;
 
-  const settings = await settingsService.getSettings(userId);
+  const [settings, user] = await Promise.all([
+    settingsService.getSettings(userId),
+    findUserById(userId),
+  ]);
+  if (!user) return null;
+
   const pendingCode = settingsService.activeTelegramLinkCode(settings);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ProfileCard name={session.user?.name ?? "Usuário"} email={session.user?.email ?? ""} />
+        <ProfileCard
+          name={session.user?.name ?? "Usuário"}
+          email={session.user?.email ?? ""}
+          memberSince={user.createdAt}
+        />
 
         <PreferencesCard currency={settings.currency} timezone={settings.timezone} />
 
