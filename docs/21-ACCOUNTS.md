@@ -240,10 +240,10 @@ Contas alimentam:
 
 # Saldo Total
 
-Soma de todas as contas:
+Soma de todas as contas ativas, incluindo `OTHER` (toda conta guarda dinheiro real):
 
 ```text id="s3x8mq"
-CHECKING + SAVINGS + CASH + BUSINESS
+CHECKING + SAVINGS + CASH + BUSINESS + OTHER
 ```
 
 ---

@@ -5,13 +5,6 @@ import { AccountNotFoundError } from "./errors";
 import type { AccountWithBalance } from "./types";
 
 /**
- * Tipos que entram no "Saldo Total" (docs/21-ACCOUNTS.md, seção "Saldo
- * Total"): `CHECKING + SAVINGS + CASH + BUSINESS`. `OTHER` fica de fora —
- * decisão documentada, não omissão (ver riscos no retorno da task).
- */
-const TOTAL_BALANCE_ACCOUNT_TYPES = new Set(["CHECKING", "SAVINGS", "CASH", "BUSINESS"]);
-
-/**
  * Sinal de cada tipo de Transaction no saldo da conta. INCOME soma, EXPENSE e
  * CARD_PAYMENT subtraem (docs/03-DATABASE.md: CARD_PAYMENT "reduz o saldo da
  * conta"). `TRANSFER` "puro" nunca aparece aqui — as pernas de transferência
@@ -68,12 +61,10 @@ async function listWithBalances(userId: string): Promise<AccountWithBalance[]> {
   }));
 }
 
-/** Soma dos saldos das contas elegíveis (ver `TOTAL_BALANCE_ACCOUNT_TYPES`). */
+/** Soma dos saldos de TODAS as contas ativas, incluindo OTHER (docs/21-ACCOUNTS.md). */
 async function totalBalance(userId: string): Promise<Prisma.Decimal> {
   const accounts = await listWithBalances(userId);
-  return accounts
-    .filter((account) => TOTAL_BALANCE_ACCOUNT_TYPES.has(account.type))
-    .reduce((total, account) => total.plus(account.balance), new Prisma.Decimal(0));
+  return accounts.reduce((total, account) => total.plus(account.balance), new Prisma.Decimal(0));
 }
 
 async function createAccount(userId: string, input: CreateAccountData): Promise<Account> {
