@@ -2,6 +2,7 @@
 
 import { Pencil, Trash2 } from "lucide-react";
 
+import { IconActionButton } from "@/components/shared/icon-action-button";
 import { formatBRL } from "@/lib/money/format";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
 import { BudgetProgressBar, budgetStatusTextClass } from "./budget-progress";
@@ -29,22 +30,17 @@ export function BudgetCard({ budget, onEdit, onDelete }: BudgetCardProps) {
         <p className="truncate text-[15px] font-extrabold text-foreground">{budget.categoryName}</p>
 
         <div className="flex shrink-0 gap-1.5">
-          <button
-            type="button"
+          <IconActionButton
+            icon={Pencil}
+            label={`Editar orçamento de ${budget.categoryName}`}
             onClick={() => onEdit(budget)}
-            aria-label={`Editar orçamento de ${budget.categoryName}`}
-            className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-          >
-            <Pencil className="size-3.5" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
+          />
+          <IconActionButton
+            icon={Trash2}
+            tone="danger"
+            label={`Excluir orçamento de ${budget.categoryName}`}
             onClick={() => onDelete(budget)}
-            aria-label={`Excluir orçamento de ${budget.categoryName}`}
-            className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" aria-hidden="true" />
-          </button>
+          />
         </div>
       </div>
 

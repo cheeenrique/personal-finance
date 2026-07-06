@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronRight, Pencil, Trash2 } from "lucide-react";
 
+import { IconActionButton } from "@/components/shared/icon-action-button";
 import { cn } from "@/lib/utils";
 import type { CategoryTreeNode } from "@/modules/categories/types";
 import { CATEGORY_TYPE_DEFAULT_COLOR } from "./category-config";
@@ -64,22 +65,13 @@ export function CategoryRow({ category, depth, onEdit, onDelete }: CategoryRowPr
 
         <CategoryTypeBadge type={category.type} className="hidden sm:inline-flex" />
 
-        <button
-          type="button"
-          onClick={() => onEdit(category)}
-          aria-label={`Editar ${category.name}`}
-          className="flex size-7 shrink-0 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-        >
-          <Pencil className="size-3.5" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
+        <IconActionButton icon={Pencil} label={`Editar ${category.name}`} onClick={() => onEdit(category)} />
+        <IconActionButton
+          icon={Trash2}
+          tone="danger"
+          label={`Excluir ${category.name}`}
           onClick={() => onDelete(category)}
-          aria-label={`Excluir ${category.name}`}
-          className="flex size-7 shrink-0 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
-        >
-          <Trash2 className="size-3.5" aria-hidden="true" />
-        </button>
+        />
       </div>
 
       {hasChildren && expanded && (

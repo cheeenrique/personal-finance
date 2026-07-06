@@ -6,7 +6,7 @@ import { ArrowLeftRight, Layers3, Pencil, Receipt, Trash2 } from "lucide-react";
 import { DataTable } from "@/components/tables/data-table";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { IconActionButton } from "@/components/shared/icon-action-button";
 import { useShell } from "@/components/providers/shell-provider";
 import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
 
@@ -201,39 +201,21 @@ function RowActions({ row, onEdit, onDelete }: RowActionsProps) {
 
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              onClick={onEdit}
-              disabled={disabled}
-              aria-label="Editar transação"
-              className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-            />
-          }
-        >
-          <Pencil className="size-3.5" aria-hidden="true" />
-        </TooltipTrigger>
-        <TooltipContent>{disabled ? "Transferências não são editáveis aqui" : "Editar"}</TooltipContent>
-      </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={disabled}
-              aria-label="Excluir transação"
-              className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
-            />
-          }
-        >
-          <Trash2 className="size-3.5" aria-hidden="true" />
-        </TooltipTrigger>
-        <TooltipContent>{disabled ? "Transferências não são excluídas aqui" : "Excluir"}</TooltipContent>
-      </Tooltip>
+      <IconActionButton
+        icon={Pencil}
+        label="Editar"
+        onClick={onEdit}
+        disabled={disabled}
+        disabledReason="Transferências não são editáveis aqui"
+      />
+      <IconActionButton
+        icon={Trash2}
+        tone="danger"
+        label="Excluir"
+        onClick={onDelete}
+        disabled={disabled}
+        disabledReason="Transferências não são excluídas aqui"
+      />
     </>
   );
 }

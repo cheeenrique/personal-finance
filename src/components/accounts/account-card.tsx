@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
+import { IconActionButton } from "@/components/shared/icon-action-button";
 import { formatBRL } from "@/lib/money/format";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
 import { ACCOUNT_TYPE_LABELS, DEFAULT_ACCOUNT_COLOR } from "./account-config";
@@ -31,28 +32,23 @@ export function AccountCard({ account, onEdit, onDelete }: AccountCardProps) {
       )}
     >
       <div className="absolute top-3 right-3 z-10 flex gap-1.5">
-        <button
-          type="button"
+        <IconActionButton
+          icon={Pencil}
+          label={`Editar ${account.name}`}
           onClick={(event) => {
             event.preventDefault();
             onEdit();
           }}
-          aria-label={`Editar ${account.name}`}
-          className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-        >
-          <Pencil className="size-3.5" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
+        />
+        <IconActionButton
+          icon={Trash2}
+          tone="danger"
+          label={`Excluir ${account.name}`}
           onClick={(event) => {
             event.preventDefault();
             onDelete();
           }}
-          aria-label={`Excluir ${account.name}`}
-          className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
-        >
-          <Trash2 className="size-3.5" aria-hidden="true" />
-        </button>
+        />
       </div>
 
       <Link

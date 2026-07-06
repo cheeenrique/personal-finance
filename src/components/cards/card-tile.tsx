@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Pencil, Trash2 } from "lucide-react";
 
+import { IconActionButton } from "@/components/shared/icon-action-button";
 import { formatBRL } from "@/lib/money/format";
 import { formatDateSaoPaulo } from "@/lib/date/format";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
@@ -58,28 +59,23 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
         </div>
 
         <div className="flex shrink-0 gap-1.5">
-          <button
-            type="button"
+          <IconActionButton
+            icon={Pencil}
+            label={`Editar ${card.name}`}
             onClick={(event) => {
               event.preventDefault();
               onEdit(card);
             }}
-            aria-label={`Editar ${card.name}`}
-            className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-          >
-            <Pencil className="size-3.5" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
+          />
+          <IconActionButton
+            icon={Trash2}
+            tone="danger"
+            label={`Excluir ${card.name}`}
             onClick={(event) => {
               event.preventDefault();
               onDelete(card);
             }}
-            aria-label={`Excluir ${card.name}`}
-            className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" aria-hidden="true" />
-          </button>
+          />
         </div>
       </div>
 

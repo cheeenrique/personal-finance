@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 
+import { IconActionButton } from "@/components/shared/icon-action-button";
 import { formatBRL } from "@/lib/money/format";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
 import { ASSET_TYPE_ICONS, ASSET_TYPE_LABELS, ASSET_TYPE_TONE_CLASSES, computeAssetVariation } from "./asset-config";
@@ -30,28 +31,23 @@ export function AssetCard({ asset, onEdit, onDelete }: AssetCardProps) {
       )}
     >
       <div className="absolute top-3 right-3 z-10 flex gap-1.5">
-        <button
-          type="button"
+        <IconActionButton
+          icon={Pencil}
+          label={`Editar ${asset.name}`}
           onClick={(event) => {
             event.preventDefault();
             onEdit();
           }}
-          aria-label={`Editar ${asset.name}`}
-          className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-        >
-          <Pencil className="size-3.5" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
+        />
+        <IconActionButton
+          icon={Trash2}
+          tone="danger"
+          label={`Excluir ${asset.name}`}
           onClick={(event) => {
             event.preventDefault();
             onDelete();
           }}
-          aria-label={`Excluir ${asset.name}`}
-          className="flex size-7 items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
-        >
-          <Trash2 className="size-3.5" aria-hidden="true" />
-        </button>
+        />
       </div>
 
       <Link
