@@ -1,48 +1,82 @@
 "use client";
 
+import { useState } from "react";
 import { CalendarDays } from "lucide-react";
-import type { ComponentProps } from "react";
+import { ptBR } from "date-fns/locale";
 
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { cn } from "@/lib/utils";
 
-type DateFieldProps = Omit<ComponentProps<typeof Input>, "type" | "value" | "onChange"> & {
-  /** `YYYY-MM-DD`, compatível com `dateInputSchema` (@/lib/date/schema). */
+type DateFieldProps = {
+  id?: string;
   value: string;
   onValueChange: (value: string) => void;
+  disabled?: boolean;
+  className?: string;
 };
 
 /**
- * Input de data usado em toda a aplicação (docs/06-SCREENS.md, "DateField").
- * Default: hoje em America/Sao_Paulo. `<input type="date">` já expõe o
- * seletor visual nativo e digitação rápida (dd/mm) — sem necessidade de uma
- * lib de calendário própria (nenhuma foi instalada, ver "Improvement
- * Suggestions" ao final).
+ * `YYYY-MM-DD` é uma data de calendário pura (sem hora/fuso) — parse por
+ * componentes evita a reinterpretação como UTC que `new Date(string)`
+ * faria (deslocaria o dia exibido). Simetria com `toDateOnlyString` abaixo.
  */
-export function DateField({ value, onValueChange, className, ...props }: DateFieldProps) {
+function parseDateOnly(value: string): Date | undefined {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+function toDateOnlyString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Seletor de data usado em toda a aplicação (docs/06-SCREENS.md, "DateField").
+ * Popover + `Calendar` (shadcn/react-day-picker) temático — substituiu o
+ * `<input type="date">` nativo, cujo calendário é renderizado pelo SO/browser
+ * e não respeita o tema escuro do app. API (`value`/`onValueChange`, string
+ * `YYYY-MM-DD`) ficou idêntica à anterior — nenhum dos 8 callers precisou
+ * mudar.
+ */
+export function DateField({ id, value, onValueChange, disabled, className }: DateFieldProps) {
+  const [open, setOpen] = useState(false);
+  const selected = parseDateOnly(value || toDateInputValueSaoPaulo());
+
   return (
-    <div className="relative">
-      <CalendarDays
-        className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-        aria-hidden="true"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            className={cn("w-full justify-start gap-2 font-mono font-normal", className)}
+          >
+            <CalendarDays className="size-4 text-muted-foreground" aria-hidden="true" />
+            {selected ? new Intl.DateTimeFormat("pt-BR").format(selected) : "Selecionar data"}
+          </Button>
+        }
       />
-      <Input
-        type="date"
-        value={value || toDateInputValueSaoPaulo()}
-        onChange={(event) => onValueChange(event.target.value)}
-        className={cn(
-          "pl-8 font-mono",
-          // O indicador nativo do <input type="date"> (ícone de calendário do
-          // browser) duplica o `CalendarDays` que já desenhamos à esquerda, e
-          // não segue o estilo dos ícones do app. Deixamos ele invisível mas
-          // esticado sobre todo o campo — continua clicável (abre o seletor
-          // nativo), só não aparece mais visualmente.
-          "[&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0",
-          className,
-        )}
-        {...props}
-      />
-    </div>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          locale={ptBR}
+          selected={selected}
+          onSelect={(date) => {
+            if (!date) return;
+            onValueChange(toDateOnlyString(date));
+            setOpen(false);
+          }}
+          autoFocus
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
