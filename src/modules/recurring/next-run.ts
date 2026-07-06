@@ -1,34 +1,6 @@
-import { toZonedTime } from "date-fns-tz";
 import { RecurringFrequency } from "@/generated/prisma/enums";
-import { TIMEZONE, parseInSaoPaulo } from "@/lib/date/timezone";
+import { calendarPartsSP, weekdaySP, daysInMonthSP as daysInMonth, startOfDaySP } from "@/lib/date/calendar-sp";
 import type { RecurringSchedule } from "./types";
-
-type CalendarParts = { year: number; month: number; day: number };
-
-/** Ano/mês/dia (1-based) do calendário America/Sao_Paulo para um instante. */
-function calendarPartsSP(date: Date): CalendarParts {
-  const zoned = toZonedTime(date, TIMEZONE);
-  return { year: zoned.getFullYear(), month: zoned.getMonth() + 1, day: zoned.getDate() };
-}
-
-/** Dia da semana (0=domingo .. 6=sábado) no calendário America/Sao_Paulo. */
-function weekdaySP(date: Date): number {
-  return toZonedTime(date, TIMEZONE).getDay();
-}
-
-/** Último dia do mês (1-based) — usado pra clampar `dayOfMonth` em meses curtos (ex.: 31 em fevereiro). */
-function daysInMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
-
-/**
- * Meia-noite (America/Sao_Paulo) de um dia calendário, convertida pro
- * instante UTC correto — mesma construção via getters locais usada em
- * `modules/transactions/service.ts` `monthWindowUtc`.
- */
-function startOfDaySP(year: number, month: number, day: number): Date {
-  return parseInSaoPaulo(new Date(year, month - 1, day, 0, 0, 0, 0));
-}
 
 /**
  * Dia seguinte (America/Sao_Paulo) ao instante recebido, à meia-noite.

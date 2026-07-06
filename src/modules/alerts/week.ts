@@ -1,5 +1,5 @@
-import { toZonedTime } from "date-fns-tz";
-import { TIMEZONE, parseInSaoPaulo } from "@/lib/date/timezone";
+import { parseInSaoPaulo } from "@/lib/date/timezone";
+import { calendarPartsSP, weekdaySP, daysInMonthSP } from "@/lib/date/calendar-sp";
 
 /**
  * Janela de tempo [gte, lt) em UTC — limite superior exclusivo, mesma
@@ -7,29 +7,6 @@ import { TIMEZONE, parseInSaoPaulo } from "@/lib/date/timezone";
  * duplicar/omitir o instante exato de virada).
  */
 export type WeekWindow = { gte: Date; lt: Date };
-
-type CalendarParts = { year: number; month: number; day: number };
-
-/**
- * Aritmética de calendário em America/Sao_Paulo — duplicada (não importada)
- * de `modules/recurring/next-run.ts` por instrução explícita da task: helpers
- * locais ao módulo, sem extrair para `lib/` compartilhada (extração DRY fica
- * para depois, ver sugestão de melhoria no retorno da task).
- */
-function calendarPartsSP(date: Date): CalendarParts {
-  const zoned = toZonedTime(date, TIMEZONE);
-  return { year: zoned.getFullYear(), month: zoned.getMonth() + 1, day: zoned.getDate() };
-}
-
-/** Dia da semana (0=domingo..6=sábado) no calendário America/Sao_Paulo. */
-function weekdaySP(date: Date): number {
-  return toZonedTime(date, TIMEZONE).getDay();
-}
-
-/** Último dia do mês (1-based), usado pelo fechamento de mês (ver `weekEndsMonth`, alerta de orçamento em green.ts). */
-function daysInMonthSP(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
 
 /**
  * Soma/subtrai dias de calendário (America/Sao_Paulo) via aritmética sobre os

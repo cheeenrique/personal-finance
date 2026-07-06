@@ -1,24 +1,5 @@
 import { z } from "zod";
-
-/**
- * Valor monetário aceito na borda (number ou string), normalizado para string
- * decimal com no máximo 2 casas — nunca float na regra de negócio (ver
- * docs/03-DATABASE.md). Mesmo parser de `modules/accounts/schemas.ts` e
- * `modules/transactions/schemas.ts` — 3ª ocorrência, já candidata a extração
- * pra `lib/money` (ver rule 02-dry-kiss-yagni, "3 ocorrências = extrair"),
- * mas fica local por instrução explícita da task (extração é do orquestrador).
- */
-const decimalStringSchema = z
-  .union([z.number(), z.string()])
-  .transform((value) => String(value).trim())
-  .refine((value) => /^-?\d+(\.\d{1,2})?$/.test(value), {
-    message: "Valor monetário inválido — use até 2 casas decimais",
-  });
-
-/** Igual a `decimalStringSchema`, mas exige positivo — `plannedAmount` do Budget é sempre > 0 (docs/26-BUDGETS.md). */
-const positiveDecimalSchema = decimalStringSchema.refine((value) => Number(value) > 0, {
-  message: "Valor deve ser positivo",
-});
+import { positiveDecimalSchema } from "@/lib/money/schema";
 
 const monthSchema = z.coerce.number().int().min(1, "Mês deve estar entre 1 e 12").max(12, "Mês deve estar entre 1 e 12");
 const yearSchema = z.coerce.number().int().min(2000, "Ano inválido").max(2100, "Ano inválido");

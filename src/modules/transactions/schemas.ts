@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TransactionType } from "@/generated/prisma/enums";
-import { parseInSaoPaulo } from "@/lib/date/timezone";
+import { decimalStringSchema, positiveDecimalSchema } from "@/lib/money/schema";
+import { dateInputSchema } from "@/lib/date/schema";
 
 const ALL_TRANSACTION_TYPE_VALUES = Object.values(TransactionType) as [
   TransactionType,
@@ -17,51 +18,6 @@ const CREATABLE_TRANSACTION_TYPES = [
   TransactionType.EXPENSE,
   TransactionType.CARD_PAYMENT,
 ] as const;
-
-/**
- * Valor monetário aceito na borda (number ou string), normalizado para string
- * decimal com no máximo 2 casas — nunca float na regra de negócio (ver
- * docs/03-DATABASE.md). Mesmo parser de `modules/accounts/schemas.ts` — 2ª
- * ocorrência ainda é aceitável (ver rule 02-dry-kiss-yagni, "2 ocorrências");
- * extrair para `lib/money` é sugestão de melhoria separada (ver retorno da task).
- */
-const decimalStringSchema = z
-  .union([z.number(), z.string()])
-  .transform((value) => String(value).trim())
-  .refine((value) => /^-?\d+(\.\d{1,2})?$/.test(value), {
-    message: "Valor monetário inválido — use até 2 casas decimais",
-  });
-
-/** Igual a `decimalStringSchema`, mas exige positivo — espelha o CHECK `amount > 0` da tabela Transaction. */
-const positiveDecimalSchema = decimalStringSchema.refine((value) => Number(value) > 0, {
-  message: "Valor deve ser positivo",
-});
-
-/**
- * Interpreta uma data de entrada de duas formas:
- * - `Date` já resolvida → passa direto.
- * - string `YYYY-MM-DD` (sem hora, ex.: date picker) → tratada como meia-noite
- *   em America/Sao_Paulo, não UTC. Sem esse cuidado, `new Date("2026-07-06")`
- *   parseia como 00:00 UTC = 21:00 do dia anterior em SP — deslocaria a data
- *   percebida pelo usuário (ver docs/01-STACK.md, timezone fixo em todo cálculo).
- * - qualquer outra string (ISO com hora/offset) → `new Date(string)`, já
- *   inequívoca.
- */
-function parseFlexibleDate(value: string | Date): Date {
-  if (value instanceof Date) return value;
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [year, month, day] = value.split("-").map(Number);
-    return parseInSaoPaulo(new Date(year, month - 1, day, 0, 0, 0, 0));
-  }
-
-  return new Date(value);
-}
-
-const dateInputSchema = z
-  .union([z.string(), z.date()])
-  .transform(parseFlexibleDate)
-  .refine((date) => !Number.isNaN(date.getTime()), { message: "Data inválida" });
 
 export const createTransactionSchema = z
   .object({

@@ -1,46 +1,6 @@
 import { z } from "zod";
-import { parseInSaoPaulo } from "@/lib/date/timezone";
-
-/**
- * Valor monetário aceito na borda (number ou string), normalizado para string
- * decimal com no máximo 2 casas — nunca float na regra de negócio (ver
- * docs/03-DATABASE.md). Mesmo parser de `modules/accounts/schemas.ts` e
- * `modules/transactions/schemas.ts` — 3ª ocorrência; extrair para
- * `lib/money` é sugestão de melhoria separada (ver retorno da task), não
- * feita aqui porque o escopo desta tarefa é só `src/modules/cards/`.
- */
-const decimalStringSchema = z
-  .union([z.number(), z.string()])
-  .transform((value) => String(value).trim())
-  .refine((value) => /^-?\d+(\.\d{1,2})?$/.test(value), {
-    message: "Valor monetário inválido — use até 2 casas decimais",
-  });
-
-/** Igual a `decimalStringSchema`, mas exige positivo (limite do cartão e valor de pagamento nunca são <= 0). */
-const positiveDecimalSchema = decimalStringSchema.refine((value) => Number(value) > 0, {
-  message: "Valor deve ser positivo",
-});
-
-/**
- * Mesma lógica de `modules/transactions/schemas.ts` `parseFlexibleDate`:
- * string `YYYY-MM-DD` (sem hora) é tratada como meia-noite em
- * America/Sao_Paulo, não UTC — evita deslocar a data percebida pelo usuário.
- */
-function parseFlexibleDate(value: string | Date): Date {
-  if (value instanceof Date) return value;
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [year, month, day] = value.split("-").map(Number);
-    return parseInSaoPaulo(new Date(year, month - 1, day, 0, 0, 0, 0));
-  }
-
-  return new Date(value);
-}
-
-const dateInputSchema = z
-  .union([z.string(), z.date()])
-  .transform(parseFlexibleDate)
-  .refine((date) => !Number.isNaN(date.getTime()), { message: "Data inválida" });
+import { positiveDecimalSchema } from "@/lib/money/schema";
+import { dateInputSchema } from "@/lib/date/schema";
 
 const dayOfMonthSchema = z.coerce
   .number()

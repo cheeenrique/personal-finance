@@ -1,25 +1,8 @@
 import { z } from "zod";
 import { AccountType } from "@/generated/prisma/enums";
+import { decimalStringSchema, positiveDecimalSchema } from "@/lib/money/schema";
 
 const ACCOUNT_TYPE_VALUES = Object.values(AccountType) as [AccountType, ...AccountType[]];
-
-/**
- * Valor monetário aceito na borda (number ou string), normalizado para string
- * decimal com no máximo 2 casas — nunca float na regra de negócio (ver
- * docs/03-DATABASE.md). Colocado aqui, não em `lib/money`, até um 2º módulo
- * precisar do mesmo parser (YAGNI — ver sugestão de melhoria no retorno).
- */
-const decimalStringSchema = z
-  .union([z.number(), z.string()])
-  .transform((value) => String(value).trim())
-  .refine((value) => /^-?\d+(\.\d{1,2})?$/.test(value), {
-    message: "Valor monetário inválido — use até 2 casas decimais",
-  });
-
-/** Igual a `decimalStringSchema`, mas exige positivo — espelha o CHECK `amount > 0` da tabela Transaction. */
-const positiveDecimalSchema = decimalStringSchema.refine((value) => Number(value) > 0, {
-  message: "Valor deve ser positivo",
-});
 
 export const createAccountSchema = z.object({
   name: z.string().trim().min(1, "Nome é obrigatório").max(120),
