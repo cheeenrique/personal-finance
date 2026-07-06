@@ -114,7 +114,12 @@ async function DashboardContent() {
         <MonthlyEvolutionChart points={monthlyEvolutionPoints} />
       </div>
 
-      <RecentTransactionsTable transactions={recentTransactions} />
+      <RecentTransactionsTable
+        transactions={recentTransactions.map((transaction) => ({
+          ...transaction,
+          amount: transaction.amount.toString(),
+        }))}
+      />
     </div>
   );
 }
