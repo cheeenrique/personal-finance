@@ -54,3 +54,7 @@ prisma/*.db-journal
 
 # build (extra, além de /build acima)
 dist/
+
+# Playwright screenshots (QA)
+.playwright-mcp/
+*.qa.png
