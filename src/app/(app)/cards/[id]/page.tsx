@@ -1,9 +1,20 @@
 import { notFound } from "next/navigation";
 
-import { listCardsAction, getInvoiceAction, getInvoiceForAction } from "@/modules/cards/actions";
+import {
+  listCardsAction,
+  getInvoiceAction,
+  getInvoiceForAction,
+  listStoredInvoicesAction,
+} from "@/modules/cards/actions";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { CardDetailView } from "@/components/cards/card-detail-view";
-import { serializeCardSummary, serializeInvoice, serializePastInvoice } from "@/components/cards/serialize";
+import {
+  serializeCardSummary,
+  serializeInvoice,
+  serializePastInvoice,
+  serializeStoredInvoice,
+} from "@/components/cards/serialize";
+import type { PastInvoiceView } from "@/components/cards/types";
 
 const HISTORY_MONTHS = 12;
 
@@ -38,23 +49,39 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
   }
 
   const invoice = invoiceResult.data;
-  const [closingYear, closingMonth] = toDateInputValueSaoPaulo(invoice.periodEnd).split("-").map(Number);
 
-  const pastInvoiceResults = await Promise.all(
-    Array.from({ length: HISTORY_MONTHS }, (_, index) => index + 1).map((monthsBack) => {
-      const { year, month } = shiftClosingMonth(closingYear, closingMonth, monthsBack);
-      return getInvoiceForAction({ cardId: card.id, year, month });
-    }),
-  );
+  /**
+   * Histórico: prioriza faturas REAIS armazenadas (`CardInvoice`, extrato
+   * importado — docs/22-CREDIT_CARDS.md). Cartão sem nenhuma armazenada cai
+   * no fallback CALCULADO por ciclo (`getInvoiceForAction`), comportamento
+   * 100% atual — não quebra os cartões que nunca tiveram fatura importada.
+   */
+  const storedInvoicesResult = await listStoredInvoicesAction(card.id);
+  const storedInvoices = storedInvoicesResult.success ? storedInvoicesResult.data : [];
 
-  const pastInvoices = pastInvoiceResults
-    .flatMap((result) => (result.success ? [result.data] : []))
-    // Só faturas com movimento — ciclos vazios (sem compras) não viram card.
-    // Antes filtrava por `periodEnd > card.createdAt`, mas isso escondia todo o
-    // histórico de cartões com lançamentos importados (o cartão nasce "hoje" no
-    // app, então toda fatura fechada é anterior ao createdAt).
-    .filter((pastInvoice) => Number(pastInvoice.total) > 0)
-    .map(serializePastInvoice);
+  let pastInvoices: PastInvoiceView[];
+
+  if (storedInvoices.length > 0) {
+    pastInvoices = storedInvoices.map(serializeStoredInvoice);
+  } else {
+    const [closingYear, closingMonth] = toDateInputValueSaoPaulo(invoice.periodEnd).split("-").map(Number);
+
+    const pastInvoiceResults = await Promise.all(
+      Array.from({ length: HISTORY_MONTHS }, (_, index) => index + 1).map((monthsBack) => {
+        const { year, month } = shiftClosingMonth(closingYear, closingMonth, monthsBack);
+        return getInvoiceForAction({ cardId: card.id, year, month });
+      }),
+    );
+
+    pastInvoices = pastInvoiceResults
+      .flatMap((result) => (result.success ? [result.data] : []))
+      // Só faturas com movimento — ciclos vazios (sem compras) não viram card.
+      // Antes filtrava por `periodEnd > card.createdAt`, mas isso escondia todo o
+      // histórico de cartões com lançamentos importados (o cartão nasce "hoje" no
+      // app, então toda fatura fechada é anterior ao createdAt).
+      .filter((pastInvoice) => Number(pastInvoice.total) > 0)
+      .map(serializePastInvoice);
+  }
 
   return (
     <CardDetailView

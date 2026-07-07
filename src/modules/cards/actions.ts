@@ -12,7 +12,7 @@ import {
   invoiceForQuerySchema,
 } from "./schemas";
 import { CardDomainError } from "./errors";
-import type { ActionResult, Card, CardWithSummary, Invoice, PayInvoiceResult } from "./types";
+import type { ActionResult, Card, CardInvoice, CardWithSummary, Invoice, PayInvoiceResult } from "./types";
 
 const CARDS_PATH = "/cards";
 const DASHBOARD_PATH = "/dashboard";
@@ -153,6 +153,19 @@ export async function getInvoiceForAction(input: unknown): Promise<ActionResult<
       parsed.data.month,
     );
     return { success: true, data: invoice };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Histórico REAL de faturas fechadas armazenadas (docs/22-CREDIT_CARDS.md, ver `service.ts` `listStoredInvoices`). */
+export async function listStoredInvoicesAction(cardId: string): Promise<ActionResult<CardInvoice[]>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  try {
+    const invoices = await cardService.listStoredInvoices(userId, cardId);
+    return { success: true, data: invoices };
   } catch (error) {
     return toActionError(error);
   }

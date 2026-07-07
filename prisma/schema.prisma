@@ -141,6 +141,7 @@ model Card {
   transactions         Transaction[]
   installmentPurchases InstallmentPurchase[]
   cycles               CardCycle[]
+  invoices             CardInvoice[]
 
   @@index([userId])
 }
@@ -168,6 +169,37 @@ model CardCycle {
   card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   @@index([cardId, effectiveFrom])
+}
+
+// ---------------------------------------------------------------------------
+// CardInvoice
+// ---------------------------------------------------------------------------
+
+// Fatura FECHADA real de um cartão, armazenada (não calculada) — ver
+// docs/22-CREDIT_CARDS.md. Cobre o caso de dados IMPORTADOS de extrato real,
+// onde agrupar Transaction por ciclo (`src/modules/cards/cycle.ts`) não bate:
+// parcelas de parcelamento são faturadas em datas que não seguem a data da
+// compra. A fatura ABERTA (ciclo atual) continua CALCULADA via
+// `cardService.currentInvoice` — este model é só para HISTÓRICO de faturas já
+// fechadas. Sem `userId` próprio — mesma exceção consciente de `CardCycle`/
+// `TransactionTag`/`AssetSnapshot` (docs/03-DATABASE.md): isolamento vem da
+// entidade-pai (`Card.userId`), nunca consultado sem passar por ela.
+model CardInvoice {
+  id          String    @id @default(cuid())
+  cardId      String
+  year        Int
+  month       Int
+  dueDate     DateTime
+  total       Decimal   @db.Decimal(12, 2)
+  isPaid      Boolean   @default(true)
+  periodStart DateTime?
+  periodEnd   DateTime?
+  createdAt   DateTime  @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, year, month])
+  @@index([cardId, dueDate])
 }
 
 // ---------------------------------------------------------------------------

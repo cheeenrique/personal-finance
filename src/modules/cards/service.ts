@@ -1,4 +1,4 @@
-import { Prisma, type Card, type CardCycle as CardCycleRow } from "@/generated/prisma/client";
+import { Prisma, type Card, type CardCycle as CardCycleRow, type CardInvoice } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db/client";
 import { nowInSaoPaulo } from "@/lib/date/timezone";
@@ -184,6 +184,18 @@ async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
   });
 }
 
+/**
+ * Histórico REAL de faturas fechadas (armazenadas), mais recente primeiro —
+ * ver docs/22-CREDIT_CARDS.md. A fatura ABERTA (ciclo atual) continua
+ * CALCULADA via `currentInvoice`, intocada. Cartão sem nenhuma `CardInvoice`
+ * armazenada retorna lista vazia — o chamador (página) decide se cai no
+ * fallback calculado por ciclo (`invoiceFor`).
+ */
+async function listStoredInvoices(userId: string, cardId: string): Promise<CardInvoice[]> {
+  await getCard(userId, cardId); // valida ownership/existência
+  return cardRepository.listInvoices(cardId);
+}
+
 export const cardService = {
   createCard,
   updateCard,
@@ -195,4 +207,5 @@ export const cardService = {
   outstandingBalance,
   availableLimit,
   listWithSummary,
+  listStoredInvoices,
 };

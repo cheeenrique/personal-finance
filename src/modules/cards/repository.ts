@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/client";
-import { Prisma, type Card, type CardCycle } from "@/generated/prisma/client";
+import { Prisma, type Card, type CardCycle, type CardInvoice } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 
 /** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `pay-invoice.ts`). */
@@ -219,6 +219,21 @@ async function listCyclesForCards(cardIds: string[]): Promise<CardCycle[]> {
   });
 }
 
+/**
+ * Faturas FECHADAS armazenadas de um cartão (docs/22-CREDIT_CARDS.md,
+ * "Lógica de Fatura") — histórico real (importado), em vez do cálculo por
+ * ciclo em `cycle.ts` (que não bate pra parcelas de extrato importado). Sem
+ * filtro de `userId` — `CardInvoice` não tem coluna própria (mesma exceção
+ * consciente de `CardCycle`, docs/03-DATABASE.md); ownership é validada pelo
+ * chamador (`cardService.listStoredInvoices`, via `getCard`) antes de listar.
+ */
+async function listInvoices(cardId: string): Promise<CardInvoice[]> {
+  return prisma.cardInvoice.findMany({
+    where: { cardId },
+    orderBy: { dueDate: "desc" },
+  });
+}
+
 export const cardRepository = {
   findById,
   list,
@@ -229,4 +244,5 @@ export const cardRepository = {
   findExpensesInRange,
   listExpensesForCards,
   sumByCardAndType,
+  listInvoices,
 };

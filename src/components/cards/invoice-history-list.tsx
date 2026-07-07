@@ -3,25 +3,16 @@ import { Receipt } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { formatBRL } from "@/lib/money/format";
 import { formatDateSaoPaulo } from "@/lib/date/format";
-import { TIMEZONE } from "@/lib/date/timezone";
-import { calendarPartsSP, startOfDaySP } from "@/lib/date/calendar-sp";
 import type { PastInvoiceView } from "./types";
 
-function monthYearLabel(isoDate: string): string {
-  return new Intl.DateTimeFormat("pt-BR", { timeZone: TIMEZONE, month: "long", year: "numeric" }).format(
-    new Date(isoDate),
-  );
-}
-
-/** Meia-noite de hoje em America/Sao_Paulo — mesmo instante usado pra construir `dueDate` (`modules/cards/cycle.ts`). */
-function startOfTodaySP(): Date {
-  const { year, month, day } = calendarPartsSP(new Date());
-  return startOfDaySP(year, month, day);
-}
-
-/** Fatura de ciclo fechado com vencimento já no passado = paga (o dono não guarda pagamento explícito de fatura). */
-function isInvoicePaid(dueDate: string): boolean {
-  return new Date(dueDate) < startOfTodaySP();
+/**
+ * Rótulo "mês de ano" a partir de `year`/`month` (1-12) já resolvidos — sem
+ * conversão de timezone aqui: `year`/`month` já são valores de calendário
+ * (vêm da `CardInvoice` armazenada ou já convertidos em `serialize.ts`), não
+ * um instante UTC que precise de interpretação.
+ */
+function monthYearLabel(year: number, month: number): string {
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
 }
 
 /** Histórico de faturas passadas — lista simples mês/total (docs/22, "Detalhe do Cartão"). */
@@ -40,10 +31,12 @@ export function InvoiceHistoryList({ invoices }: { invoices: PastInvoiceView[] }
   return (
     <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card">
       {invoices.map((invoice) => (
-        <li key={invoice.periodEnd} className="flex items-center justify-between px-4 py-3 text-sm">
+        <li key={`${invoice.year}-${invoice.month}`} className="flex items-center justify-between px-4 py-3 text-sm">
           <span className="flex items-center gap-2">
-            <span className="font-semibold text-foreground capitalize">{monthYearLabel(invoice.periodEnd)}</span>
-            {isInvoicePaid(invoice.dueDate) && (
+            <span className="font-semibold text-foreground capitalize">
+              {monthYearLabel(invoice.year, invoice.month)}
+            </span>
+            {invoice.isPaid && (
               <span className="inline-flex items-center rounded-full bg-success/16 px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap text-success">
                 Paga
               </span>

@@ -32,9 +32,18 @@ export type InvoiceView = {
   total: string;
 };
 
-/** Fatura de um ciclo passado — só o resumo (mês/total), sem os itens (docs/22, "Faturas Futuras"/histórico). */
+/**
+ * Fatura passada — só o resumo (mês/total), sem os itens (docs/22, "Faturas
+ * Futuras"/histórico). Vem de uma `CardInvoice` armazenada (real, importada)
+ * OU de um ciclo calculado (`invoiceFor`) como fallback pra cartões sem
+ * fatura armazenada (ver `serialize.ts`) — `year`/`month` no lugar de
+ * `periodEnd` porque `CardInvoice.periodStart`/`periodEnd` são opcionais no
+ * schema (nem toda fatura importada tem o período de compra registrado).
+ */
 export type PastInvoiceView = {
-  periodEnd: string;
+  year: number;
+  month: number;
   dueDate: string;
   total: string;
+  isPaid: boolean;
 };

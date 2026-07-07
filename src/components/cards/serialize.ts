@@ -1,4 +1,5 @@
-import type { CardWithSummary, Invoice } from "@/modules/cards/types";
+import { calendarPartsSP, startOfDaySP } from "@/lib/date/calendar-sp";
+import type { CardWithSummary, CardInvoice, Invoice } from "@/modules/cards/types";
 import type { CardSummaryView, InvoiceView, PastInvoiceView } from "./types";
 
 /** Server-only, sem "use server": só roda dentro de Server Components (páginas), nunca cruza a fronteira do client sozinha. */
@@ -39,10 +40,41 @@ export function serializeInvoice(invoice: Invoice): InvoiceView {
   };
 }
 
+/** Meia-noite de hoje em America/Sao_Paulo — mesmo instante usado pra construir `dueDate` (`modules/cards/cycle.ts`). */
+function startOfTodaySP(): Date {
+  const { year, month, day } = calendarPartsSP(new Date());
+  return startOfDaySP(year, month, day);
+}
+
+/**
+ * Fatura CALCULADA por ciclo (`cardService.invoiceFor`) — fallback pro
+ * histórico de cartões sem `CardInvoice` armazenada (docs/22-CREDIT_CARDS.md,
+ * ver page.tsx). Sem `isPaid` próprio (é derivada, não uma fatura real
+ * lançada) — usa a heurística "vencimento já no passado = paga", já que o
+ * dono não guarda pagamento explícito de fatura calculada.
+ */
 export function serializePastInvoice(invoice: Invoice): PastInvoiceView {
+  const { year, month } = calendarPartsSP(invoice.periodEnd);
   return {
-    periodEnd: invoice.periodEnd.toISOString(),
+    year,
+    month,
     dueDate: invoice.dueDate.toISOString(),
     total: invoice.total.toString(),
+    isPaid: invoice.dueDate < startOfTodaySP(),
+  };
+}
+
+/**
+ * Fatura REAL fechada, armazenada (`CardInvoice`) — histórico verdadeiro pra
+ * cartões com extrato importado (docs/22-CREDIT_CARDS.md, "Lógica de
+ * Fatura"). `isPaid` vem direto do banco, não é heurística.
+ */
+export function serializeStoredInvoice(invoice: CardInvoice): PastInvoiceView {
+  return {
+    year: invoice.year,
+    month: invoice.month,
+    dueDate: invoice.dueDate.toISOString(),
+    total: invoice.total.toString(),
+    isPaid: invoice.isPaid,
   };
 }
