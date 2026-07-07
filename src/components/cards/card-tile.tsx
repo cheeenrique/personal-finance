@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 
 import { IconActionButton } from "@/components/shared/icon-action-button";
 import { formatBRL } from "@/lib/money/format";
@@ -23,9 +24,13 @@ type CardTileProps = {
  * Card UI"). O card inteiro é clicável (leva ao detalhe) via link
  * "esticado" (`absolute inset-0`) por trás do conteúdo — os botões de
  * ação ficam por cima (`z-10`), então recebem o clique antes do link,
- * evitando aninhar `<button>` dentro de `<a>` (inválido/inacessível).
+ * evitando aninhar `<button>` dentro de `<a>` (inválido/inacessível). O
+ * botão "olhinho" (`Eye`) navega pro mesmo destino de forma explícita —
+ * usa `router.push` (em vez de `Link`) porque `IconActionButton` só aceita
+ * `onClick` de `<button>`.
  */
 export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
+  const router = useRouter();
   const percent = computeUsagePercent(card.outstandingBalance, card.limit);
   const Icon = (card.icon && CARD_ICON_MAP[card.icon]) || DEFAULT_CARD_ICON;
 
@@ -59,6 +64,14 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
         </div>
 
         <div className="flex shrink-0 gap-1.5">
+          <IconActionButton
+            icon={Eye}
+            label={`Ver detalhes de ${card.name}`}
+            onClick={(event) => {
+              event.preventDefault();
+              router.push(`/cards/${card.id}`);
+            }}
+          />
           <IconActionButton
             icon={Pencil}
             label={`Editar ${card.name}`}
