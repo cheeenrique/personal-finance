@@ -41,21 +41,53 @@ export type TelegramOrigin =
   | { kind: "card"; id: string; label: string };
 
 /**
+ * Canal usado no lançamento (docs/30-TELEGRAM.md, "paymentMethod") — refina
+ * `originKind`/`originName`: "credit" só resolve pra CARTÃO, os demais só pra
+ * CONTA (ver `resolve.ts`, `expectedOriginKind`). `null` quando a mensagem não
+ * menciona nenhum canal (ambíguo — aceita conta OU cartão no match).
+ */
+export type TelegramPaymentMethod = "credit" | "debit" | "pix" | "transfer" | "cash";
+
+/**
  * Saída estruturada do parsing por IA (docs/30-TELEGRAM.md, "Parsing por
  * IA") — já validada contra `aiResponseSchema` (zod) em `ai-parser.ts`.
  * `isTransaction=false` quando a mensagem não é um lançamento (saudação,
- * pergunta etc.). `date`/`categoryName`/`originKind`/`originName` vêm `null`
- * quando a mensagem não menciona o respectivo dado — resolução determinística
- * (data default = hoje, categoria/origem = fallback) fica por conta do
- * chamador (`handlers.ts`), nunca da IA.
+ * pergunta etc.). `amount` vem `null` quando a mensagem não menciona nenhum
+ * valor (docs/30-TELEGRAM.md, "Fluxo conversacional" — vira pergunta, nunca
+ * um valor inventado). `date`/`categoryName`/`paymentMethod`/`originKind`/
+ * `originName` vêm `null` quando a mensagem não menciona o respectivo dado —
+ * resolução determinística (data default = hoje, categoria = fallback) fica
+ * por conta do chamador (`draft.ts`), nunca da IA.
  */
 export type AiParsedTransaction = {
   isTransaction: boolean;
   type: TelegramTransactionType;
-  amount: string;
+  amount: string | null;
   description: string;
   date: string | null;
   categoryName: string | null;
+  paymentMethod: TelegramPaymentMethod | null;
+  originKind: TelegramOriginKind | null;
+  originName: string | null;
+};
+
+/** Campo obrigatório ainda faltando num lançamento em progresso (docs/30-TELEGRAM.md, "Fluxo conversacional"). Categoria nunca entra aqui — sempre tem fallback ("Outros"/"Outros (Receita)"), nunca bloqueia. */
+export type TelegramMissingField = "amount" | "origin";
+
+/**
+ * Rascunho de um lançamento em progresso — persistido em
+ * `TelegramPendingEntry.draftJson` (Prisma `Json`) enquanto falta valor e/ou
+ * origem (docs/30-TELEGRAM.md, "Fluxo conversacional"). Superset serializável
+ * de `AiParsedTransaction` sem `isTransaction` (sempre `true` a partir do
+ * momento em que vira draft — ver `draft.ts`, `draftFromAi`).
+ */
+export type TelegramDraft = {
+  type: TelegramTransactionType;
+  amount: string | null;
+  description: string;
+  date: string | null;
+  categoryName: string | null;
+  paymentMethod: TelegramPaymentMethod | null;
   originKind: TelegramOriginKind | null;
   originName: string | null;
 };

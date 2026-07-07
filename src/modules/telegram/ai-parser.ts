@@ -22,24 +22,28 @@ const RESPONSE_SCHEMA = {
   properties: {
     isTransaction: { type: "BOOLEAN" },
     type: { type: "STRING", enum: ["EXPENSE", "INCOME"] },
-    amount: { type: "STRING" },
+    amount: { type: "STRING", nullable: true },
     description: { type: "STRING" },
     date: { type: "STRING", nullable: true },
     categoryName: { type: "STRING", nullable: true },
+    paymentMethod: { type: "STRING", enum: ["credit", "debit", "pix", "transfer", "cash"], nullable: true },
     originKind: { type: "STRING", enum: ["account", "card"], nullable: true },
     originName: { type: "STRING", nullable: true },
   },
-  required: ["isTransaction", "type", "amount", "description"],
+  required: ["isTransaction", "type", "description"],
 } as const;
 
 /** Valida a saída do modelo — nunca confiamos no JSON de um LLM sem checar shape (mesmo com `responseSchema`). */
 const aiResponseSchema = z.object({
   isTransaction: z.boolean(),
   type: z.enum(["EXPENSE", "INCOME"]),
-  amount: z.string().min(1),
+  // `amount` nullable (docs/30-TELEGRAM.md, "Fluxo conversacional"): mensagem
+  // sem valor numérico vira pergunta em vez de a IA inventar um número.
+  amount: z.string().min(1).nullable().optional(),
   description: z.string().min(1),
   date: z.string().nullable().optional(),
   categoryName: z.string().nullable().optional(),
+  paymentMethod: z.enum(["credit", "debit", "pix", "transfer", "cash"]).nullable().optional(),
   originKind: z.enum(["account", "card"]).nullable().optional(),
   originName: z.string().nullable().optional(),
 });
@@ -65,13 +69,14 @@ function buildPrompt(rawText: string, ctx: AiParserContext): string {
     `Data de referência ("hoje"): ${ctx.todaySaoPaulo} (America/Sao_Paulo).`,
     "",
     "Regras:",
-    "- isTransaction=false se a mensagem NÃO for um lançamento (saudação, pergunta, texto aleatório sem valor monetário).",
-    "- type: EXPENSE (gasto) ou INCOME (receita). Assuma EXPENSE quando ambíguo.",
-    '- amount: valor decimal em string (ex.: "30" ou "30.50"), sem símbolo de moeda.',
-    "- description: descrição curta do lançamento (poucas palavras).",
+    "- isTransaction=false se a mensagem NÃO for um lançamento (saudação, pergunta, texto aleatório sem qualquer menção a gasto/recebimento de dinheiro).",
+    '- type: INCOME quando o dinheiro ENTRA pro usuário (ex.: "recebi", "recebido de", "pix recebido", "caiu", salário, freela); EXPENSE quando o dinheiro SAI (ex.: "paguei", "comprei", "pix para", "transferência para", gasto do dia a dia). Assuma EXPENSE quando ambíguo.',
+    '- amount: valor decimal em string (ex.: "30" ou "30.50"), sem símbolo de moeda. Se a mensagem NÃO mencionar nenhum valor numérico, retorne null — NUNCA invente um valor.',
+    "- description: descrição curta do lançamento (poucas palavras). Pessoa ou empresa EXTERNA citada (ex.: \"mãe\", \"Romeika\", \"Funape\" — alguém que NÃO é o próprio usuário) SEMPRE vai na descrição, nunca é uma conta/cartão do usuário.",
     '- date: resolva datas relativas ("hoje", "ontem", "amanhã") e absolutas ("dia 18/06", "18/06") usando a data de referência acima como "hoje" e o ano corrente quando omitido. Formato YYYY-MM-DD. Se a mensagem não mencionar data, retorne null.',
     `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Se nenhuma for uma boa correspondência, retorne null.`,
-    '- originKind/originName: se o usuário citar um CARTÃO (ex.: "cartão X", "X crédito", "X débito", ou o nome de um cartão da lista abaixo), originKind="card" e originName = nome EXATO da lista de cartões. Se citar um banco/conta/pix (nome de uma conta da lista abaixo), originKind="account" e originName = nome EXATO da lista de contas. Se não mencionar nenhuma origem, ambos null.',
+    '- paymentMethod: identifique COMO o dinheiro saiu/entrou — "credit" (cartão de crédito), "debit" (cartão de débito), "pix", "transfer" (transferência/TED/DOC), "cash" (dinheiro/espécie). Se a mensagem não mencionar nenhum canal, retorne null.',
+    '- originKind/originName: só preencha se o nome citado bater com um item REAL das listas abaixo. Se citar um CARTÃO da lista (geralmente junto de "crédito"/"débito"), originKind="card" e originName = nome EXATO da lista de cartões. Se citar uma CONTA da lista (geralmente junto de "pix"/"transferência"/banco), originKind="account" e originName = nome EXATO da lista de contas. IMPORTANTE: nome de pessoa/empresa EXTERNA (que foi pra description) NUNCA é origem, mesmo aparecendo perto de "pix" ou "transferência". Sem menção de conta/cartão real do usuário, ambos null.',
     `Contas do usuário: [${accountsLabel}]`,
     `Cartões do usuário: [${cardsLabel}]`,
     "",
@@ -129,10 +134,11 @@ export async function parseTransactionWithAI(
     return {
       isTransaction: parsed.data.isTransaction,
       type: parsed.data.type,
-      amount: parsed.data.amount,
+      amount: parsed.data.amount ?? null,
       description: parsed.data.description,
       date: parsed.data.date ?? null,
       categoryName: parsed.data.categoryName ?? null,
+      paymentMethod: parsed.data.paymentMethod ?? null,
       originKind: parsed.data.originKind ?? null,
       originName: parsed.data.originName ?? null,
     };

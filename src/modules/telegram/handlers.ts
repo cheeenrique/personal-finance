@@ -7,13 +7,10 @@ import { AccountDomainError } from "@/modules/accounts/errors";
 import { nowInSaoPaulo, parseInSaoPaulo } from "@/lib/date/timezone";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { parseTransactionWithAI } from "./ai-parser";
-import {
-  listCategoryNamesForAI,
-  listOriginNamesForAI,
-  resolveCategoryByName,
-  resolveCategoryId,
-  resolveOrigin,
-} from "./resolve";
+import { draftFromAi, handlePendingReply, processDraft } from "./draft";
+import { telegramPendingRepository } from "./pending";
+import { listCategoryNamesForAI, listOriginNamesForAI, originPayload, resolveCategoryId, resolveOrigin } from "./resolve";
+import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildBalanceReply,
   buildErrorReply,
@@ -23,7 +20,7 @@ import {
   buildUnknownReply,
 } from "./reply";
 import { TelegramDomainError } from "./errors";
-import type { AiParsedTransaction, CommandResult, ParsedCommand, TelegramOrigin } from "./types";
+import type { CommandResult, ParsedCommand } from "./types";
 
 function isKnownDomainError(error: unknown): error is Error {
   return (
@@ -33,19 +30,23 @@ function isKnownDomainError(error: unknown): error is Error {
   );
 }
 
-/** `{ accountId }` ou `{ cardId } ` pro payload de `createTransactionSchema` — nunca os dois juntos (invariante do schema). */
-function originPayload(origin: TelegramOrigin): { accountId: string } | { cardId: string } {
-  return origin.kind === "card" ? { cardId: origin.id } : { accountId: origin.id };
-}
-
-/** Regra 2/3 (docs/30-TELEGRAM.md): categoria nunca fica nula, data default = agora. Origem default = `resolveOrigin` sem kind/name (mesma conta ativa mais antiga de sempre, ver resolve.ts). */
+/**
+ * Regra 2/3 (docs/30-TELEGRAM.md): categoria nunca fica nula, data default =
+ * agora. Origem default = `resolveOrigin` sem kind/name (mesma conta ativa
+ * mais antiga de sempre, ver resolve.ts) — caminho SEM fluxo de pergunta
+ * (usado tanto pro lançamento rápido regex quanto pro fallback quando a IA
+ * falha/está indisponível, docs/30-TELEGRAM.md "A IA nunca pode derrubar o
+ * bot"). Toda transação criada pelo bot leva a tag "Telegram" (find-or-create,
+ * requisito do dono — nunca afeta transações da UI web).
+ */
 async function handleCreateTransaction(
   userId: string,
   command: Extract<ParsedCommand, { kind: "create_transaction" }>,
 ): Promise<CommandResult> {
-  const [category, origin] = await Promise.all([
+  const [category, origin, telegramTagId] = await Promise.all([
     resolveCategoryId(userId, command.type, command.keywordCandidates),
     resolveOrigin(userId, null, null),
+    resolveTelegramTagId(userId),
   ]);
 
   const parsed = createTransactionSchema.safeParse({
@@ -54,6 +55,7 @@ async function handleCreateTransaction(
     type: command.type,
     categoryId: category.id,
     ...originPayload(origin),
+    tagIds: [telegramTagId],
   });
 
   if (!parsed.success) {
@@ -70,57 +72,6 @@ async function handleCreateTransaction(
       type: command.type,
       description: command.description,
       amount: command.amount,
-      categoryName: category.name,
-      originLabel: origin.label,
-      date: created.date,
-      isPaid: created.isPaid,
-    }),
-    resultCode: "transaction_created",
-  };
-}
-
-/**
- * Lançamento a partir da saída já validada da IA (docs/30-TELEGRAM.md,
- * "Parsing por IA"). Regra determinística — NUNCA decidida pela IA: data
- * resolvida > hoje (America/Sao_Paulo) = previsto (`isPaid=false`); senão
- * pago (`isPaid=true`). Comparação por string `YYYY-MM-DD` (ISO, ordena
- * lexicograficamente igual a cronologicamente — sem parse de Date aqui).
- */
-async function handleAiTransaction(userId: string, ai: AiParsedTransaction): Promise<CommandResult> {
-  const today = toDateInputValueSaoPaulo();
-  const dateStr = ai.date ?? today;
-  const isPaid = dateStr <= today;
-  const keywordCandidates = [ai.categoryName, ai.description].filter((value): value is string => Boolean(value));
-
-  const [category, origin] = await Promise.all([
-    resolveCategoryByName(userId, ai.type, ai.categoryName, keywordCandidates),
-    resolveOrigin(userId, ai.originKind, ai.originName),
-  ]);
-
-  const parsed = createTransactionSchema.safeParse({
-    description: ai.description,
-    amount: ai.amount,
-    type: ai.type,
-    categoryId: category.id,
-    ...originPayload(origin),
-    date: dateStr,
-    isPaid,
-  });
-
-  if (!parsed.success) {
-    return {
-      text: buildErrorReply(parsed.error.issues[0]?.message ?? "Dados inválidos."),
-      resultCode: "validation_error",
-    };
-  }
-
-  const created = await transactionService.createTransaction(userId, parsed.data);
-
-  return {
-    text: buildTransactionConfirmationReply({
-      type: ai.type,
-      description: ai.description,
-      amount: ai.amount,
       categoryName: category.name,
       originLabel: origin.label,
       date: created.date,
@@ -151,13 +102,22 @@ async function buildAiContext(userId: string) {
  * IA indisponível/erro/timeout/JSON inválido (`null`) → fallback pro
  * resultado do parser regex já calculado em `route.ts` (`fallbackCommand`):
  * `create_transaction` vira o lançamento de sempre (hoje + pago), `unknown`
- * vira a resposta de "não entendi".
+ * vira a resposta de "não entendi". Esse fallback NUNCA entra no fluxo de
+ * pergunta (`draft.ts`) — só o caminho de sucesso da IA exige valor + origem
+ * resolvíveis (docs/30-TELEGRAM.md, "A IA nunca pode derrubar o bot").
+ *
+ * Se já existe um pending em aberto pro usuário (docs/30-TELEGRAM.md, "Fluxo
+ * conversacional"), a mensagem é tratada como RESPOSTA a ele — nunca como um
+ * lançamento novo, mesmo que pareça um (`handlePendingReply`, draft.ts).
  */
 async function handleFreeformEntry(
   userId: string,
   rawText: string,
   fallbackCommand: Extract<ParsedCommand, { kind: "create_transaction" | "unknown" }>,
 ): Promise<CommandResult> {
+  const pending = await telegramPendingRepository.getActive(userId);
+  if (pending) return handlePendingReply(userId, pending, rawText);
+
   const ctx = await buildAiContext(userId);
   const ai = await parseTransactionWithAI(rawText, ctx);
 
@@ -171,7 +131,7 @@ async function handleFreeformEntry(
     return { text: buildUnknownReply(), resultCode: "unknown_message" };
   }
 
-  return handleAiTransaction(userId, ai);
+  return processDraft(userId, draftFromAi(ai), 0);
 }
 
 async function handleQueryBalance(userId: string): Promise<CommandResult> {

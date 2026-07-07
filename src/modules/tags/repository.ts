@@ -17,6 +17,11 @@ async function list(userId: string): Promise<Tag[]> {
   return prisma.tag.findMany({ where: { userId, deletedAt: null }, orderBy: { createdAt: "asc" } });
 }
 
+/** Busca case-insensitive por nome — insumo do find-or-create automático (ex.: tag "Telegram" anexada pelo bot, ver `modules/telegram/telegram-tag.ts`). */
+async function findByNameCI(userId: string, name: string): Promise<Tag | null> {
+  return prisma.tag.findFirst({ where: { userId, deletedAt: null, name: { equals: name, mode: "insensitive" } } });
+}
+
 async function create(userId: string, data: CreateTagData): Promise<Tag> {
   return prisma.tag.create({ data: { userId, name: data.name, color: data.color } });
 }
@@ -42,4 +47,4 @@ async function softDelete(userId: string, id: string): Promise<Tag | null> {
   return prisma.tag.update({ where: { id }, data: { deletedAt: new Date() } });
 }
 
-export const tagRepository = { findById, list, create, update, softDelete };
+export const tagRepository = { findById, list, findByNameCI, create, update, softDelete };

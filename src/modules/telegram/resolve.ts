@@ -5,7 +5,7 @@ import { cardService } from "@/modules/cards/service";
 import type { Category, CategoryTreeNode } from "@/modules/categories/types";
 import { normalizeWord } from "./normalize";
 import { FallbackCategoryMissingError, NoActiveAccountError } from "./errors";
-import type { TelegramOrigin, TelegramOriginKind, TelegramTransactionType } from "./types";
+import type { TelegramOrigin, TelegramOriginKind, TelegramPaymentMethod, TelegramTransactionType } from "./types";
 
 /**
  * Fallback fixo por tipo (docs/24-CATEGORIES.md + docs/30-TELEGRAM.md, Regra
@@ -162,6 +162,64 @@ export async function resolveOrigin(
 
   const fallback = await findDefaultActiveAccount(userId);
   return { kind: "account", id: fallback.id, label: `Conta ${fallback.name}` };
+}
+
+/** `{ accountId }` ou `{ cardId }` pro payload de `createTransactionSchema` — nunca os dois juntos (invariante do schema). Compartilhado por `handlers.ts` (parser regex) e `draft.ts` (fluxo de IA v2). */
+export function originPayload(origin: TelegramOrigin): { accountId: string } | { cardId: string } {
+  return origin.kind === "card" ? { cardId: origin.id } : { accountId: origin.id };
+}
+
+/**
+ * Canal de pagamento → tipo de origem esperado (docs/30-TELEGRAM.md,
+ * "paymentMethod"): "credit" só resolve pra CARTÃO; "debit"/"pix"/"transfer"/
+ * "cash" só resolvem pra CONTA. `null` (canal não identificado pela IA) não
+ * restringe — aceita conta OU cartão no match.
+ */
+const ORIGIN_KIND_BY_PAYMENT_METHOD: Record<TelegramPaymentMethod, TelegramOriginKind> = {
+  credit: "card",
+  debit: "account",
+  pix: "account",
+  transfer: "account",
+  cash: "account",
+};
+
+export function expectedOriginKind(paymentMethod: TelegramPaymentMethod | null): TelegramOriginKind | null {
+  return paymentMethod ? ORIGIN_KIND_BY_PAYMENT_METHOD[paymentMethod] : null;
+}
+
+/**
+ * Resolve a origem pro fluxo de IA v2 (docs/30-TELEGRAM.md, "Fluxo
+ * conversacional") — DIFERENTE de `resolveOrigin` acima (usado pelo parser
+ * regex/fallback determinístico): aqui NÃO existe fallback pra conta default.
+ * Sem `originName` ou sem match real (respeitando o tipo esperado pelo
+ * `paymentMethod`, via `expectedOriginKind`) → `null`, sinal pro chamador
+ * (`draft.ts`) entrar no fluxo de pergunta em vez de assumir uma origem que o
+ * usuário nunca confirmou.
+ */
+export async function resolveOriginStrict(
+  userId: string,
+  paymentMethod: TelegramPaymentMethod | null,
+  originKind: TelegramOriginKind | null,
+  originName: string | null,
+): Promise<TelegramOrigin | null> {
+  if (!originName) return null;
+
+  const normalizedTarget = normalizeWord(originName);
+  const wantKind = expectedOriginKind(paymentMethod) ?? originKind;
+
+  if (wantKind === "card" || wantKind === null) {
+    const cards = await cardService.listCards(userId);
+    const match = cards.find((card) => card.isActive && normalizeWord(card.name) === normalizedTarget);
+    if (match) return { kind: "card", id: match.id, label: `Cartão ${match.name}` };
+  }
+
+  if (wantKind === "account" || wantKind === null) {
+    const accounts = await accountService.listWithBalances(userId);
+    const match = accounts.find((account) => account.isActive && normalizeWord(account.name) === normalizedTarget);
+    if (match) return { kind: "account", id: match.id, label: `Conta ${match.name}` };
+  }
+
+  return null;
 }
 
 /** Nomes das categorias (ambos os tipos) do usuário — insumo do prompt da IA pra escolher a categoria mais próxima. */

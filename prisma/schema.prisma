@@ -91,6 +91,7 @@ model User {
   recurringTransactions RecurringTransaction[]
   alerts                Alert[]
   settings              UserSettings?
+  telegramPendingEntry  TelegramPendingEntry?
 }
 
 // ---------------------------------------------------------------------------
@@ -417,6 +418,37 @@ model UserSettings {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// TelegramPendingEntry (rascunho de lançamento em progresso, ver 30-TELEGRAM.md)
+// ---------------------------------------------------------------------------
+
+model TelegramPendingEntry {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Rascunho serializado do lançamento (ver `modules/telegram/types.ts`,
+  // `TelegramDraft`) — mesclado a cada resposta do usuário até completar.
+  draftJson Json
+
+  // Único campo faltando no momento (`"amount"` | `"origin"`) — a mensagem
+  // seguinte do usuário é interpretada como resposta a ESSE campo
+  // (`modules/telegram/pending-merge.ts`).
+  missingField String
+
+  // Rodadas de pergunta já feitas — trava em ~3 (docs/30-TELEGRAM.md, "Fluxo
+  // conversacional") pra não ficar perguntando pra sempre se a resposta do
+  // usuário nunca resolve o campo faltante.
+  attempts Int @default(0)
+
+  // TTL curto (~10min, `modules/telegram/pending.ts`) — expirado é tratado
+  // como se não existisse, a mensagem seguinte vira um lançamento novo.
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
