@@ -38,9 +38,6 @@ Como usamos a mesma conexão direta pra tudo, isso não faz falta.
    demais envs que o app exige (ver `10-AUTH.md` para a lista completa):
    - `AUTH_SECRET`
    - `AUTH_URL`
-   - `TELEGRAM_BOT_TOKEN`
-   - `TELEGRAM_WEBHOOK_SECRET`
-   - `TELEGRAM_ALLOWED_CHAT_IDS` (fallback, opcional)
    - `CRON_SECRET`
    - `SEED_USER1_EMAIL`, `SEED_USER1_PASSWORD`, `SEED_USER1_NAME`
    - `SEED_USER2_EMAIL`, `SEED_USER2_PASSWORD`, `SEED_USER2_NAME`
@@ -48,3 +45,10 @@ Como usamos a mesma conexão direta pra tudo, isso não faz falta.
 Nenhuma dessas é injetada pela integração Supabase — só as do banco
 (`POSTGRES_*`) são. Precisam ser configuradas manualmente em
 Vercel → Project → Settings → Environment Variables (Production).
+
+O Telegram não usa mais envs globais — cada usuário instala o próprio bot
+pela tela de Configurações (token + webhook-secret ficam em `UserSettings`,
+ver `30-TELEGRAM.md`). Atenção: o webhook (`setWebhook`) monta sua URL a
+partir de `AUTH_URL` (`modules/settings/service.ts`) — em produção ela
+precisa apontar pra URL pública do deploy, senão o Telegram registra o
+webhook errado.

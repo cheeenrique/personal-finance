@@ -320,12 +320,11 @@ Obrigatórias, nunca commitadas (`.env` fora do git) e nunca hardcoded no códig
 * `AUTH_SECRET` — chave de assinatura de sessão do Auth.js
 * `AUTH_URL` — base URL do Auth.js no deploy (ex.: `https://app.dominio.com`)
 * `DATABASE_URL` — connection string do Postgres
-* `TELEGRAM_BOT_TOKEN` — token do bot no Telegram
-* `TELEGRAM_WEBHOOK_SECRET` — validado contra o header `X-Telegram-Bot-Api-Secret-Token` em toda request do webhook
-* `TELEGRAM_ALLOWED_CHAT_IDS` — allowlist dos 2 chat_ids autorizados, mapeados para userId
 * `CRON_SECRET` — valida o header `Authorization: Bearer` no cron de alertas (`/api/cron/weekly-summary`, ver `29-ALERTS.md`)
 * `SEED_USER1_EMAIL`, `SEED_USER1_PASSWORD`, `SEED_USER1_NAME` — credenciais do usuário 1 (dono), lidas por `prisma db seed` para criar a conta com senha hashada (bcrypt)
 * `SEED_USER2_EMAIL`, `SEED_USER2_PASSWORD`, `SEED_USER2_NAME` — credenciais do usuário 2 (esposa), mesmo fluxo do seed
+
+O Telegram não tem mais env vars globais (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_WEBHOOK_SECRET`/`TELEGRAM_ALLOWED_CHAT_IDS`, legado removido) — cada usuário configura o próprio bot pela tela de Configurações, e token/webhook-secret ficam em `UserSettings` no banco. Ver `30-TELEGRAM.md`.
 
 ---
 
