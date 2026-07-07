@@ -27,9 +27,10 @@ async function findById(userId: string, id: string): Promise<Budget | null> {
   return prisma.budget.findFirst({ where: { id, userId, deletedAt: null } });
 }
 
-async function listByPeriod(userId: string, year: number, month: number): Promise<Budget[]> {
+/** `categoryId` (opcional) narrow pra uma única categoria — filtro global "categoria" de `/reports` (docs/28-REPORTS.md "Filtros Globais"), aplicado na query em vez de pós-filtro em memória. */
+async function listByPeriod(userId: string, year: number, month: number, categoryId?: string): Promise<Budget[]> {
   return prisma.budget.findMany({
-    where: { userId, year, month, deletedAt: null },
+    where: { userId, year, month, deletedAt: null, ...(categoryId && { categoryId }) },
     orderBy: { createdAt: "asc" },
   });
 }

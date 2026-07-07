@@ -58,6 +58,26 @@ async function ReportsContent({ filters }: { filters: ReturnType<typeof parseRep
 
   const { dateFrom, dateTo } = resolveDateRange(filters.period);
   const { year, month } = deriveYearMonth(dateTo);
+  const parsedDateFrom = parseFlexibleDate(dateFrom);
+  const parsedDateTo = parseFlexibleDate(dateTo);
+
+  /**
+   * Mapa de filtros por seção (docs/28-REPORTS.md "Filtros Globais" +
+   * comentários de `modules/reports/service.ts`):
+   * - Fluxo de caixa (`cashflowByMonth`) + Resumo (`cashflow`): período (ano
+   *   pro gráfico, range exato pro resumo) + conta + categoria + tipo.
+   * - Por categoria (`categoryTotals`): período + conta + tipo (categoria do
+   *   filtro global narrow o RESULTADO em memória abaixo, não a query — ver
+   *   comentário de `categoryTotals`).
+   * - Por conta (`accountReport`): período + conta (narrow na query).
+   * - Por cartão: só cartão, narrow em memória (`cardsWithSummary` precisa vir
+   *   INTEIRO pra popular o dropdown de cartões da própria barra de filtros).
+   * - Orçamento (`budgetService.listWithProgress`): categoria (narrow na
+   *   query via `budgetRepository.listByPeriod`).
+   * - Patrimônio: sem filtro (evolução completa).
+   */
+  const cashflowFilters = { accountId: filters.accountId, categoryId: filters.categoryId, type: filters.type };
+  const categoryFilters = { accountId: filters.accountId, type: filters.type };
 
   const [
     monthlyPoints,
@@ -70,13 +90,13 @@ async function ReportsContent({ filters }: { filters: ReturnType<typeof parseRep
     categoryTree,
     accountsWithBalance,
   ] = await Promise.all([
-    reportService.incomeVsExpenseByMonth(userId, year),
-    reportService.expenseByCategory(userId, year, month),
-    reportService.cashflow(userId, parseFlexibleDate(dateFrom), parseFlexibleDate(dateTo)),
-    reportService.accountReport(userId, parseFlexibleDate(dateFrom), parseFlexibleDate(dateTo)),
+    reportService.cashflowByMonth(userId, year, cashflowFilters),
+    reportService.categoryTotals(userId, parsedDateFrom, parsedDateTo, categoryFilters),
+    reportService.cashflow(userId, parsedDateFrom, parsedDateTo, cashflowFilters),
+    reportService.accountReport(userId, parsedDateFrom, parsedDateTo, filters.accountId),
     reportService.patrimonyEvolution(userId),
     cardService.listWithSummary(userId),
-    budgetService.listWithProgress(userId, year, month),
+    budgetService.listWithProgress(userId, year, month, filters.categoryId),
     categoryService.listTree(userId),
     accountService.listWithBalances(userId),
   ]);
@@ -94,21 +114,28 @@ async function ReportsContent({ filters }: { filters: ReturnType<typeof parseRep
   const accountOptions = accountsWithBalance.map((account) => ({ value: account.id, label: account.name }));
   const cardOptions = cardsWithSummary.map((card) => ({ value: card.id, label: card.name }));
 
+  // `totalAll` é a base do percentual da barra em `CategoryReportSection` —
+  // já vem filtrado por período/conta/tipo (`categoryTotals` acima), então
+  // aqui só resta o narrow por categoria selecionada (mantém a MESMA base pro
+  // percentual, uma categoria isolada não vira 100% sozinha).
   const totalAll = categoryTotalsAll.reduce((sum, category) => sum + category.total.toNumber(), 0);
   const categoryTotals = filters.categoryId
     ? categoryTotalsAll.filter((category) => category.categoryId === filters.categoryId)
     : categoryTotalsAll;
 
-  const accountReportRows: AccountReportRow[] = accountRows
-    .filter((row) => !filters.accountId || row.accountId === filters.accountId)
-    .map((row) => ({
-      accountId: row.accountId,
-      accountName: row.accountName,
-      totalIn: row.totalIn.toNumber(),
-      totalOut: row.totalOut.toNumber(),
-      totalMovement: row.totalMovement.toNumber(),
-    }));
+  const accountReportRows: AccountReportRow[] = accountRows.map((row) => ({
+    accountId: row.accountId,
+    accountName: row.accountName,
+    totalIn: row.totalIn.toNumber(),
+    totalOut: row.totalOut.toNumber(),
+    totalMovement: row.totalMovement.toNumber(),
+  }));
 
+  // Narrow por cartão em memória (não na query): `cardsWithSummary` precisa
+  // vir INTEIRO pra popular `cardOptions` do dropdown de filtros acima — pedir
+  // já filtrado exigiria uma 2ª chamada só pra montar as opções. Filtro exato
+  // por id sobre uma lista pequena (cartões do usuário), sem risco de
+  // "pós-filtro frágil" (sem lógica difusa, sempre resulta em 0 ou 1 linha).
   const cardReportRows: CardReportRow[] = cardsWithSummary
     .filter((card) => !filters.cardId || card.id === filters.cardId)
     .map((card) => ({
@@ -122,16 +149,14 @@ async function ReportsContent({ filters }: { filters: ReturnType<typeof parseRep
       mealBalance: card.mealBalance?.toNumber() ?? 0,
     }));
 
-  const budgetReportRows: BudgetReportRow[] = budgetsWithProgress
-    .filter((budget) => !filters.categoryId || budget.categoryId === filters.categoryId)
-    .map((budget) => ({
-      id: budget.id,
-      categoryName: categoryNameById.get(budget.categoryId) ?? "—",
-      plannedAmount: budget.plannedAmount.toNumber(),
-      spentAmount: budget.spentAmount.toNumber(),
-      progress: budget.progress,
-      status: budget.status,
-    }));
+  const budgetReportRows: BudgetReportRow[] = budgetsWithProgress.map((budget) => ({
+    id: budget.id,
+    categoryName: categoryNameById.get(budget.categoryId) ?? "—",
+    plannedAmount: budget.plannedAmount.toNumber(),
+    spentAmount: budget.spentAmount.toNumber(),
+    progress: budget.progress,
+    status: budget.status,
+  }));
 
   return (
     <div className="flex flex-col gap-5">

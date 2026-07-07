@@ -4,7 +4,7 @@ import { ProgressBar } from "@/components/dashboard/progress-bar";
 import { formatBRL } from "@/lib/money/format";
 
 type CategoryReportSectionProps = {
-  /** Já filtrado por `categoryId` (se selecionado) — ver `page.tsx`. */
+  /** Já filtrado por período/conta/tipo (`reportService.categoryTotals`) + `categoryId` (se selecionado, narrow em memória) — ver `page.tsx`. */
   categories: CategoryExpenseTotal[];
   /** Total SEM o filtro de categoria — base do percentual da barra (uma categoria isolada não vira 100% sozinha). */
   totalAll: number;

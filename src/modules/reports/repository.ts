@@ -2,10 +2,23 @@ import { prisma } from "@/lib/db/client";
 import { Prisma, type Transaction } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 import type { CsvFilterInput } from "./schemas";
+import type { CashflowFilters, CategoryTotalsFilters } from "./types";
 
 export type DateRange = { gte: Date; lte: Date };
 
 export type IncomeExpenseRow = Pick<Transaction, "date" | "type" | "amount">;
+
+/**
+ * Linha crua do Fluxo de Caixa CORRETO (conta-only) — `effectiveDate` é
+ * `COALESCE("paidAt", "date")`, mesma regra de caixa do Dashboard
+ * (`transactions/repository.ts` `sumAmountByTypeInRange`). Não confundir com
+ * `IncomeExpenseRow.date`: aquele insumo alimenta `incomeVsExpenseByMonth`
+ * (série histórica por `date`/accrual, ainda usada pela "Evolução mensal" do
+ * Dashboard) — mantido intocado de propósito.
+ */
+export type CashflowRow = { effectiveDate: Date; type: TransactionType; amount: Prisma.Decimal };
+
+export type CategoryTotalRow = { categoryId: string; sum: Prisma.Decimal };
 
 export type AccountTypeMovement = { accountId: string; type: string; sum: Prisma.Decimal };
 
@@ -43,39 +56,149 @@ async function listIncomeExpenseInRange(userId: string, range: DateRange): Promi
   });
 }
 
-/** Soma de receita/despesa num período arbitrário — insumo do relatório de fluxo de caixa. */
-async function sumIncomeExpenseInRange(
+/**
+ * Condições SQL compartilhadas do Fluxo de Caixa CORRETO (docs/28-REPORTS.md
+ * "Exclusão de Transfer e Pagamento de Fatura" + regra de caixa do Dashboard):
+ * só conta (`cardId IS NULL`), só paga, sem transferência. `type` restringe a
+ * INCOME/EXPENSE só quando o filtro pede um desses dois — outro valor (ou
+ * ausência de filtro) inclui os dois tipos (ver `CashflowFilters`, types.ts).
+ * `accountId`/`categoryId` narrow quando informados.
+ */
+function buildCashflowConditions(userId: string, filters: CashflowFilters): Prisma.Sql[] {
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`"userId" = ${userId}`,
+    Prisma.sql`"deletedAt" IS NULL`,
+    Prisma.sql`"isPaid" = true`,
+    Prisma.sql`"transferId" IS NULL`,
+    Prisma.sql`"cardId" IS NULL`,
+  ];
+
+  conditions.push(
+    filters.type === TransactionType.INCOME || filters.type === TransactionType.EXPENSE
+      ? Prisma.sql`"type" = ${filters.type}::"TransactionType"`
+      : Prisma.sql`"type" IN ('INCOME', 'EXPENSE')`,
+  );
+
+  if (filters.accountId) conditions.push(Prisma.sql`"accountId" = ${filters.accountId}`);
+  if (filters.categoryId) conditions.push(Prisma.sql`"categoryId" = ${filters.categoryId}`);
+
+  return conditions;
+}
+
+/**
+ * Fluxo de Caixa mês a mês CORRETO (conta-only) — insumo de
+ * `reportService.cashflowByMonth` (gráfico "Fluxo de caixa" de `/reports`).
+ * Rows crus (sem agregação no banco), bucketizados por mês SP em
+ * `service.ts` a partir de `effectiveDate` — mesma técnica de
+ * `listIncomeExpenseInRange` (que fica intocada, ver seu comentário).
+ */
+async function listCashflowByMonthInRange(
   userId: string,
   range: DateRange,
+  filters: CashflowFilters = {},
+): Promise<CashflowRow[]> {
+  const conditions = buildCashflowConditions(userId, filters);
+  conditions.push(Prisma.sql`COALESCE("paidAt", "date") >= ${range.gte}`);
+  conditions.push(Prisma.sql`COALESCE("paidAt", "date") <= ${range.lte}`);
+
+  return prisma.$queryRaw<CashflowRow[]>`
+    SELECT COALESCE("paidAt", "date") AS "effectiveDate", "type", "amount"
+    FROM "Transaction"
+    WHERE ${Prisma.join(conditions, " AND ")}
+  `;
+}
+
+/**
+ * Soma de receita/despesa CORRETA (conta-only) num período arbitrário —
+ * insumo do "Resumo do período" (`reportService.cashflow`). `range` já deve
+ * vir com o fim do dia estendido quando o filtro é por `paidAt` (ver
+ * `service.ts` `endOfDayInclusive`) — `paidAt` carrega hora real, diferente
+ * de `date` (sempre meia-noite).
+ */
+async function sumCashflowInRange(
+  userId: string,
+  range: DateRange,
+  filters: CashflowFilters = {},
 ): Promise<{ income: Prisma.Decimal; expense: Prisma.Decimal }> {
+  const conditions = buildCashflowConditions(userId, filters);
+  conditions.push(Prisma.sql`COALESCE("paidAt", "date") >= ${range.gte}`);
+  conditions.push(Prisma.sql`COALESCE("paidAt", "date") <= ${range.lte}`);
+
+  const rows = await prisma.$queryRaw<{ type: TransactionType; total: Prisma.Decimal | string | number }[]>`
+    SELECT "type", COALESCE(SUM("amount"), 0) AS total
+    FROM "Transaction"
+    WHERE ${Prisma.join(conditions, " AND ")}
+    GROUP BY "type"
+  `;
+
+  const income = rows.find((row) => row.type === TransactionType.INCOME)?.total ?? 0;
+  const expense = rows.find((row) => row.type === TransactionType.EXPENSE)?.total ?? 0;
+
+  return { income: new Prisma.Decimal(income), expense: new Prisma.Decimal(expense) };
+}
+
+/**
+ * Totais por categoria num período ARBITRÁRIO — insumo de
+ * `reportService.categoryTotals` ("Por categoria" de `/reports`). Distinto de
+ * `transactionRepository.groupExpensesByCategoryInRange` (mês único, sempre
+ * EXPENSE, sem filtro extra — intocado porque também alimenta Dashboard e
+ * Telegram): aqui o tipo pode ser INCOME quando o filtro global pede, e o
+ * range é o período inteiro selecionado (não só um mês).
+ */
+async function groupCategoryTotalsInRange(
+  userId: string,
+  range: DateRange,
+  filters: CategoryTotalsFilters = {},
+): Promise<CategoryTotalRow[]> {
+  const type = filters.type === TransactionType.INCOME ? TransactionType.INCOME : TransactionType.EXPENSE;
+
   const rows = await prisma.transaction.groupBy({
-    by: ["type"],
+    by: ["categoryId"],
     where: {
       userId,
       deletedAt: null,
       isPaid: true,
+      type,
       transferId: null,
-      type: { in: [TransactionType.INCOME, TransactionType.EXPENSE] },
+      categoryId: { not: null },
+      ...(filters.accountId && { accountId: filters.accountId }),
       date: { gte: range.gte, lte: range.lte },
     },
     _sum: { amount: true },
   });
 
-  const income = rows.find((row) => row.type === TransactionType.INCOME)?._sum.amount ?? new Prisma.Decimal(0);
-  const expense = rows.find((row) => row.type === TransactionType.EXPENSE)?._sum.amount ?? new Prisma.Decimal(0);
+  return rows
+    .filter((row): row is typeof row & { categoryId: string } => row.categoryId !== null)
+    .map((row) => ({ categoryId: row.categoryId, sum: row._sum.amount ?? new Prisma.Decimal(0) }));
+}
 
-  return { income, expense };
+/**
+ * Nomes de categoria por id — mesmo padrão de `findAccountNamesByIds` abaixo
+ * (módulos não cross-importam repository um do outro neste projeto, ver
+ * `modules/budgets/repository.ts`).
+ */
+async function findCategoryNamesByIds(ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+
+  const categories = await prisma.category.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true },
+  });
+
+  return new Map(categories.map((category) => [category.id, category.name]));
 }
 
 /**
  * Movimentação por conta num período — SEM excluir Transfer/CARD_PAYMENT
  * (regra oposta à de receita/despesa, docs/28-REPORTS.md "Relatório por
  * Conta"). Agrupado por conta+tipo em 1 query, soma por direção acontece em
- * `service.ts`.
+ * `service.ts`. `accountId` (opcional) narrow pra uma única conta — filtro
+ * "conta" do mapa de filtros globais aplicado na QUERY, não em memória.
  */
 async function groupMovementByAccountInRange(
   userId: string,
   range: DateRange,
+  accountId?: string,
 ): Promise<AccountTypeMovement[]> {
   const rows = await prisma.transaction.groupBy({
     by: ["accountId", "type"],
@@ -83,7 +206,7 @@ async function groupMovementByAccountInRange(
       userId,
       deletedAt: null,
       isPaid: true,
-      accountId: { not: null },
+      accountId: accountId ?? { not: null },
       date: { gte: range.gte, lte: range.lte },
     },
     _sum: { amount: true },
@@ -146,8 +269,11 @@ async function listForCsv(userId: string, filters: CsvFilterInput): Promise<Tran
 
 export const reportRepository = {
   listIncomeExpenseInRange,
-  sumIncomeExpenseInRange,
+  listCashflowByMonthInRange,
+  sumCashflowInRange,
   groupMovementByAccountInRange,
+  groupCategoryTotalsInRange,
+  findCategoryNamesByIds,
   findAccountNamesByIds,
   listForCsv,
 };

@@ -12,15 +12,15 @@ function monthLabel(year: number, month: number): string {
 }
 
 type CashflowSectionProps = {
-  /** Série dos 12 meses do ano de referência (`reportService.incomeVsExpenseByMonth`) — o range de datas do filtro não se aplica aqui, o endpoint só aceita `year` inteiro. */
+  /** Série dos 12 meses do ano de referência (`reportService.cashflowByMonth` — conta-only + `COALESCE(paidAt, date)`, mesma base de caixa do Dashboard) — o range de datas do filtro não se aplica aqui, o endpoint só aceita `year` inteiro. */
   monthlyPoints: IncomeExpenseMonthPoint[];
 };
 
 /**
  * "Fluxo de Caixa" (docs/28-REPORTS.md, "Relatório de Fluxo de Caixa") — a
- * série mensal (`incomeVsExpenseByMonth`) vira a linha. `AppLineChart` já é o
- * componente documentado como reusado pelo Dashboard e por Reports (ver seu
- * próprio comentário de doc). Os 3 KPIs do período (Receitas/Despesas/Saldo)
+ * série mensal (`reportService.cashflowByMonth`) vira a linha. `AppLineChart`
+ * já é o componente documentado como reusado pelo Dashboard e por Reports (ver
+ * seu próprio comentário de doc). Os 3 KPIs do período (Receitas/Despesas/Saldo)
  * viraram card próprio (`kpi-summary-card.tsx`) — rebalanceamento visual da
  * linha 1 de `/reports`, ver `page.tsx`.
  */

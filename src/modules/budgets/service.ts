@@ -169,10 +169,17 @@ async function deleteBudget(userId: string, id: string): Promise<void> {
  * Orçamentos do período + `spentAmount`/progresso/status de cada — 3 queries
  * fixas independente de N budgets (categorias, budgets, soma agrupada por
  * categoria), sem N+1 (docs/26-BUDGETS.md, "Performance": "preferir
- * agregações no backend").
+ * agregações no backend"). `categoryId` (opcional) narrow pra uma única
+ * categoria — filtro global "categoria" de `/reports` (docs/28-REPORTS.md
+ * "Filtros Globais"), aplicado na query via `budgetRepository.listByPeriod`.
  */
-async function listWithProgress(userId: string, year: number, month: number): Promise<BudgetWithProgress[]> {
-  const budgets = await budgetRepository.listByPeriod(userId, year, month);
+async function listWithProgress(
+  userId: string,
+  year: number,
+  month: number,
+  categoryId?: string,
+): Promise<BudgetWithProgress[]> {
+  const budgets = await budgetRepository.listByPeriod(userId, year, month, categoryId);
   if (budgets.length === 0) return [];
 
   const categories = await budgetRepository.listCategoryHierarchy(userId);
