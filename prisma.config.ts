@@ -10,6 +10,20 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Local (`.env`): DATABASE_URL explícito. Produção (Vercel + integração
+    // Supabase): essa env não existe — cai no fallback POSTGRES_URL_NON_POOLING,
+    // nome que a integração injeta automaticamente (conexão direta, porta
+    // 5432, sem pgbouncer). Usamos a mesma conexão direta pras migrations e
+    // pro runtime (`src/lib/db/client.ts`) de propósito: app de 2 usuários,
+    // tráfego trivial, então o limite de conexões diretas do Supabase não é
+    // problema — e evitamos as armadilhas de prepared statements do pgbouncer
+    // em transaction-mode com o `@prisma/adapter-pg`.
+    //
+    // O tipo `Datasource` do Prisma 7.8 (`@prisma/config`) só expõe `url` e
+    // `shadowDatabaseUrl` — não existe mais um campo `directUrl` separado
+    // aqui (isso era do datasource block do schema.prisma em versões
+    // anteriores). Como usamos a mesma URL direta pra tudo, isso não é uma
+    // limitação: não precisamos de uma segunda variável.
+    url: process.env["DATABASE_URL"] ?? process.env["POSTGRES_URL_NON_POOLING"],
   },
 });
