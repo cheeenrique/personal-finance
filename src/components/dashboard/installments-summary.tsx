@@ -12,6 +12,8 @@ type InstallmentsSummaryProps = {
   purchases: ActiveInstallmentPurchase[];
 };
 
+const MAX_VISIBLE_PURCHASES = 5;
+
 /**
  * Bloco "Parcelamentos Ativos" (docs/11-DASHBOARD.md, "4. Parcelamentos
  * Ativos"; docs/23-INSTALLMENTS.md, "Visual no Dashboard"): 1 linha por
@@ -19,6 +21,12 @@ type InstallmentsSummaryProps = {
  * ao demo (design/Personal Finance App.dc.html, "Parcelamentos ativos").
  * Clique vai direto pro modal de detalhes daquela compra em `/installments`
  * (`?open=<id>`, lido por `InstallmentsBoard`).
+ *
+ * Mostra só os `MAX_VISIBLE_PURCHASES` mais recentes. `ActiveInstallmentPurchase`
+ * não expõe `createdAt`, mas `transactionService.listActiveInstallmentPurchases`
+ * já vem ordenado por `createdAt` desc (repository), então o slice aqui
+ * preserva "mais recentes primeiro" sem precisar tocar no service compartilhado.
+ * "Ver todos" cobre o restante em `/installments`.
  */
 export function InstallmentsSummary({ purchases }: InstallmentsSummaryProps) {
   if (purchases.length === 0) {
@@ -37,10 +45,12 @@ export function InstallmentsSummary({ purchases }: InstallmentsSummaryProps) {
     );
   }
 
+  const recentPurchases = purchases.slice(0, MAX_VISIBLE_PURCHASES);
+
   return (
     <SectionCard title="Parcelamentos ativos" action={{ label: "Ver todos", href: "/installments" }}>
       <div className="flex flex-col gap-4">
-        {purchases.map((purchase) => {
+        {recentPurchases.map((purchase) => {
           const percent = (purchase.paidCount / purchase.installmentsCount) * 100;
 
           return (

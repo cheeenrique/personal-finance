@@ -19,11 +19,17 @@ type CardsSummaryProps = {
   cards: CardWithSummary[];
 };
 
+const MAX_VISIBLE_CARDS = 5;
+
 /**
  * Bloco "Cartões e Dívidas" (docs/11-DASHBOARD.md, "3. Cartões e Dívidas"):
  * nome, limite usado/total, barra de progresso — layout de linha única
  * (sem card por item), igual ao demo (design/Personal Finance App.dc.html,
  * "Cartões e dívidas"). Clique vai direto pro detalhe do cartão (`/cards/[id]`).
+ *
+ * Mostra só os `MAX_VISIBLE_CARDS` mais recentes — `cardService.listWithSummary`
+ * ordena por `createdAt` ascendente, então o sort desc + slice acontece aqui
+ * (sem tocar no service compartilhado). "Ver cartões" cobre o restante em `/cards`.
  */
 export function CardsSummary({ cards }: CardsSummaryProps) {
   if (cards.length === 0) {
@@ -42,10 +48,14 @@ export function CardsSummary({ cards }: CardsSummaryProps) {
     );
   }
 
+  const recentCards = [...cards]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, MAX_VISIBLE_CARDS);
+
   return (
     <SectionCard title="Cartões e dívidas" action={{ label: "Ver cartões", href: "/cards" }}>
       <div className="flex flex-col gap-4">
-        {cards.map((card) => {
+        {recentCards.map((card) => {
           const limit = card.limit.toNumber();
           const outstanding = card.outstandingBalance.toNumber();
           const percent = limit > 0 ? (outstanding / limit) * 100 : 0;
