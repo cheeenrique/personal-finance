@@ -18,6 +18,7 @@ import type {
   Category,
   CategoryExpenseTotal,
   InstallmentPurchaseWithProgress,
+  KnownMerchant,
   Money,
   PaginatedResult,
   RecentTransactionRow,
@@ -256,6 +257,43 @@ async function lastCategoryForDescription(userId: string, description: string): 
 }
 
 /**
+ * Pagadores/merchants conhecidos do usuário — as `limit` descrições mais
+ * frequentes + a categoria DOMINANTE (mais usada) de cada, ordenadas por
+ * frequência desc (docs/30-TELEGRAM.md, "Parsing por IA"). Insumo do prompt
+ * do Gemini no Telegram: casa semanticamente a descrição de uma transação
+ * nova contra um merchant já conhecido, mesmo quando o texto vem diferente.
+ * Sem N+1: 2 `groupBy` + 1 lookup de nomes (`findCategoryNamesByIds`, já
+ * reusado por `expensesByCategory`), tudo agregado no banco. Descrições sem
+ * NENHUM histórico categorizado (ex.: só `CARD_PAYMENT`) ficam de fora — não
+ * há categoria pra ensinar a IA.
+ */
+async function listKnownMerchants(userId: string, limit: number): Promise<KnownMerchant[]> {
+  const frequencies = await transactionRepository.findDescriptionFrequencies(userId, limit);
+  if (frequencies.length === 0) return [];
+
+  const descriptions = frequencies.map((row) => row.description);
+  const categoryCounts = await transactionRepository.findCategoryCountsByDescriptions(userId, descriptions);
+
+  // 1ª ocorrência de cada descrição já é a categoria dominante — ver o
+  // comentário de `findCategoryCountsByDescriptions` (ordenado por contagem
+  // desc globalmente).
+  const dominantCategoryId = new Map<string, string>();
+  for (const row of categoryCounts) {
+    if (!dominantCategoryId.has(row.description)) dominantCategoryId.set(row.description, row.categoryId);
+  }
+
+  const namesById = await transactionRepository.findCategoryNamesByIds([...new Set(dominantCategoryId.values())]);
+
+  return frequencies
+    .map((row) => {
+      const categoryId = dominantCategoryId.get(row.description);
+      const categoryName = categoryId ? namesById.get(categoryId) : undefined;
+      return categoryName ? { description: row.description, categoryName } : null;
+    })
+    .filter((merchant): merchant is KnownMerchant => merchant !== null);
+}
+
+/**
  * Janela do mês em America/Sao_Paulo, convertida para o instante UTC correto
  * — construção via `new Date(y, m, d, ...)` (getters locais) é o formato que
  * `parseInSaoPaulo`/`fromZonedTime` espera, independente do timezone do host
@@ -415,6 +453,7 @@ export const transactionService = {
   lastUsedCategory,
   suggestDescriptions,
   lastCategoryForDescription,
+  listKnownMerchants,
   monthlyExpenseTotal,
   monthlyIncomeTotal,
   monthlyUnpaidExpenseTotal,

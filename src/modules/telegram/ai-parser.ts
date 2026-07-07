@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { KnownMerchant } from "@/modules/transactions/types";
 import type { AiParsedTransaction } from "./types";
 
 /**
@@ -57,16 +58,41 @@ export type AiParserContext = {
   accountNames: string[];
   /** Nomes dos cartões ATIVOS do usuário. */
   cardNames: string[];
+  /**
+   * Pagadores/merchants conhecidos do usuário — descrição já usada + a
+   * categoria dominante dela (`transactionService.listKnownMerchants`, ver
+   * `resolve.ts`, `listKnownMerchantsForAI`). Deixa a IA casar SEMANTICAMENTE
+   * um pagador já visto mesmo com o texto novo diferente (docs/30-TELEGRAM.md,
+   * "Parsing por IA"), em vez do match exato frágil do fallback determinístico.
+   */
+  knownMerchants: KnownMerchant[];
 };
 
 function labelOrPlaceholder(names: string[], placeholder: string): string {
   return names.length > 0 ? names.join(", ") : placeholder;
 }
 
+/** Descrições longas truncadas — a lista de merchants não pode inflar o prompt em tokens (docs/30-TELEGRAM.md, top ~40 já compacto por si). */
+const MAX_MERCHANT_DESCRIPTION_LENGTH = 60;
+
+function truncateMerchantDescription(description: string): string {
+  return description.length > MAX_MERCHANT_DESCRIPTION_LENGTH
+    ? `${description.slice(0, MAX_MERCHANT_DESCRIPTION_LENGTH)}…`
+    : description;
+}
+
+function knownMerchantsLabel(merchants: KnownMerchant[]): string {
+  if (merchants.length === 0) return "(nenhum ainda)";
+  return merchants
+    .map((merchant) => `"${truncateMerchantDescription(merchant.description)}" → ${merchant.categoryName}`)
+    .join("; ");
+}
+
 function buildPrompt(rawText: string, ctx: AiParserContext): string {
   const categoriesLabel = labelOrPlaceholder(ctx.categoryNames, "(nenhuma cadastrada)");
   const accountsLabel = labelOrPlaceholder(ctx.accountNames, "(nenhuma cadastrada)");
   const cardsLabel = labelOrPlaceholder(ctx.cardNames, "(nenhum cadastrado)");
+  const merchantsLabel = knownMerchantsLabel(ctx.knownMerchants);
 
   return [
     "Você extrai dados de uma mensagem de lançamento financeiro pessoal (pt-BR) enviada por um usuário a um bot do Telegram.",
@@ -76,13 +102,14 @@ function buildPrompt(rawText: string, ctx: AiParserContext): string {
     "- isTransaction=false se a mensagem NÃO for um lançamento (saudação, pergunta, texto aleatório sem qualquer menção a gasto/recebimento de dinheiro).",
     '- type: INCOME quando o dinheiro ENTRA pro usuário (ex.: "recebi", "recebido de", "pix recebido", "caiu", salário, freela); EXPENSE quando o dinheiro SAI (ex.: "paguei", "comprei", "pix para", "transferência para", gasto do dia a dia). Assuma EXPENSE quando ambíguo.',
     '- amount: valor decimal em string (ex.: "30" ou "30.50"), sem símbolo de moeda. Se a mensagem NÃO mencionar nenhum valor numérico, retorne null — NUNCA invente um valor.',
-    "- description: descrição curta do lançamento (poucas palavras). Pessoa ou empresa EXTERNA citada (ex.: \"mãe\", \"Romeika\", \"Funape\" — alguém que NÃO é o próprio usuário) SEMPRE vai na descrição, nunca é uma conta/cartão do usuário.",
+    "- description: descrição curta do lançamento (poucas palavras). Pessoa ou empresa EXTERNA citada (ex.: \"mãe\", \"Romeika\", \"Funape\" — alguém que NÃO é o próprio usuário) SEMPRE vai na descrição, nunca é uma conta/cartão do usuário. Se o pagador/beneficiário for o MESMO de um item da lista \"Pagadores/recebedores conhecidos\" abaixo (mesmo com o texto diferente — variação de grafia, abreviação, razão social com CNPJ junto etc.), escreva a description com o nome CANÔNICO desse item (o texto entre aspas antes da seta), em vez de repetir o texto cru da mensagem.",
     '- date: resolva datas relativas ("hoje", "ontem", "amanhã") e absolutas ("dia 18/06", "18/06") usando a data de referência acima como "hoje" e o ano corrente quando omitido. Formato YYYY-MM-DD. Se a mensagem não mencionar data, retorne null.',
-    `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Se nenhuma for uma boa correspondência, retorne null.`,
+    `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Se o pagador/beneficiário bater com um item da lista "Pagadores/recebedores conhecidos" abaixo (mesmo critério da regra de description), use a categoria DESSE item. Senão, se nenhuma categoria for uma boa correspondência, retorne null.`,
     '- paymentMethod: identifique COMO o dinheiro saiu/entrou — "credit" (cartão de crédito), "debit" (cartão de débito), "pix", "transfer" (transferência/TED/DOC), "cash" (dinheiro/espécie). Se a mensagem não mencionar nenhum canal, retorne null.',
     '- originKind/originName: só preencha se o nome citado bater com um item REAL das listas abaixo. Se citar um CARTÃO da lista (geralmente junto de "crédito"/"débito"), originKind="card" e originName = nome EXATO da lista de cartões. Se citar uma CONTA da lista (geralmente junto de "pix"/"transferência"/banco), originKind="account" e originName = nome EXATO da lista de contas. IMPORTANTE: nome de pessoa/empresa EXTERNA (que foi pra description) NUNCA é origem, mesmo aparecendo perto de "pix" ou "transferência". Sem menção de conta/cartão real do usuário, ambos null.',
     `Contas do usuário: [${accountsLabel}]`,
     `Cartões do usuário: [${cardsLabel}]`,
+    `Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${merchantsLabel}]`,
     "",
     `Mensagem do usuário: "${rawText}"`,
   ].join("\n");
@@ -102,6 +129,7 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
   const categoriesLabel = labelOrPlaceholder(ctx.categoryNames, "(nenhuma cadastrada)");
   const accountsLabel = labelOrPlaceholder(ctx.accountNames, "(nenhuma cadastrada)");
   const cardsLabel = labelOrPlaceholder(ctx.cardNames, "(nenhum cadastrado)");
+  const merchantsLabel = knownMerchantsLabel(ctx.knownMerchants);
 
   const lines = [
     "Você extrai dados de uma IMAGEM de um lançamento financeiro pessoal (pt-BR) enviada por um usuário a um bot do Telegram.",
@@ -112,13 +140,14 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
     "- isTransaction=false se a imagem NÃO mostrar nenhum lançamento financeiro reconhecível (foto sem valor nem estabelecimento/lançamento visível).",
     '- type: INCOME quando o dinheiro ENTRA pro usuário (recebimento, Pix recebido, depósito); EXPENSE quando o dinheiro SAI (compra aprovada, pagamento, Pix enviado). Assuma EXPENSE quando ambíguo — a maioria das notificações de cartão/recibo é gasto.',
     '- amount: valor TOTAL exatamente como aparece na imagem (o valor "aprovado"/"pago"/da compra), em string decimal (ex.: "67.89"), sem símbolo de moeda. Se a imagem NÃO mostrar nenhum valor numérico legível, retorne null — NUNCA invente um valor.',
-    '- description: o ESTABELECIMENTO/comércio citado na imagem (ex.: "FILIAL ELDORA"), poucas palavras. Pessoa/empresa EXTERNA (destinatário de um Pix, por exemplo) segue a mesma regra do texto: vai na descrição, nunca é origem.',
+    '- description: o ESTABELECIMENTO/comércio citado na imagem (ex.: "FILIAL ELDORA"), poucas palavras. Pessoa/empresa EXTERNA (destinatário de um Pix, por exemplo) segue a mesma regra do texto: vai na descrição, nunca é origem. Se o estabelecimento/pagador bater com um item da lista "Pagadores/recebedores conhecidos" abaixo (mesmo com o texto diferente — variação de grafia, abreviação, razão social com CNPJ junto etc.), escreva a description com o nome CANÔNICO desse item (o texto entre aspas antes da seta).',
     "- date: se a imagem mostrar a data/hora do lançamento, resolva pro formato YYYY-MM-DD (ano corrente quando omitido). Sem nenhuma data visível na imagem, retorne null (o sistema assume hoje).",
-    `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Sem boa correspondência, retorne null.`,
+    `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Se o estabelecimento/pagador bater com um item da lista "Pagadores/recebedores conhecidos" abaixo (mesmo critério da regra de description), use a categoria DESSE item. Senão, sem boa correspondência, retorne null.`,
     '- paymentMethod: identifique o canal pelas palavras da imagem — "credit" (crédito), "debit" (débito), "pix", "transfer" (TED/DOC/transferência), "cash" (dinheiro/espécie). Sem menção clara, retorne null.',
     `- originKind/originName: só preencha se o NOME (não o número) de uma conta ou cartão REAL do usuário aparecer na imagem, batendo com um item das listas abaixo. Menções como "cartão com final 7547" ou os últimos dígitos de um cartão NÃO bastam pra identificar QUAL cartão cadastrado é — o app não guarda os últimos dígitos dos cartões, então NUNCA infira qual cartão a partir só desse número. Nesse caso deixe originKind/originName null (o sistema pergunta ao usuário qual cartão/conta foi).`,
     `Contas do usuário: [${accountsLabel}]`,
     `Cartões do usuário: [${cardsLabel}]`,
+    `Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${merchantsLabel}]`,
   ];
 
   if (caption) {

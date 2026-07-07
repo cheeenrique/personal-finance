@@ -9,7 +9,14 @@ import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { parseTransactionFromImage, parseTransactionWithAI } from "./ai-parser";
 import { draftFromAi, handlePendingReply, processDraft } from "./draft";
 import { telegramPendingRepository } from "./pending";
-import { listCategoryNamesForAI, listOriginNamesForAI, originPayload, resolveCategoryId, resolveOrigin } from "./resolve";
+import {
+  listCategoryNamesForAI,
+  listKnownMerchantsForAI,
+  listOriginNamesForAI,
+  originPayload,
+  resolveCategoryId,
+  resolveOrigin,
+} from "./resolve";
 import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildBalanceReply,
@@ -82,11 +89,16 @@ async function handleCreateTransaction(
   };
 }
 
-/** Insumo do prompt da IA — categorias/contas/cartões reais do usuário + "hoje" em SP (docs/30-TELEGRAM.md, "Parsing por IA"). */
+/**
+ * Insumo do prompt da IA — categorias/contas/cartões reais do usuário +
+ * merchants conhecidos (descrição → categoria dominante, docs/30-TELEGRAM.md,
+ * "Parsing por IA") + "hoje" em SP.
+ */
 async function buildAiContext(userId: string) {
-  const [categoryNames, origins] = await Promise.all([
+  const [categoryNames, origins, knownMerchants] = await Promise.all([
     listCategoryNamesForAI(userId),
     listOriginNamesForAI(userId),
+    listKnownMerchantsForAI(userId),
   ]);
 
   return {
@@ -94,6 +106,7 @@ async function buildAiContext(userId: string) {
     categoryNames,
     accountNames: origins.accountNames,
     cardNames: origins.cardNames,
+    knownMerchants,
   };
 }
 

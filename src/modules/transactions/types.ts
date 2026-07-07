@@ -75,6 +75,17 @@ export type RecentTransactionRow = {
  */
 export type RecentTransactionRowClient = Omit<RecentTransactionRow, "amount"> & { amount: string };
 
+/**
+ * Pagador/merchant conhecido do usuário — descrição já usada em lançamentos
+ * anteriores + categoria DOMINANTE (mais frequente) dela (docs/30-TELEGRAM.md,
+ * "Parsing por IA"). Insumo do prompt do Gemini no Telegram: a IA casa a
+ * descrição de uma transação nova contra este nome mesmo quando o texto vem
+ * diferente (ex.: "FUNDACAO DE APOIO A PESQUISA" vs. "Fundação de Apoio à
+ * Pesquisa FUNAPE"), reusando categoria + nome canônico em vez do match exato
+ * frágil de `lastCategoryForDescription`.
+ */
+export type KnownMerchant = { description: string; categoryName: string };
+
 /** Compra parcelada + parcelas cruas (pré-derivação) — insumo de `listInstallmentPurchasesWithProgress`. */
 export type InstallmentPurchaseRow = {
   id: string;

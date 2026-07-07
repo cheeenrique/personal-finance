@@ -4,6 +4,7 @@ import { accountService } from "@/modules/accounts/service";
 import { cardService } from "@/modules/cards/service";
 import { transactionService } from "@/modules/transactions/service";
 import type { Category, CategoryTreeNode } from "@/modules/categories/types";
+import type { KnownMerchant } from "@/modules/transactions/types";
 import { normalizeWord } from "./normalize";
 import { FallbackCategoryMissingError, NoActiveAccountError } from "./errors";
 import type {
@@ -359,4 +360,19 @@ export async function listOriginNamesForAI(
     accountNames: accounts.filter((account) => account.isActive).map((account) => account.name),
     cardNames: cards.filter((card) => card.isActive).map((card) => card.name),
   };
+}
+
+/** Top ~40 merchants (docs/30-TELEGRAM.md, "Parsing por IA") — compacto o bastante pro prompt não explodir em tokens. */
+const KNOWN_MERCHANTS_LIMIT = 40;
+
+/**
+ * Pagadores/merchants conhecidos do usuário — insumo do prompt da IA pra
+ * casar semanticamente a descrição de uma transação nova contra um histórico
+ * já categorizado (docs/30-TELEGRAM.md, "Parsing por IA"), em vez do match
+ * exato frágil de `resolveCategoryId`/`lastCategoryForDescription`. Reusa
+ * `transactionService.listKnownMerchants` (módulo transactions, sem
+ * duplicar a query aqui).
+ */
+export async function listKnownMerchantsForAI(userId: string): Promise<KnownMerchant[]> {
+  return transactionService.listKnownMerchants(userId, KNOWN_MERCHANTS_LIMIT);
 }

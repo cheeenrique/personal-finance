@@ -248,6 +248,57 @@ async function findDescriptionSuggestions(userId: string, query: string, limit: 
 }
 
 /**
+ * Descrições DISTINTAS do usuário por frequência (`_count` desc) — sem filtro
+ * de texto, diferente de `findDescriptionSuggestions` (autocomplete). Insumo
+ * de `transactionService.listKnownMerchants` (docs/30-TELEGRAM.md, "Parsing
+ * por IA"): as `limit` descrições mais usadas viram candidatas a "merchant
+ * conhecido" pro prompt do Gemini.
+ */
+async function findDescriptionFrequencies(
+  userId: string,
+  limit: number,
+): Promise<{ description: string; count: number }[]> {
+  const grouped = await prisma.transaction.groupBy({
+    by: ["description"],
+    where: { userId, deletedAt: null },
+    _count: { description: true },
+    orderBy: { _count: { description: "desc" } },
+    take: limit,
+  });
+
+  return grouped.map((row) => ({ description: row.description, count: row._count.description }));
+}
+
+/**
+ * Contagem de lançamentos por (descrição, categoria) restrita a um conjunto
+ * de descrições já conhecidas — insumo de `transactionService.
+ * listKnownMerchants` pra achar a categoria DOMINANTE de cada merchant.
+ * `categoryId: { not: null }` exclui `CARD_PAYMENT` (categoria sempre null,
+ * docs/24-CATEGORIES.md) do cômputo. Ordenado por contagem desc GLOBALMENTE
+ * (não por descrição) de propósito: o service escolhe a categoria dominante
+ * de cada descrição pegando a 1ª ocorrência dela nesta lista, o que só
+ * funciona porque a maior contagem de cada grupo aparece antes de qualquer
+ * contagem menor do mesmo grupo nessa ordenação global.
+ */
+async function findCategoryCountsByDescriptions(
+  userId: string,
+  descriptions: string[],
+): Promise<{ description: string; categoryId: string; count: number }[]> {
+  if (descriptions.length === 0) return [];
+
+  const grouped = await prisma.transaction.groupBy({
+    by: ["description", "categoryId"],
+    where: { userId, deletedAt: null, description: { in: descriptions }, categoryId: { not: null } },
+    _count: { categoryId: true },
+    orderBy: { _count: { categoryId: "desc" } },
+  });
+
+  return grouped
+    .filter((row): row is typeof row & { categoryId: string } => row.categoryId !== null)
+    .map((row) => ({ description: row.description, categoryId: row.categoryId, count: row._count.categoryId }));
+}
+
+/**
  * Transação mais recente (por `date`, depois `createdAt`) com uma descrição
  * EXATA — insumo do bônus "pré-preencher categoria" ao escolher uma sugestão
  * do autocomplete de Descrição (mesma regra de `findMostRecentByType`, mas
@@ -448,6 +499,8 @@ export const transactionRepository = {
   list,
   findMostRecentByType,
   findDescriptionSuggestions,
+  findDescriptionFrequencies,
+  findCategoryCountsByDescriptions,
   findMostRecentByDescription,
   sumAmountByTypeInRange,
   groupExpensesByCategoryInRange,
