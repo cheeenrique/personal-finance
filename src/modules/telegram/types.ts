@@ -74,6 +74,17 @@ export type AiParsedTransaction = {
 /** Campo obrigatório ainda faltando num lançamento em progresso (docs/30-TELEGRAM.md, "Fluxo conversacional"). Categoria nunca entra aqui — sempre tem fallback ("Outros"/"Outros (Receita)"), nunca bloqueia. */
 export type TelegramMissingField = "amount" | "origin";
 
+/** Um item do array `message.photo` do Telegram — do menor pro maior (thumb→full). */
+export type TelegramPhotoSize = { file_id: string; width: number; height: number };
+
+/**
+ * Foto já detectada/normalizada de um update (docs/30-TELEGRAM.md — extração
+ * por Gemini vision, ver `photo.ts`): `fileId` da MAIOR resolução disponível +
+ * `caption` opcional (texto que o usuário mandou junto da foto), usado como
+ * dica extra no prompt (`ai-parser.ts`, `buildImagePrompt`).
+ */
+export type TelegramPhotoInput = { fileId: string; caption: string | null };
+
 /**
  * Rascunho de um lançamento em progresso — persistido em
  * `TelegramPendingEntry.draftJson` (Prisma `Json`) enquanto falta valor e/ou

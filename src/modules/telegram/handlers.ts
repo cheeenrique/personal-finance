@@ -6,7 +6,7 @@ import { accountService } from "@/modules/accounts/service";
 import { AccountDomainError } from "@/modules/accounts/errors";
 import { nowInSaoPaulo, parseInSaoPaulo } from "@/lib/date/timezone";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
-import { parseTransactionWithAI } from "./ai-parser";
+import { parseTransactionFromImage, parseTransactionWithAI } from "./ai-parser";
 import { draftFromAi, handlePendingReply, processDraft } from "./draft";
 import { telegramPendingRepository } from "./pending";
 import { listCategoryNamesForAI, listOriginNamesForAI, originPayload, resolveCategoryId, resolveOrigin } from "./resolve";
@@ -14,6 +14,7 @@ import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildBalanceReply,
   buildErrorReply,
+  buildImageUnreadableReply,
   buildMonthExpensesReply,
   buildTodaySummaryReply,
   buildTransactionConfirmationReply,
@@ -134,6 +135,42 @@ async function handleFreeformEntry(
   return processDraft(userId, draftFromAi(ai), 0);
 }
 
+/**
+ * Lançamento via FOTO (docs/30-TELEGRAM.md, bot aceita foto de nota/
+ * comprovante/notificação — extração por Gemini vision). A partir do momento
+ * em que a IA reconhece um lançamento na imagem, cai no MESMO fluxo
+ * conversacional do texto (`processDraft`, draft.ts): confirma origem
+ * ambígua (ex.: notificação só cita "cartão final 7547", sem nome real de
+ * cartão — vira pergunta, nunca um chute), aplica a tag "Telegram", cria a
+ * transação.
+ *
+ * DIFERENTE do texto, não existe fallback determinístico pra foto (não dá
+ * pra "regex" uma imagem) — sem `GEMINI_API_KEY`, erro/timeout na chamada,
+ * imagem sem nenhum lançamento reconhecível (`isTransaction=false`) ou sem
+ * valor legível (`amount=null`), responde pedindo pra reenviar a foto (mais
+ * nítida) ou digitar em texto, sem abrir um pending — não há nada de
+ * concreto pra perguntar sobre nesses casos.
+ *
+ * Não verifica pending em aberto (diferente de `handleFreeformEntry`): uma
+ * foto nunca é tratada como resposta textual a uma pergunta anterior (fora de
+ * escopo desta versão — ver Improvement Suggestions no relatório).
+ */
+export async function handleImageEntry(
+  userId: string,
+  imageBytes: Buffer,
+  mimeType: string,
+  caption: string | null,
+): Promise<CommandResult> {
+  const ctx = await buildAiContext(userId);
+  const ai = await parseTransactionFromImage(imageBytes, mimeType, caption, ctx);
+
+  if (ai === null || !ai.isTransaction || !ai.amount) {
+    return { text: buildImageUnreadableReply(), resultCode: "image_unreadable" };
+  }
+
+  return processDraft(userId, draftFromAi(ai), 0);
+}
+
 async function handleQueryBalance(userId: string): Promise<CommandResult> {
   const total = await accountService.totalBalance(userId);
   return { text: buildBalanceReply(total.toString()), resultCode: "balance_queried" };
@@ -210,4 +247,4 @@ async function executeCommand(userId: string, command: ParsedCommand, rawText: s
   }
 }
 
-export const telegramHandlers = { executeCommand };
+export const telegramHandlers = { executeCommand, handleImageEntry };

@@ -195,6 +195,53 @@ livre passa por IA.
 
 ---
 
+# Parsing por IA (lançamento via FOTO)
+
+O bot também aceita **foto** de nota fiscal, comprovante (Pix/transferência)
+ou notificação push do banco/cartão (print de tela do celular) — ex.: "Compra
+no crédito aprovada — Compra de R$ 67,89 APROVADA em FILIAL ELDORA para o
+cartão com final 7547.". Extração via Gemini **vision** (mesmo modelo,
+`gemini-2.5-flash`, mesmo endpoint `generateContent`, mesmo `responseSchema`),
+`modules/telegram/ai-parser.ts`, `parseTransactionFromImage`.
+
+* **Detecção** — `message.photo` do Telegram é um array de `PhotoSize`
+  (thumb→full, ordem não garantida); `modules/telegram/photo.ts`,
+  `extractLargestPhoto` (função pura) pega a de MAIOR `width` (melhor
+  qualidade de leitura) + o `caption` opcional (texto junto da foto, vira
+  dica extra no prompt).
+* **Download** — `modules/telegram/telegram-api.ts`, `downloadPhoto`:
+  `getFile(file_id)` resolve o `file_path`, depois baixa os bytes de
+  `https://api.telegram.org/file/bot<TOKEN>/<file_path>` (mesmo token do bot
+  do usuário, BYO-bot). Timeout de 8s em cada chamada — `null` em qualquer
+  falha (arquivo expirado, rede, timeout), o webhook responde pedindo pra
+  reenviar.
+* **Extração** — mesmas regras de type/amount/description/categoryName/
+  paymentMethod da extração por texto (ver seção acima), só a FONTE muda
+  (imagem via `inlineData` + prompt, em vez de texto puro). Cobre recibo, nota
+  fiscal, comprovante de Pix E notificação push do banco — o prompt trata os
+  4 formatos igual.
+* **`originKind`/`originName` na imagem** — mesma regra estrita do texto: só
+  preenche se o NOME de uma conta/cartão REAL do usuário aparecer na imagem.
+  Uma notificação citando só "cartão com final 7547" (dígitos, não nome) NÃO
+  é suficiente pra resolver qual cartão cadastrado é — o app não guarda os
+  últimos dígitos de nenhum cartão — então a IA deixa `originName=null` nesse
+  caso e o fluxo conversacional pergunta "De onde saiu?" normalmente (nunca
+  inventa um cartão a partir do número).
+* **Mesmo fluxo conversacional do texto** — a partir do momento em que a IA
+  reconhece um lançamento na foto (`isTransaction=true` + `amount` legível),
+  o resultado cai no MESMO `processDraft` (`draft.ts`) do texto: confirma
+  origem ambígua, aplica a tag "Telegram", cria a transação. Sem fallback
+  determinístico pra foto (não dá pra "regex" uma imagem) — sem
+  `GEMINI_API_KEY`, erro/timeout, imagem sem lançamento reconhecível ou sem
+  valor legível, o bot responde pedindo pra reenviar a foto (mais nítida) ou
+  digitar o lançamento em texto, sem abrir pending.
+* Uma foto enviada enquanto já existe um pending em aberto (pergunta de
+  valor/origem pendente) NÃO é tratada como resposta a esse pending nesta
+  versão — vira um lançamento novo via imagem (o pending antigo só expira
+  pelo TTL de sempre). Fora de escopo desta iteração.
+
+---
+
 # Fluxo conversacional (rascunho pendente)
 
 Quando o lançamento livre passa pela IA com sucesso (`isTransaction=true`),

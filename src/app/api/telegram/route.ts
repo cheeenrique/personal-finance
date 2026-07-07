@@ -5,7 +5,13 @@ import { telegramParser } from "@/modules/telegram/parser";
 import { telegramHandlers } from "@/modules/telegram/handlers";
 import { telegramApi } from "@/modules/telegram/telegram-api";
 import { looksLikeLinkCommand, tryLinkFromMessage } from "@/modules/telegram/link";
-import { buildTelegramLinkedReply, buildTelegramLinkFailedReply } from "@/modules/telegram/reply";
+import { extractLargestPhoto } from "@/modules/telegram/photo";
+import {
+  buildImageUnreadableReply,
+  buildTelegramLinkedReply,
+  buildTelegramLinkFailedReply,
+} from "@/modules/telegram/reply";
+import type { TelegramPhotoSize } from "@/modules/telegram/types";
 
 const WEBHOOK_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 
@@ -13,8 +19,19 @@ type TelegramUpdate = {
   message?: {
     chat?: { id?: number | string };
     text?: string;
+    photo?: TelegramPhotoSize[];
+    caption?: string;
   };
 };
+
+/**
+ * Foto de nota/comprovante + a chamada Gemini vision encadeiam 2 requests
+ * externas (download do Telegram + `generateContent`, ~8s de timeout cada —
+ * ver `telegram-api.ts`/`ai-parser.ts`) — acima do default de function
+ * duration do Vercel Hobby (docs/01-STACK.md). `maxDuration` evita timeout
+ * silencioso do webhook nesse caminho.
+ */
+export const maxDuration = 30;
 
 /**
  * Webhook do Telegram — exceção documentada ao padrão Server Actions
@@ -43,16 +60,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const update = (await request.json().catch(() => null)) as TelegramUpdate | null;
   const chatId = update?.message?.chat?.id;
-  const text = update?.message?.text;
 
-  if (chatId === undefined || chatId === null || !text) {
+  if (chatId === undefined || chatId === null) {
+    return NextResponse.json({ ok: true });
+  }
+
+  const text = update?.message?.text;
+  // Foto de nota/comprovante/notificação (docs/30-TELEGRAM.md, bot aceita
+  // foto) — `message.photo` é um array de tamanhos, `extractLargestPhoto`
+  // (função pura, `photo.ts`) já resolve a maior resolução + o `caption`
+  // opcional. `null` quando a mensagem não tem foto nenhuma.
+  const photoInput = update?.message ? extractLargestPhoto(update.message) : null;
+
+  if (!text && !photoInput) {
     return NextResponse.json({ ok: true });
   }
 
   // Comando de vínculo (`/vincular <CODE>` ou `/start <CODE>`) roda ANTES da
   // checagem de chat vinculado — é assim que um chat_id novo, ainda não
   // vinculado a esse bot, entra no sistema (docs/12-SETTINGS.md, "3. Telegram").
-  if (looksLikeLinkCommand(text)) {
+  // Só se aplica a mensagens de TEXTO — o Telegram nunca manda um comando via foto.
+  if (text && looksLikeLinkCommand(text)) {
     const linkResult = await tryLinkFromMessage(userId, chatId, text);
 
     if (linkResult.ok) {
@@ -70,6 +98,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Rejeição silenciosa (docs/30-TELEGRAM.md, "Segurança"): 200 vazio, sem
     // processar nem responder ao remetente.
     console.log(`chat_id=${chatId} -> rejected_unauthorized`);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (photoInput) {
+    const downloaded = await telegramApi.downloadPhoto(botToken, photoInput.fileId);
+
+    if (!downloaded) {
+      await telegramApi.sendMessage(botToken, chatId, buildImageUnreadableReply());
+      console.log(`chat_id=${chatId} -> image_download_failed`);
+      return NextResponse.json({ ok: true });
+    }
+
+    const result = await telegramHandlers.handleImageEntry(
+      userId,
+      downloaded.bytes,
+      downloaded.mimeType,
+      photoInput.caption,
+    );
+    await telegramApi.sendMessage(botToken, chatId, result.text);
+    console.log(`chat_id=${chatId} -> ${result.resultCode}`);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!text) {
+    // Inalcançável na prática (mensagem sem foto E sem texto já retornou
+    // acima) — guarda só pra o compilador não exigir non-null assertion.
     return NextResponse.json({ ok: true });
   }
 

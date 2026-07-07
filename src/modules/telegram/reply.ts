@@ -113,6 +113,20 @@ export function buildPendingGaveUpReply(): string {
   ].join("\n");
 }
 
+/**
+ * Foto que não deu pra baixar OU que o Gemini não conseguiu ler como um
+ * lançamento (sem valor legível, ou nada de financeiro reconhecível na
+ * imagem — docs/30-TELEGRAM.md, bot aceita foto de nota/comprovante/
+ * notificação). Mesmo padrão de "não entendi" (`buildUnknownReply`): ⚠️, pede
+ * pra tentar de novo ou digitar em texto.
+ */
+export function buildImageUnreadableReply(): string {
+  return [
+    `${ICON_WARNING} Não consegui identificar um lançamento nessa foto.`,
+    "Manda de novo com mais luz/foco, ou digite o lançamento em texto (ex.: mercado 120).",
+  ].join("\n");
+}
+
 /** Vínculo confirmado via `/vincular <CODE>` ou `/start <CODE>` (docs/12-SETTINGS.md, "3. Telegram"). */
 export function buildTelegramLinkedReply(): string {
   return `${ICON_SUCCESS} Telegram vinculado com sucesso! Agora você pode registrar transações por aqui.`;
