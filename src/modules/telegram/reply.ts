@@ -100,6 +100,18 @@ export function buildAskOriginReply(): string {
   ].join("\n");
 }
 
+/**
+ * Origem ambígua (docs/30-TELEGRAM.md, bug fix "origem faz loop"): o núcleo
+ * citado bateu em MAIS de uma conta/cartão real (ex.: "Nubank" batendo em
+ * "Nubank - Pessoal" E "Nubank - MEI") — lista os candidatos em vez do
+ * genérico `buildAskOriginReply`. A próxima resposta do usuário (ex.: "MEI")
+ * é re-mesclada no draft e re-resolvida (`resolveOriginStrict`) — o match por
+ * contém tende a achar só 1 candidato dessa vez.
+ */
+export function buildAskOriginAmbiguousReply(candidateLabels: string[]): string {
+  return [`${ICON_WARNING} Encontrei mais de uma opção. Qual delas?`, ...candidateLabels].join("\n");
+}
+
 /** "cancelar" com um pending em aberto (docs/30-TELEGRAM.md, "Fluxo conversacional"). */
 export function buildPendingCancelledReply(): string {
   return `${ICON_SUCCESS} Lançamento cancelado.`;

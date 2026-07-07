@@ -8,13 +8,14 @@ import { originPayload, resolveCategoryByName, resolveOriginStrict } from "./res
 import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildAskAmountReply,
+  buildAskOriginAmbiguousReply,
   buildAskOriginReply,
   buildErrorReply,
   buildPendingCancelledReply,
   buildPendingGaveUpReply,
   buildTransactionConfirmationReply,
 } from "./reply";
-import type { AiParsedTransaction, CommandResult, TelegramDraft, TelegramMissingField, TelegramOrigin } from "./types";
+import type { AiParsedTransaction, CommandResult, TelegramDraft, TelegramOrigin } from "./types";
 
 /**
  * Rodadas máximas de pergunta antes de desistir (docs/30-TELEGRAM.md, "Fluxo
@@ -39,14 +40,16 @@ export function draftFromAi(ai: AiParsedTransaction): TelegramDraft {
 
 type DraftResolution =
   | { complete: true; category: { id: string; name: string }; origin: TelegramOrigin }
-  | { complete: false; missing: TelegramMissingField };
+  | { complete: false; missing: "amount" }
+  | { complete: false; missing: "origin"; ambiguousLabels?: string[] };
 
 /**
  * Campos OBRIGATÓRIOS do lançamento via IA (docs/30-TELEGRAM.md, "Fluxo
  * conversacional"): valor + origem resolvível (conta OU cartão real do
  * usuário, conforme `paymentMethod` — `resolveOriginStrict`). Categoria NUNCA
- * bloqueia — sempre cai no fallback "Outros"/"Outros (Receita)"
- * (`resolveCategoryByName`, mesma regra do parser regex).
+ * bloqueia — sempre cai no histórico por descrição, depois no fallback
+ * "Outros"/"Outros (Receita)" (`resolveCategoryByName`, mesma regra do
+ * parser regex).
  */
 async function resolveDraft(userId: string, draft: TelegramDraft): Promise<DraftResolution> {
   if (!draft.amount || !positiveDecimalSchema.safeParse(draft.amount).success) {
@@ -57,14 +60,24 @@ async function resolveDraft(userId: string, draft: TelegramDraft): Promise<Draft
     Boolean(value),
   );
 
-  const [category, origin] = await Promise.all([
-    resolveCategoryByName(userId, draft.type, draft.categoryName, keywordCandidates),
+  const [category, originResult] = await Promise.all([
+    resolveCategoryByName(userId, draft.type, draft.categoryName, draft.description, keywordCandidates),
     resolveOriginStrict(userId, draft.paymentMethod, draft.originKind, draft.originName),
   ]);
 
-  if (!origin) return { complete: false, missing: "origin" };
+  if (originResult.status === "resolved") {
+    return { complete: true, category, origin: originResult.origin };
+  }
 
-  return { complete: true, category, origin };
+  if (originResult.status === "ambiguous") {
+    return {
+      complete: false,
+      missing: "origin",
+      ambiguousLabels: originResult.candidates.map((candidate) => candidate.label),
+    };
+  }
+
+  return { complete: false, missing: "origin" };
 }
 
 /**
@@ -147,9 +160,18 @@ export async function processDraft(userId: string, draft: TelegramDraft, attempt
   const nextAttempts = attempts + 1;
   await telegramPendingRepository.upsert(userId, draft, resolution.missing, nextAttempts);
 
-  return resolution.missing === "amount"
-    ? { text: buildAskAmountReply(), resultCode: "pending_amount_asked" }
-    : { text: buildAskOriginReply(), resultCode: "pending_origin_asked" };
+  if (resolution.missing === "amount") {
+    return { text: buildAskAmountReply(), resultCode: "pending_amount_asked" };
+  }
+
+  if (resolution.ambiguousLabels && resolution.ambiguousLabels.length > 0) {
+    return {
+      text: buildAskOriginAmbiguousReply(resolution.ambiguousLabels),
+      resultCode: "pending_origin_ambiguous",
+    };
+  }
+
+  return { text: buildAskOriginReply(), resultCode: "pending_origin_asked" };
 }
 
 /**
@@ -167,6 +189,6 @@ export async function handlePendingReply(
     return { text: buildPendingCancelledReply(), resultCode: "pending_cancelled" };
   }
 
-  const merged = await mergeReplyIntoDraft(userId, pending.draft, pending.missingField, rawText);
+  const merged = mergeReplyIntoDraft(pending.draft, pending.missingField, rawText);
   return processDraft(userId, merged, pending.attempts);
 }

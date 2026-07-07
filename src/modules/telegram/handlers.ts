@@ -45,7 +45,7 @@ async function handleCreateTransaction(
   command: Extract<ParsedCommand, { kind: "create_transaction" }>,
 ): Promise<CommandResult> {
   const [category, origin, telegramTagId] = await Promise.all([
-    resolveCategoryId(userId, command.type, command.keywordCandidates),
+    resolveCategoryId(userId, command.type, command.keywordCandidates, command.description),
     resolveOrigin(userId, null, null),
     resolveTelegramTagId(userId),
   ]);

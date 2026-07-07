@@ -74,6 +74,20 @@ export type AiParsedTransaction = {
 /** Campo obrigatório ainda faltando num lançamento em progresso (docs/30-TELEGRAM.md, "Fluxo conversacional"). Categoria nunca entra aqui — sempre tem fallback ("Outros"/"Outros (Receita)"), nunca bloqueia. */
 export type TelegramMissingField = "amount" | "origin";
 
+/**
+ * Resultado de casar o texto de origem citado (IA ou resposta de pending)
+ * contra contas/cartões REAIS e ATIVOS do usuário (`resolve.ts`,
+ * `resolveOriginStrict` — docs/30-TELEGRAM.md, bug fix "match por contém" +
+ * ambiguidade): "resolved" = exatamente 1 candidato bateu; "ambiguous" = mais
+ * de um bateu (ex.: "Nubank" batendo em "Nubank - Pessoal" E "Nubank - MEI")
+ * — o chamador (`draft.ts`) pergunta qual, listando `candidates`; "none" =
+ * nada bateu (ou não havia origem nenhuma pra tentar casar).
+ */
+export type OriginMatchResult =
+  | { status: "resolved"; origin: TelegramOrigin }
+  | { status: "ambiguous"; candidates: TelegramOrigin[] }
+  | { status: "none" };
+
 /** Um item do array `message.photo` do Telegram — do menor pro maior (thumb→full). */
 export type TelegramPhotoSize = { file_id: string; width: number; height: number };
 

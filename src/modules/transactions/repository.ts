@@ -258,7 +258,12 @@ async function findMostRecentByDescription(
   description: string,
 ): Promise<(Transaction & { category: Category | null }) | null> {
   return prisma.transaction.findFirst({
-    where: { userId, description, categoryId: { not: null }, deletedAt: null },
+    where: {
+      userId,
+      description: { equals: description, mode: "insensitive" },
+      categoryId: { not: null },
+      deletedAt: null,
+    },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     include: { category: true },
   });

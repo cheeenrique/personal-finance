@@ -2,10 +2,17 @@ import { CategoryType } from "@/generated/prisma/enums";
 import { categoryService } from "@/modules/categories/service";
 import { accountService } from "@/modules/accounts/service";
 import { cardService } from "@/modules/cards/service";
+import { transactionService } from "@/modules/transactions/service";
 import type { Category, CategoryTreeNode } from "@/modules/categories/types";
 import { normalizeWord } from "./normalize";
 import { FallbackCategoryMissingError, NoActiveAccountError } from "./errors";
-import type { TelegramOrigin, TelegramOriginKind, TelegramPaymentMethod, TelegramTransactionType } from "./types";
+import type {
+  OriginMatchResult,
+  TelegramOrigin,
+  TelegramOriginKind,
+  TelegramPaymentMethod,
+  TelegramTransactionType,
+} from "./types";
 
 /**
  * Fallback fixo por tipo (docs/24-CATEGORIES.md + docs/30-TELEGRAM.md, Regra
@@ -64,14 +71,18 @@ function toDisplayCategory(match: Category, byId: Map<string, Category>): Catego
  * Resolve a categoria de uma transação criada via Telegram (docs/30-TELEGRAM.md,
  * Regra 2 + "Estrutura de Interpretação"): 1) palavra-chave explícita ou a
  * própria descrição batendo com nome de categoria (própria ou filha, com
- * rollup pro pai) já existente do usuário; 2) fallback fixo
- * "Outros"/"Outros (Receita)" quando ambíguo ou nada reconhecido — nunca
- * fica sem categoria.
+ * rollup pro pai) já existente do usuário; 2) HISTÓRICO — categoria da
+ * transação mais recente com essa MESMA descrição (`transactionService.
+ * lastCategoryForDescription`, reusado do módulo transactions — mesma função
+ * do autocomplete de Descrição, sem reimplementar); 3) fallback fixo
+ * "Outros"/"Outros (Receita)" quando nada bate nem no histórico — nunca fica
+ * sem categoria.
  */
 export async function resolveCategoryId(
   userId: string,
   type: TelegramTransactionType,
   keywordCandidates: string[],
+  description: string,
 ): Promise<{ id: string; name: string }> {
   const expectedType = type === "INCOME" ? CategoryType.INCOME : CategoryType.EXPENSE;
   const tree = await categoryService.listTree(userId);
@@ -81,6 +92,12 @@ export async function resolveCategoryId(
   const keywordMatch = matchByKeyword(keywordCandidates, categories);
   if (keywordMatch) {
     const display = toDisplayCategory(keywordMatch, byId);
+    return { id: display.id, name: display.name };
+  }
+
+  const historyCategory = await transactionService.lastCategoryForDescription(userId, description);
+  if (historyCategory && historyCategory.type === expectedType) {
+    const display = toDisplayCategory(historyCategory, byId);
     return { id: display.id, name: display.name };
   }
 
@@ -97,13 +114,15 @@ export async function resolveCategoryId(
  * parser regex, que casa uma palavra isolada contra PARTES do nome, porque
  * ali as candidatas são palavras soltas da mensagem, não o nome completo
  * escolhido pela IA a partir da lista real). Sem match exato → cai no
- * `resolveCategoryId` existente (mesmo fallback "Outros"/"Outros (Receita)",
- * sem duplicar essa regra).
+ * `resolveCategoryId` existente (keyword → histórico → fallback
+ * "Outros"/"Outros (Receita)", sem duplicar essa regra) — cobre tanto o
+ * lançamento por texto quanto por foto (ambos passam por aqui, `draft.ts`).
  */
 export async function resolveCategoryByName(
   userId: string,
   type: TelegramTransactionType,
   categoryName: string | null,
+  description: string,
   fallbackKeywordCandidates: string[],
 ): Promise<{ id: string; name: string }> {
   if (categoryName) {
@@ -120,7 +139,7 @@ export async function resolveCategoryByName(
     }
   }
 
-  return resolveCategoryId(userId, type, fallbackKeywordCandidates);
+  return resolveCategoryId(userId, type, fallbackKeywordCandidates, description);
 }
 
 /** Conta ATIVA mais antiga (1ª criada) do usuário — origem default quando nada mais resolve. */
@@ -188,38 +207,140 @@ export function expectedOriginKind(paymentMethod: TelegramPaymentMethod | null):
 }
 
 /**
+ * Palavras de método/canal + preposições de ligação (docs/30-TELEGRAM.md, bug
+ * fix "origem faz loop"): removidas do texto citado ANTES de casar contra
+ * conta/cartão real — sem isso, "Crédito Nubank" nunca bate com nenhum nome
+ * de cartão cadastrado (o núcleo real é só "Nubank"). Aplicada igualmente ao
+ * NOME real da conta/cartão (via `originMatchCore` abaixo), então o núcleo
+ * comparado é sempre "o nome, sem ruído de canal/ligação" dos dois lados.
+ */
+const ORIGIN_NOISE_WORDS = new Set([
+  "credito",
+  "cartao",
+  "debito",
+  "pix",
+  "conta",
+  "transferencia",
+  "na",
+  "no",
+  "da",
+  "do",
+  "de",
+]);
+
+/**
+ * Núcleo comparável de um texto de origem: `normalizeWord` (acento/caixa) +
+ * despontuação ("Nubank - MEI" → "nubank mei", pra não depender de o usuário
+ * repetir o traço do nome cadastrado) + remoção de `ORIGIN_NOISE_WORDS` por
+ * TOKEN (nunca substring solta — "pixel" não perde nada por conter "pix").
+ * String vazia quando o texto era só ruído (ex.: "crédito" sozinho) — sinal
+ * pro chamador não tentar casar nada.
+ */
+function originMatchCore(value: string): string {
+  const flattened = normalizeWord(value)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  if (!flattened) return "";
+
+  return flattened
+    .split(/\s+/)
+    .filter((token) => !ORIGIN_NOISE_WORDS.has(token))
+    .join(" ");
+}
+
+/** Candidato de origem (conta ou cartão ATIVO) já com o núcleo comparável calculado — insumo de `findOriginMatches`. */
+type OriginCandidate = { origin: TelegramOrigin; core: string };
+
+async function activeOriginCandidates(
+  userId: string,
+  wantKind: TelegramOriginKind | null,
+): Promise<OriginCandidate[]> {
+  const candidates: OriginCandidate[] = [];
+
+  if (wantKind === "card" || wantKind === null) {
+    const cards = await cardService.listCards(userId);
+    for (const card of cards) {
+      if (!card.isActive) continue;
+      candidates.push({
+        origin: { kind: "card", id: card.id, label: `Cartão ${card.name}` },
+        core: originMatchCore(card.name),
+      });
+    }
+  }
+
+  if (wantKind === "account" || wantKind === null) {
+    const accounts = await accountService.listWithBalances(userId);
+    for (const account of accounts) {
+      if (!account.isActive) continue;
+      candidates.push({
+        origin: { kind: "account", id: account.id, label: `Conta ${account.name}` },
+        core: originMatchCore(account.name),
+      });
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * Casa o núcleo citado (já sem ruído, `originMatchCore`) contra as contas/
+ * cartões ATIVOS do tipo esperado. Match EXATO tem prioridade sobre o
+ * CONTÉM (docs/30-TELEGRAM.md: "se o usuário digitar o nome cheio, resolve
+ * direto") — só cai pro contém (bidirecional: candidato contém o núcleo OU
+ * núcleo contém o candidato) quando nenhum exato bateu. 0 resultados = nada
+ * bateu; 2+ = ambíguo (`resolveOriginStrict` decide o que fazer com cada
+ * caso).
+ */
+async function findOriginMatches(
+  userId: string,
+  wantKind: TelegramOriginKind | null,
+  core: string,
+): Promise<TelegramOrigin[]> {
+  const candidates = await activeOriginCandidates(userId, wantKind);
+
+  const exact = candidates.filter((candidate) => candidate.core === core);
+  const pool =
+    exact.length > 0
+      ? exact
+      : candidates.filter((candidate) => candidate.core.includes(core) || core.includes(candidate.core));
+
+  return pool.map((candidate) => candidate.origin);
+}
+
+/**
  * Resolve a origem pro fluxo de IA v2 (docs/30-TELEGRAM.md, "Fluxo
  * conversacional") — DIFERENTE de `resolveOrigin` acima (usado pelo parser
  * regex/fallback determinístico): aqui NÃO existe fallback pra conta default.
- * Sem `originName` ou sem match real (respeitando o tipo esperado pelo
- * `paymentMethod`, via `expectedOriginKind`) → `null`, sinal pro chamador
- * (`draft.ts`) entrar no fluxo de pergunta em vez de assumir uma origem que o
- * usuário nunca confirmou.
+ * Fonte ÚNICA de matching de origem por texto livre (docs/30-TELEGRAM.md, bug
+ * fix): tanto o `originName` já vindo da IA quanto o texto de uma resposta de
+ * pending (`pending-merge.ts` só extrai o texto bruto, não casa contra o
+ * banco — DRY, evita duplicar essa lógica em 2 lugares) passam por aqui.
+ *
+ * Sem `originName`/núcleo (`originMatchCore`) → `{ status: "none" }`. Com
+ * núcleo, casa (`findOriginMatches`, respeitando o tipo esperado via
+ * `expectedOriginKind`) contra contas/cartões ATIVOS: 1 resultado →
+ * `"resolved"`; 2+ (ex.: "Nubank" batendo em "Nubank - Pessoal" E "Nubank -
+ * MEI") → `"ambiguous"` — o chamador (`draft.ts`) pergunta qual, listando os
+ * candidatos, em vez do genérico "De onde saiu?"; 0 → `"none"`, mesmo sinal
+ * de sempre pro fluxo de pergunta.
  */
 export async function resolveOriginStrict(
   userId: string,
   paymentMethod: TelegramPaymentMethod | null,
   originKind: TelegramOriginKind | null,
   originName: string | null,
-): Promise<TelegramOrigin | null> {
-  if (!originName) return null;
+): Promise<OriginMatchResult> {
+  if (!originName) return { status: "none" };
 
-  const normalizedTarget = normalizeWord(originName);
+  const core = originMatchCore(originName);
+  if (!core) return { status: "none" };
+
   const wantKind = expectedOriginKind(paymentMethod) ?? originKind;
+  const matches = await findOriginMatches(userId, wantKind, core);
 
-  if (wantKind === "card" || wantKind === null) {
-    const cards = await cardService.listCards(userId);
-    const match = cards.find((card) => card.isActive && normalizeWord(card.name) === normalizedTarget);
-    if (match) return { kind: "card", id: match.id, label: `Cartão ${match.name}` };
-  }
-
-  if (wantKind === "account" || wantKind === null) {
-    const accounts = await accountService.listWithBalances(userId);
-    const match = accounts.find((account) => account.isActive && normalizeWord(account.name) === normalizedTarget);
-    if (match) return { kind: "account", id: match.id, label: `Conta ${match.name}` };
-  }
-
-  return null;
+  if (matches.length === 0) return { status: "none" };
+  if (matches.length === 1) return { status: "resolved", origin: matches[0] };
+  return { status: "ambiguous", candidates: matches };
 }
 
 /** Nomes das categorias (ambos os tipos) do usuário — insumo do prompt da IA pra escolher a categoria mais próxima. */
