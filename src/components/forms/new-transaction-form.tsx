@@ -5,17 +5,18 @@ import { Loader2, TrendingDown, TrendingUp } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { CurrencyInput } from "@/components/forms/currency-input";
 import { DateField } from "@/components/forms/date-field";
+import { DescriptionAutocomplete } from "@/components/forms/description-autocomplete";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
 import { FormField } from "@/components/forms/form-field";
 import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
 import { useShell } from "@/components/providers/shell-provider";
-import { createTransactionAction } from "@/modules/transactions/actions";
+import { createTransactionAction, getLastCategoryByDescriptionAction } from "@/modules/transactions/actions";
 import { listAccountOptionsAction, listCardOptionsAction } from "@/components/shared/entity-options-actions";
 import { listCategoryTreeAction } from "@/modules/categories/actions";
 import type { CategoryTreeNode } from "@/modules/categories/types";
@@ -33,6 +34,16 @@ type OriginValue = `account:${string}` | `card:${string}`;
 
 function lastCategoryStorageKey(type: TransactionType) {
   return `pf:last-category:${type}`;
+}
+
+/**
+ * `YYYY-MM-DD` é comparável lexicograficamente — mesma regra determinística
+ * de `isPaid` usada no Telegram (docs/30-TELEGRAM.md: "data resolvida > hoje
+ * (America/Sao_Paulo) = previsto"), aqui aplicada no default do toggle
+ * "Já paga" em vez de decidida no servidor.
+ */
+function isFutureDate(dateStr: string): boolean {
+  return dateStr > toDateInputValueSaoPaulo();
 }
 
 function flattenCategories(nodes: CategoryTreeNode[], depth = 0): EntitySelectOption[] {
@@ -65,6 +76,11 @@ export function NewTransactionForm() {
   const [origin, setOrigin] = useState<OriginValue | undefined>(undefined);
   const [date, setDate] = useState(toDateInputValueSaoPaulo());
   const [notes, setNotes] = useState("");
+  const [isPaid, setIsPaid] = useState(true);
+  // `true` assim que o usuário mexe manualmente no toggle — a partir daí o
+  // default automático (data futura → previsto) para de sobrescrever a
+  // escolha explícita dele, mesmo que a data mude de novo.
+  const [isPaidTouched, setIsPaidTouched] = useState(false);
 
   const [categories, setCategories] = useState<CategoryTreeNode[]>([]);
   const [originOptions, setOriginOptions] = useState<EntitySelectOption[]>([]);
@@ -92,7 +108,23 @@ export function NewTransactionForm() {
           ? undefined
           : (window.localStorage.getItem(lastCategoryStorageKey(initialType)) ?? undefined),
       );
+      setIsPaidTouched(false);
+      setIsPaid(!isFutureDate(date));
     }
+  }
+
+  /**
+   * Default do toggle "Já paga" reage a MUDANÇAS de data (mesmo padrão de
+   * sync render-time acima) — nunca sobrescreve uma escolha manual já feita
+   * (`isPaidTouched`). Data futura entra desligado (previsto/a pagar); ao
+   * voltar pra hoje/passado, volta ligado (pago) — regra determinística de
+   * `isPaid` (docs/30-TELEGRAM.md), aplicada aqui no default da UI em vez de
+   * decidida no servidor.
+   */
+  const [lastDateForIsPaid, setLastDateForIsPaid] = useState(date);
+  if (date !== lastDateForIsPaid) {
+    setLastDateForIsPaid(date);
+    if (!isPaidTouched) setIsPaid(!isFutureDate(date));
   }
 
   // Busca categorias/contas/cartões (Server Actions) só quando o modal abre —
@@ -141,6 +173,22 @@ export function NewTransactionForm() {
     setOrigin(undefined);
     setNotes("");
     setDate(toDateInputValueSaoPaulo());
+    setIsPaid(true);
+    setIsPaidTouched(false);
+  }
+
+  /**
+   * Bônus do autocomplete de Descrição (docs/20-TRANSACTIONS.md): ao escolher
+   * uma sugestão, pré-preenche a categoria com a da transação mais recente
+   * com essa descrição — só se ela bater com o tipo atual (Receita/Despesa),
+   * pra nunca aplicar uma categoria do tipo errado por baixo do tabs ativo.
+   */
+  async function handleSelectDescriptionSuggestion(selectedDescription: string) {
+    const result = await getLastCategoryByDescriptionAction(selectedDescription);
+    if (result.success && result.data && result.data.type === categoryType) {
+      setCategoryId(result.data.id);
+      clearFieldError("categoryId");
+    }
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -167,6 +215,7 @@ export function NewTransactionForm() {
         cardId: originKind === "card" ? originId : undefined,
         date,
         notes: notes.trim() || undefined,
+        isPaid,
       });
 
       if (!result.success) {
@@ -229,13 +278,14 @@ export function NewTransactionForm() {
         </FormField>
 
         <FormField label="Descrição" htmlFor="tx-description" required error={fieldErrors.description}>
-          <Input
+          <DescriptionAutocomplete
             id="tx-description"
             value={description}
-            onChange={(event) => {
-              setDescription(event.target.value);
+            onValueChange={(value) => {
+              setDescription(value);
               clearFieldError("description");
             }}
+            onSelectSuggestion={handleSelectDescriptionSuggestion}
             placeholder="Ex.: Mercado, Salário…"
             aria-invalid={Boolean(fieldErrors.description)}
             disabled={isPending}
@@ -284,6 +334,26 @@ export function NewTransactionForm() {
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             placeholder="Detalhes adicionais…"
+            disabled={isPending}
+          />
+        </div>
+
+        <div className="flex items-center justify-between rounded-[10px] border border-border px-3 py-2.5">
+          <div>
+            <Label htmlFor="tx-ispaid">Já paga</Label>
+            <p className="text-[12px] font-medium text-muted-foreground">
+              {isFutureDate(date)
+                ? "Data futura entra como previsto (a pagar)."
+                : "Desative se ainda não foi paga — ela entra como previsto/a pagar."}
+            </p>
+          </div>
+          <Switch
+            id="tx-ispaid"
+            checked={isPaid}
+            onCheckedChange={(checked) => {
+              setIsPaid(checked);
+              setIsPaidTouched(true);
+            }}
             disabled={isPending}
           />
         </div>

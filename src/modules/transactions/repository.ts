@@ -226,6 +226,42 @@ async function findMostRecentByType(
 }
 
 /**
+ * Descrições DISTINTAS do usuário que combinam com `query` (`contains`,
+ * case-insensitive) — insumo do autocomplete do campo Descrição (docs/
+ * 20-TRANSACTIONS.md). `groupBy` rankeia direto no banco por frequência
+ * (`_count` desc) e recência (`_max(date)` desc) — sem dedupe/rank em memória.
+ */
+async function findDescriptionSuggestions(userId: string, query: string, limit: number): Promise<string[]> {
+  const grouped = await prisma.transaction.groupBy({
+    by: ["description"],
+    where: { userId, deletedAt: null, description: { contains: query, mode: "insensitive" } },
+    _count: { description: true },
+    _max: { date: true },
+    orderBy: [{ _count: { description: "desc" } }, { _max: { date: "desc" } }],
+    take: limit,
+  });
+
+  return grouped.map((row) => row.description);
+}
+
+/**
+ * Transação mais recente (por `date`, depois `createdAt`) com uma descrição
+ * EXATA — insumo do bônus "pré-preencher categoria" ao escolher uma sugestão
+ * do autocomplete de Descrição (mesma regra de `findMostRecentByType`, mas
+ * por descrição em vez de tipo).
+ */
+async function findMostRecentByDescription(
+  userId: string,
+  description: string,
+): Promise<(Transaction & { category: Category | null }) | null> {
+  return prisma.transaction.findFirst({
+    where: { userId, description, categoryId: { not: null }, deletedAt: null },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    include: { category: true },
+  });
+}
+
+/**
  * Soma de Transactions por tipo numa janela de datas — insumo dos KPIs
  * mensais (ver service.ts `monthlyExpenseTotal`/`monthlyIncomeTotal`/
  * `monthlyUnpaidExpenseTotal`). Exclui pernas de transferência
@@ -400,6 +436,8 @@ export const transactionRepository = {
   restore,
   list,
   findMostRecentByType,
+  findDescriptionSuggestions,
+  findMostRecentByDescription,
   sumAmountByTypeInRange,
   groupExpensesByCategoryInRange,
   findCategoryNamesByIds,

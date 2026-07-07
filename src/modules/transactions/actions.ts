@@ -215,3 +215,31 @@ export async function getLastUsedCategoryAction(
     return toActionError(error);
   }
 }
+
+/** Autocomplete do campo Descrição (ver `DescriptionAutocomplete`) — sugestões vindas das próprias transações do usuário. */
+export async function suggestDescriptionsAction(query: string): Promise<ActionResult<string[]>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  try {
+    const suggestions = await transactionService.suggestDescriptions(userId, query);
+    return { success: true, data: suggestions };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Bônus do autocomplete de Descrição — categoria da transação mais recente com a mesma descrição. */
+export async function getLastCategoryByDescriptionAction(
+  description: string,
+): Promise<ActionResult<Category | null>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  try {
+    const category = await transactionService.lastCategoryForDescription(userId, description);
+    return { success: true, data: category };
+  } catch (error) {
+    return toActionError(error);
+  }
+}

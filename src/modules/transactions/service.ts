@@ -188,6 +188,33 @@ async function lastUsedCategory(
   return lastTransaction?.category ?? null;
 }
 
+const SUGGESTION_MIN_QUERY_LENGTH = 2;
+const SUGGESTION_LIMIT = 8;
+const SUGGESTION_MAX_QUERY_LENGTH = 255;
+
+/**
+ * Autocomplete do campo Descrição — descrições anteriores do próprio usuário
+ * que combinam com `query` (docs/20-TRANSACTIONS.md). Ignora buscas curtas
+ * demais (ruído, sem poder discriminatório).
+ */
+async function suggestDescriptions(userId: string, query: string): Promise<string[]> {
+  const trimmed = query.trim().slice(0, SUGGESTION_MAX_QUERY_LENGTH);
+  if (trimmed.length < SUGGESTION_MIN_QUERY_LENGTH) return [];
+  return transactionRepository.findDescriptionSuggestions(userId, trimmed, SUGGESTION_LIMIT);
+}
+
+/**
+ * Categoria da transação mais recente com essa descrição EXATA — bônus do
+ * autocomplete de Descrição: ao escolher uma sugestão, pré-preenche a
+ * categoria em vez de deixar o campo vazio de novo.
+ */
+async function lastCategoryForDescription(userId: string, description: string): Promise<Category | null> {
+  const trimmed = description.trim();
+  if (!trimmed) return null;
+  const lastTransaction = await transactionRepository.findMostRecentByDescription(userId, trimmed);
+  return lastTransaction?.category ?? null;
+}
+
 /**
  * Janela do mês em America/Sao_Paulo, convertida para o instante UTC correto
  * — construção via `new Date(y, m, d, ...)` (getters locais) é o formato que
@@ -346,6 +373,8 @@ export const transactionService = {
   getTransaction,
   list,
   lastUsedCategory,
+  suggestDescriptions,
+  lastCategoryForDescription,
   monthlyExpenseTotal,
   monthlyIncomeTotal,
   monthlyUnpaidExpenseTotal,
