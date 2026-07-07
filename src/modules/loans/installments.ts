@@ -1,0 +1,131 @@
+import { addMonths } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import { prisma } from "@/lib/db/client";
+import { TransactionType } from "@/generated/prisma/enums";
+import { parseInSaoPaulo, TIMEZONE } from "@/lib/date/timezone";
+import { assertAccountOwnership, assertCategoryOwnership } from "./service";
+import { LoanInstallmentMismatchError } from "./errors";
+import type { CreateLoanInput } from "./schemas";
+import type { CreateLoanResult } from "./types";
+
+/**
+ * Converte "123.45" em 12345 (centavos), sem passar por float — evita erro de
+ * arredondamento. Duplicado de `transactions/installments.ts` (2ª ocorrência,
+ * aceitável — rule 02-dry-kiss-yagni, "3 ocorrências = extrair"); extrair pra
+ * `lib/money/` se um 3º consumidor aparecer.
+ */
+function decimalToCents(amount: string): number {
+  const [integerPart, decimalPart = ""] = amount.split(".");
+  const cents = (decimalPart + "00").slice(0, 2);
+  const sign = integerPart.startsWith("-") ? -1 : 1;
+  return sign * (Number(integerPart.replace("-", "")) * 100 + Number(cents));
+}
+
+function centsToDecimal(cents: number): string {
+  const sign = cents < 0 ? "-" : "";
+  const absoluteCents = Math.abs(cents);
+  const integerPart = Math.floor(absoluteCents / 100);
+  const decimalPart = String(absoluteCents % 100).padStart(2, "0");
+  return `${sign}${integerPart}.${decimalPart}`;
+}
+
+/**
+ * Rateio do empréstimo — diferente do rateio de compra parcelada de cartão
+ * (`transactions/installments.ts` `splitInstallmentAmounts`, onde o valor da
+ * parcela é DERIVADO de `totalAmount/count`): aqui `installmentAmount` já vem
+ * do contrato do empréstimo. As N-1 primeiras parcelas usam esse valor cheio;
+ * a ÚLTIMA absorve o resíduo (`totalToPay - installmentAmount*(N-1)`) pra
+ * soma bater exatamente com `totalToPay`. Resíduo <= 0 indica
+ * `installmentAmount` incompatível com `totalToPay`/`installmentsCount`
+ * informados — dados de contrato inconsistentes.
+ */
+function splitLoanInstallmentAmounts(
+  totalToPay: string,
+  installmentAmount: string,
+  installmentsCount: number,
+): string[] {
+  const totalCents = decimalToCents(totalToPay);
+  const baseCents = decimalToCents(installmentAmount);
+  const lastCents = totalCents - baseCents * (installmentsCount - 1);
+
+  if (lastCents <= 0) {
+    throw new LoanInstallmentMismatchError({ totalToPay, installmentAmount, installmentsCount });
+  }
+
+  return Array.from({ length: installmentsCount }, (_, index) =>
+    centsToDecimal(index === installmentsCount - 1 ? lastCents : baseCents),
+  );
+}
+
+/**
+ * Vencimento de cada parcela = `firstDueDate` + (n-1) meses, respeitando o
+ * calendário de America/Sao_Paulo — mesma lógica de
+ * `transactions/installments.ts` `installmentDueDate` (ver JSDoc lá para o
+ * detalhe de por que `toZonedTime`/`parseInSaoPaulo` em vez de UTC puro).
+ */
+function installmentDueDate(firstDueDate: Date, installmentNumber: number): Date {
+  const zonedFirstDueDate = toZonedTime(firstDueDate, TIMEZONE);
+  const zonedDueDate = addMonths(zonedFirstDueDate, installmentNumber - 1);
+  return parseInSaoPaulo(zonedDueDate);
+}
+
+/**
+ * Cria o Loan + as N Transactions (parcelas) atomicamente — mesmo padrão de
+ * `transactions/installments.ts` `createInstallmentPurchase`, mas na CONTA
+ * (não cartão) e com parcela nascendo `isPaid=false` (PREVISTO). Diferente da
+ * compra no cartão (parcela já nasce confirmada, `isPaid=true`, "paga" =
+ * `date <= hoje`), a parcela do empréstimo entra em "Previsto / A Pagar"
+ * (docs/11-DASHBOARD.md) até o usuário marcar como paga manualmente (mesmo
+ * fluxo de qualquer EXPENSE de conta) — refletido no progresso derivado por
+ * `isPaid` real, não por data (ver service.ts `deriveLoanProgress`).
+ *
+ * Escritas sequenciais dentro do `$transaction` interativo — Prisma não
+ * garante segurança de queries concorrentes no mesmo client de transação.
+ */
+export async function createLoan(userId: string, input: CreateLoanInput): Promise<CreateLoanResult> {
+  await assertAccountOwnership(userId, input.accountId);
+  if (input.categoryId) await assertCategoryOwnership(userId, input.categoryId);
+
+  const categoryId = input.categoryId ?? null;
+  const amounts = splitLoanInstallmentAmounts(input.totalToPay, input.installmentAmount, input.installmentsCount);
+
+  return prisma.$transaction(async (tx) => {
+    const loan = await tx.loan.create({
+      data: {
+        userId,
+        description: input.description,
+        lender: input.lender ?? null,
+        principal: input.principal,
+        totalToPay: input.totalToPay,
+        installmentsCount: input.installmentsCount,
+        installmentAmount: input.installmentAmount,
+        firstDueDate: input.firstDueDate,
+        accountId: input.accountId,
+        categoryId,
+      },
+    });
+
+    const transactions = [];
+    for (let index = 0; index < input.installmentsCount; index += 1) {
+      const installmentNumber = index + 1;
+      const description = `${input.description} - parcela ${installmentNumber}/${input.installmentsCount}`;
+      // eslint-disable-next-line no-await-in-loop -- sequencial de propósito, ver JSDoc acima
+      const transaction = await tx.transaction.create({
+        data: {
+          userId,
+          description,
+          type: TransactionType.EXPENSE,
+          amount: amounts[index],
+          accountId: input.accountId,
+          categoryId,
+          date: installmentDueDate(input.firstDueDate, installmentNumber),
+          isPaid: false,
+          loanId: loan.id,
+        },
+      });
+      transactions.push(transaction);
+    }
+
+    return { loan, transactions };
+  });
+}

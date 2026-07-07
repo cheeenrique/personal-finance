@@ -99,6 +99,7 @@ model User {
   budgets               Budget[]
   assets                Asset[]
   installmentPurchases  InstallmentPurchase[]
+  loans                 Loan[]
   recurringTransactions RecurringTransaction[]
   alerts                Alert[]
   settings              UserSettings?
@@ -125,6 +126,7 @@ model Account {
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions          Transaction[]
   recurringTransactions RecurringTransaction[]
+  loans                 Loan[]
 
   @@index([userId])
 }
@@ -246,6 +248,7 @@ model Category {
   transactions          Transaction[]
   budgets               Budget[]
   recurringTransactions RecurringTransaction[]
+  loans                 Loan[]
 
   @@index([userId, parentId])
 }
@@ -308,6 +311,13 @@ model Transaction {
   installmentPurchaseId String?
   installmentNumber     Int?
 
+  // Parcela de empréstimo (docs/03-DATABASE.md, model Loan) — análogo a
+  // `installmentPurchaseId`, mas na CONTA (não cartão) e sem
+  // `installmentNumber` próprio (o número da parcela vive só na
+  // `description`, ex. "Maternidade - parcela 3/12"; ver
+  // `modules/loans/installments.ts`).
+  loanId String?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -317,6 +327,7 @@ model Transaction {
   account             Account?             @relation(fields: [accountId], references: [id], onDelete: Restrict)
   card                Card?                @relation(fields: [cardId], references: [id], onDelete: Restrict)
   installmentPurchase InstallmentPurchase? @relation(fields: [installmentPurchaseId], references: [id], onDelete: Restrict)
+  loan                Loan?                @relation(fields: [loanId], references: [id], onDelete: Restrict)
   transactionTags     TransactionTag[]
 
   @@index([userId, date])
@@ -325,6 +336,7 @@ model Transaction {
   @@index([categoryId])
   @@index([transferId])
   @@index([installmentPurchaseId])
+  @@index([loanId])
 }
 
 // ---------------------------------------------------------------------------
@@ -408,6 +420,43 @@ model InstallmentPurchase {
 
   @@index([userId])
   @@index([cardId])
+}
+
+// ---------------------------------------------------------------------------
+// Loan
+// ---------------------------------------------------------------------------
+
+// Empréstimo (docs/03-DATABASE.md) — análogo a `InstallmentPurchase`, mas na
+// CONTA (não cartão) e com principal + juros. `totalToPay` inclui os juros;
+// `totalToPay - principal` é o custo do empréstimo (derivado, sem coluna
+// própria — mesmo princípio de "Regra de Ouro" do banco: nada denormalizado
+// que dá pra calcular). Cada parcela nasce como `Transaction`
+// (`type=EXPENSE`, `loanId` preenchido, `isPaid=false` — PREVISTO, diferente
+// da parcela de cartão que já nasce paga) — ver `modules/loans/`.
+model Loan {
+  id                String    @id @default(cuid())
+  userId            String
+  description       String
+  lender            String?
+  principal         Decimal   @db.Decimal(12, 2)
+  totalToPay        Decimal   @db.Decimal(12, 2)
+  installmentsCount Int
+  installmentAmount Decimal   @db.Decimal(12, 2)
+  firstDueDate      DateTime
+  accountId         String
+  categoryId        String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account      Account       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([categoryId])
 }
 
 // ---------------------------------------------------------------------------
