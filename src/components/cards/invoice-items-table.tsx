@@ -2,14 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Receipt, Trash2 } from "lucide-react";
+import { Receipt } from "lucide-react";
 
 import { DataTable } from "@/components/tables/data-table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { IconActionButton } from "@/components/shared/icon-action-button";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { buildTransactionColumns } from "@/components/transactions/transaction-columns";
 import { EditTransactionModal } from "@/components/transactions/edit-transaction-modal";
+import { TransactionDetailModal } from "@/components/transactions/transaction-detail-modal";
+import { TransactionRowActions } from "@/components/transactions/transaction-row-actions";
 import { useTransactionsReferenceData } from "@/components/transactions/use-transactions-reference-data";
 import { useTransactionMutations } from "@/components/transactions/use-transaction-mutations";
 import type { ClientTransaction } from "@/modules/transactions/types";
@@ -81,6 +82,7 @@ export function InvoiceItemsTable({ cardId, periodStart, periodEnd }: InvoiceIte
   const mutations = useTransactionMutations(reloadAll);
 
   const [editing, setEditing] = useState<ClientTransaction | null>(null);
+  const [viewing, setViewing] = useState<ClientTransaction | null>(null);
   const [deleting, setDeleting] = useState<ClientTransaction | null>(null);
 
   const columns = useMemo(
@@ -119,10 +121,13 @@ export function InvoiceItemsTable({ cardId, periodStart, periodEnd }: InvoiceIte
           />
         }
         rowActions={(row) => (
-          <>
-            <IconActionButton icon={Pencil} label="Editar" onClick={() => setEditing(row)} />
-            <IconActionButton icon={Trash2} tone="danger" label="Excluir" onClick={() => setDeleting(row)} />
-          </>
+          <TransactionRowActions
+            row={row}
+            onView={() => setViewing(row)}
+            onMarkPaid={() => void mutations.markPaid(row)}
+            onEdit={() => setEditing(row)}
+            onDelete={() => setDeleting(row)}
+          />
         )}
         pagination={{ page: page.page, pageSize: page.pageSize, total: page.total, onPageChange: setCurrentPage }}
       />
@@ -137,6 +142,15 @@ export function InvoiceItemsTable({ cardId, periodStart, periodEnd }: InvoiceIte
           setEditing(null);
           reloadAll();
         }}
+      />
+
+      <TransactionDetailModal
+        transaction={viewing}
+        onOpenChange={(open) => {
+          if (!open) setViewing(null);
+        }}
+        referenceData={referenceData}
+        installmentTotals={installmentTotals}
       />
 
       <ConfirmDialog

@@ -18,6 +18,7 @@ import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
 import { TagMultiSelect } from "./tag-multi-select";
 import { invalidateAllTransactionLists } from "./transaction-query-keys";
+import { isCardTransaction } from "./use-transaction-mutations";
 import type { TransactionsReferenceData } from "./use-transactions-reference-data";
 import { updateTransactionAction } from "@/modules/transactions/actions";
 import type { ClientTransaction } from "@/modules/transactions/types";
@@ -51,6 +52,8 @@ type EditTransactionModalProps = {
 export function EditTransactionModal({ transaction, onOpenChange, referenceData, onSaved }: EditTransactionModalProps) {
   const queryClient = useQueryClient();
   const isCardPayment = transaction?.type === TransactionType.CARD_PAYMENT;
+  /** Cartão não tem o switch "já paga" — cobrança é confirmada na compra, quem paga é a fatura (ver JSDoc de `isCardTransaction`, decisão confirmada pelo dono do produto). */
+  const hideIsPaidToggle = Boolean(transaction && isCardTransaction(transaction));
 
   const [type, setType] = useState<EditableType>(TransactionType.EXPENSE);
   const [description, setDescription] = useState("");
@@ -251,15 +254,24 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
           />
         </div>
 
-        <div className="flex items-center justify-between rounded-[10px] border border-border px-3 py-2.5">
-          <div>
-            <Label htmlFor="edit-tx-ispaid">Já paga</Label>
+        {hideIsPaidToggle ? (
+          <div className="rounded-[10px] border border-border px-3 py-2.5">
+            <p className="text-sm font-bold text-foreground">Pago via fatura</p>
             <p className="text-[12px] font-medium text-muted-foreground">
-              Desative se ainda não foi paga — ela entra como previsto/a pagar.
+              Cobrança de cartão é sempre confirmada — o pagamento acontece no nível da fatura, não desta linha.
             </p>
           </div>
-          <Switch id="edit-tx-ispaid" checked={isPaid} onCheckedChange={setIsPaid} disabled={isPending} />
-        </div>
+        ) : (
+          <div className="flex items-center justify-between rounded-[10px] border border-border px-3 py-2.5">
+            <div>
+              <Label htmlFor="edit-tx-ispaid">Já paga</Label>
+              <p className="text-[12px] font-medium text-muted-foreground">
+                Desative se ainda não foi paga — ela entra como previsto/a pagar.
+              </p>
+            </div>
+            <Switch id="edit-tx-ispaid" checked={isPaid} onCheckedChange={setIsPaid} disabled={isPending} />
+          </div>
+        )}
 
         {formError && (
           <p role="alert" className="text-sm font-medium text-destructive">

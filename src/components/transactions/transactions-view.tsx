@@ -1,24 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeftRight, Layers3, Pencil, Receipt, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Layers3, Receipt } from "lucide-react";
 
 import { DataTable } from "@/components/tables/data-table";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { IconActionButton } from "@/components/shared/icon-action-button";
 import { useShell } from "@/components/providers/shell-provider";
 import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
 
 import { TransactionFiltersBar } from "./transaction-filters-bar";
 import { buildTransactionColumns } from "./transaction-columns";
 import { EditTransactionModal } from "./edit-transaction-modal";
+import { TransactionDetailModal } from "./transaction-detail-modal";
+import { TransactionRowActions } from "./transaction-row-actions";
 import { TransferFormModal } from "./transfer-form-modal";
 import { NewInstallmentModal } from "./new-installment-modal";
 import { useTransactionFilters } from "./use-transaction-filters";
 import { useTransactionsReferenceData } from "./use-transactions-reference-data";
 import { useTransactionsList } from "./use-transactions-list";
-import { isTransferLeg, useTransactionMutations } from "./use-transaction-mutations";
+import { useTransactionMutations } from "./use-transaction-mutations";
 import type { ClientTransaction } from "@/modules/transactions/types";
 
 /**
@@ -36,6 +37,7 @@ export function TransactionsView() {
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<ClientTransaction | null>(null);
+  const [viewing, setViewing] = useState<ClientTransaction | null>(null);
   const [deleting, setDeleting] = useState<ClientTransaction | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -127,7 +129,15 @@ export function TransactionsView() {
         sort={filters.state.sort}
         onSortChange={handleSortChange}
         selection={{ selectedIds, onChange: setSelectedIds }}
-        rowActions={(row) => <RowActions row={row} onEdit={() => setEditing(row)} onDelete={() => setDeleting(row)} />}
+        rowActions={(row) => (
+          <TransactionRowActions
+            row={row}
+            onView={() => setViewing(row)}
+            onMarkPaid={() => void mutations.markPaid(row)}
+            onEdit={() => setEditing(row)}
+            onDelete={() => setDeleting(row)}
+          />
+        )}
         bulkActions={() => (
           <>
             <Button
@@ -156,6 +166,15 @@ export function TransactionsView() {
           setEditing(null);
           reload();
         }}
+      />
+
+      <TransactionDetailModal
+        transaction={viewing}
+        onOpenChange={(open) => {
+          if (!open) setViewing(null);
+        }}
+        referenceData={referenceData}
+        installmentTotals={installmentTotals}
       />
 
       <TransferFormModal open={transferOpen} onOpenChange={setTransferOpen} referenceData={referenceData} onSaved={reload} />
@@ -190,32 +209,5 @@ export function TransactionsView() {
         }}
       />
     </div>
-  );
-}
-
-type RowActionsProps = { row: ClientTransaction; onEdit: () => void; onDelete: () => void };
-
-/** 28x28 icon-only (design/PERSONAL_FINANCE_LAYOUT_HANDOFF.md, "DataTable"). Desabilitado pra pernas de TRANSFER. */
-function RowActions({ row, onEdit, onDelete }: RowActionsProps) {
-  const disabled = isTransferLeg(row);
-
-  return (
-    <>
-      <IconActionButton
-        icon={Pencil}
-        label="Editar"
-        onClick={onEdit}
-        disabled={disabled}
-        disabledReason="Transferências não são editáveis aqui"
-      />
-      <IconActionButton
-        icon={Trash2}
-        tone="danger"
-        label="Excluir"
-        onClick={onDelete}
-        disabled={disabled}
-        disabledReason="Transferências não são excluídas aqui"
-      />
-    </>
   );
 }

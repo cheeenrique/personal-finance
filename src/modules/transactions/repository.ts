@@ -24,6 +24,8 @@ export type CreateTransactionData = {
 
 export type UpdateTransactionData = Partial<Omit<CreateTransactionData, "tagIds">> & {
   tagIds?: string[];
+  /** Derivado da transição de `isPaid` — sempre resolvido pelo service (`resolvePaidAtOnUpdate`), nunca repassado cru do caller. */
+  paidAt?: Date | null;
 };
 
 export type TransactionListFilter = {
@@ -123,6 +125,7 @@ async function update(
       ...(data.date !== undefined && { date: data.date }),
       ...(data.notes !== undefined && { notes: data.notes }),
       ...(data.isPaid !== undefined && { isPaid: data.isPaid }),
+      ...(data.paidAt !== undefined && { paidAt: data.paidAt }),
       ...(data.tagIds !== undefined && {
         transactionTags: { deleteMany: {}, create: data.tagIds.map((tagId) => ({ tagId })) },
       }),

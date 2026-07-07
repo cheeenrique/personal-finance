@@ -4,11 +4,11 @@ import type { MouseEvent } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-export type IconActionButtonTone = "default" | "danger";
+export type IconActionButtonTone = "default" | "danger" | "success";
 
 type IconActionButtonProps = {
   icon: LucideIcon;
-  /** `default` = hover azul/estrutural. `danger` = hover vermelho (ação destrutiva). */
+  /** `default` = hover azul/estrutural. `danger` = hover vermelho (ação destrutiva). `success` = hover verde (ação positiva, ex.: marcar como paga). */
   tone?: IconActionButtonTone;
   /** aria-label obrigatório — também vira o texto do Tooltip quando habilitado. */
   label: string;
@@ -21,6 +21,7 @@ type IconActionButtonProps = {
 const TONE_HOVER_CLASSES: Record<IconActionButtonTone, string> = {
   default: "hover:border-primary hover:text-primary",
   danger: "hover:border-destructive hover:text-destructive",
+  success: "hover:border-success hover:text-success",
 };
 
 /**

@@ -108,6 +108,43 @@ async function createTransaction(
   });
 }
 
+/**
+ * `paidAt` é derivado da TRANSIÇÃO de `isPaid` num update — nunca aceito cru
+ * do caller (docs/03-DATABASE.md, model Transaction). Centralizado aqui pra
+ * TODOS os caminhos que tocam `isPaid` via `updateTransaction` pegarem a
+ * MESMA regra: edição avulsa (`EditTransactionModal`), marcar paga por linha
+ * ou em massa (`useTransactionMutations.markPaid`/`bulkMarkPaid`) e marcar
+ * paga do empréstimo (`loan-detail-view.tsx`) — todos passam por
+ * `updateTransactionAction` → aqui, nenhum tem lógica própria.
+ *
+ * Compara `newIsPaid` contra o `isPaid` ATUAL (não só "newIsPaid é true") —
+ * `EditTransactionModal` sempre reenvia `isPaid` no payload (mesmo quando o
+ * usuário não tocou no switch), então "true resubmetido sobre um `true` que
+ * já existia" NÃO é uma transição e não pode setar `paidAt` de novo (senão
+ * qualquer edição de descrição/valor numa transação já paga sem `paidAt`
+ * — o caso comum de "compra normal" — geraria um `paidAt` falso na hora do
+ * PRIMEIRO edit incidental).
+ *
+ * Transação que já NASCE paga (`isPaid=true` na criação) não ganha `paidAt`
+ * na criação — sem uma transição pendente→paga pra capturar, não existe
+ * "quando foi paga" pra registrar. `paidAt` marca especificamente o momento
+ * em que uma PENDÊNCIA virou paga.
+ *
+ * - `isPaid` não veio no payload OU veio igual ao valor atual: não mexe em
+ *   `paidAt` (sem transição real).
+ * - `false → true`: `paidAt = now()`, só se ainda não tiver um valor
+ *   (idempotente — chamar de novo com o mesmo resultado não reseta a data).
+ * - `true → false`: limpa `paidAt` (volta a pendente, sem "pago em").
+ */
+function resolvePaidAtOnUpdate(
+  existing: { isPaid: boolean; paidAt: Date | null },
+  newIsPaid: boolean | undefined,
+): Date | null | undefined {
+  if (newIsPaid === undefined || newIsPaid === existing.isPaid) return undefined;
+  if (!newIsPaid) return null;
+  return existing.paidAt ?? new Date();
+}
+
 async function updateTransaction(
   userId: string,
   id: string,
@@ -128,6 +165,8 @@ async function updateTransaction(
   if (input.cardId) await assertCardOwnership(userId, input.cardId);
   if (input.tagIds && input.tagIds.length > 0) await assertTagsOwnership(userId, input.tagIds);
 
+  const paidAt = resolvePaidAtOnUpdate(existing, input.isPaid);
+
   const updated = await transactionRepository.update(userId, id, {
     ...(input.description !== undefined && { description: input.description }),
     ...(input.amount !== undefined && { amount: input.amount }),
@@ -138,6 +177,7 @@ async function updateTransaction(
     ...(input.date !== undefined && { date: input.date }),
     ...(input.notes !== undefined && { notes: input.notes }),
     ...(input.isPaid !== undefined && { isPaid: input.isPaid }),
+    ...(paidAt !== undefined && { paidAt }),
     ...(input.tagIds !== undefined && { tagIds: input.tagIds }),
   });
 

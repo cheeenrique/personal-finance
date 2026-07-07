@@ -306,6 +306,14 @@ model Transaction {
 
   isPaid Boolean @default(true)
 
+  // Momento em que `isPaid` virou `true` (docs/03-DATABASE.md) — setado só na
+  // transição pendente→paga (`modules/transactions/service.ts` `updateTransaction`),
+  // nunca na criação (transação que já nasce paga não tem uma transição pra
+  // capturar). Null em transação ainda pendente OU paga desde antes deste
+  // campo existir (dado legado) — a timeline de detalhe cai num fallback
+  // nesse segundo caso (ver `TransactionDetailModal`).
+  paidAt DateTime?
+
   transferId String?
 
   installmentPurchaseId String?

@@ -16,8 +16,12 @@ type ColumnDeps = {
   installmentTotals: Map<string, number>;
 };
 
-/** Cor + sinal do valor: transferência usa o tom próprio (`on-transfer`), nunca a cor de receita/despesa crua. */
-function amountAppearance(row: ClientTransaction): { className: string; sign: string } {
+/**
+ * Cor + sinal do valor: transferência usa o tom próprio (`on-transfer`), nunca
+ * a cor de receita/despesa crua. Exportado — reaproveitado por
+ * `TransactionDetailModal` (mesmo cálculo do valor grande no topo do modal).
+ */
+export function amountAppearance(row: ClientTransaction): { className: string; sign: string } {
   if (row.transferId) {
     return { className: "text-on-transfer", sign: row.type === TransactionType.INCOME ? "+" : "-" };
   }

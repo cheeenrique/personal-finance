@@ -17,6 +17,18 @@ export function isTransferLeg(row: { transferId: string | null }): boolean {
 }
 
 /**
+ * `cardId` preenchido = transação vinculada a cartão de crédito (compra,
+ * parcela ou pagamento de fatura) — o controle de "marcar como paga" por
+ * linha (botão + switch de `EditTransactionModal`) só existe pra transação
+ * de CONTA. Cobrança de cartão é confirmada na hora da compra; o pagamento
+ * real acontece no nível da FATURA (`payInvoiceAction`), não por transação
+ * individual — decisão confirmada pelo dono do produto.
+ */
+export function isCardTransaction(row: { cardId: string | null }): boolean {
+  return Boolean(row.cardId);
+}
+
+/**
  * Mutations da tabela de Transações (excluir com undo, ações em massa) —
  * extraído de `transactions-view.tsx` por tamanho de arquivo (rule
  * 05-naming-size). Toda mutation termina revalidando a listagem via
@@ -86,5 +98,24 @@ export function useTransactionMutations(onMutated: () => void) {
     onMutated();
   }
 
-  return { deleteOne, bulkDelete, bulkMarkPaid };
+  /**
+   * Ação de linha "Marcar como paga" (`TransactionRowActions`) — mesma regra
+   * de `bulkMarkPaid` + `isCardTransaction`: transação de cartão nunca é
+   * marcada paga por linha (ver JSDoc de `isCardTransaction`).
+   */
+  async function markPaid(row: ClientTransaction): Promise<void> {
+    if (isTransferLeg(row) || isCardTransaction(row) || row.isPaid) return;
+
+    const result = await updateTransactionAction(row.id, { isPaid: true });
+    if (!result.success) {
+      notifyError(result.error.message);
+      return;
+    }
+
+    invalidateAllTransactionLists(queryClient);
+    notifySuccess("Transação marcada como paga");
+    onMutated();
+  }
+
+  return { deleteOne, bulkDelete, bulkMarkPaid, markPaid };
 }
