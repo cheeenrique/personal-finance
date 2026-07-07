@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, TrendingDown, TrendingUp } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
@@ -16,6 +17,7 @@ import { FormField } from "@/components/forms/form-field";
 import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
 import { TagMultiSelect } from "./tag-multi-select";
+import { invalidateAllTransactionLists } from "./transaction-query-keys";
 import type { TransactionsReferenceData } from "./use-transactions-reference-data";
 import { updateTransactionAction } from "@/modules/transactions/actions";
 import type { ClientTransaction } from "@/modules/transactions/types";
@@ -47,6 +49,7 @@ type EditTransactionModalProps = {
  * no módulo `accounts/transfer.ts` ainda).
  */
 export function EditTransactionModal({ transaction, onOpenChange, referenceData, onSaved }: EditTransactionModalProps) {
+  const queryClient = useQueryClient();
   const isCardPayment = transaction?.type === TransactionType.CARD_PAYMENT;
 
   const [type, setType] = useState<EditableType>(TransactionType.EXPENSE);
@@ -125,6 +128,11 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
         return;
       }
 
+      // Este modal é reaproveitado em telas diferentes de onde a transação
+      // pode também listar (ex.: editar em `/transactions` uma linha que
+      // também aparece em `/accounts/[id]`) — invalida todas as listagens
+      // client-side, não só a da tela atual (`transaction-query-keys.ts`).
+      invalidateAllTransactionLists(queryClient);
       notifySuccess("Transação atualizada");
       onSaved();
     });

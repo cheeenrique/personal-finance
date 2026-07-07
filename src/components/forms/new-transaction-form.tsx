@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, TrendingDown, TrendingUp } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
@@ -16,6 +17,7 @@ import { FormField } from "@/components/forms/form-field";
 import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
 import { useShell } from "@/components/providers/shell-provider";
+import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
 import { createTransactionAction, getLastCategoryByDescriptionAction } from "@/modules/transactions/actions";
 import { listAccountOptionsAction, listCardOptionsAction } from "@/components/shared/entity-options-actions";
 import { listCategoryTreeAction } from "@/modules/categories/actions";
@@ -67,6 +69,7 @@ export function NewTransactionForm() {
     transactionModalDefaultCardId,
     closeTransactionModal,
   } = useShell();
+  const queryClient = useQueryClient();
 
   const initialType =
     transactionModalDefaultType === TransactionType.INCOME
@@ -235,6 +238,12 @@ export function NewTransactionForm() {
       if (categoryId) {
         window.localStorage.setItem(lastCategoryStorageKey(type), categoryId);
       }
+      // Modal global (abre de qualquer página, ver `useShell`) — não tem como
+      // saber qual tabela client-side está montada, então invalida todas
+      // (`transaction-query-keys.ts`). Sem isso a tabela só reflete a nova
+      // transação depois de um F5, mesmo com os KPIs/gráficos (RSC) já
+      // atualizados via `revalidatePath` da server action.
+      invalidateAllTransactionLists(queryClient);
       notifySuccess("Transação salva");
       resetForm();
       closeTransactionModal();
