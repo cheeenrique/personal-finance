@@ -34,10 +34,11 @@ function getPageNumbers(current: number, total: number): (number | "ellipsis")[]
 }
 
 /**
- * Paginação server-side — só usada em `/transactions` (única lista que
- * cresce sem limite, docs/04-DESIGN_SYSTEM.md, "Tabelas"). Rodapé fixo do
- * card da `DataTable`: "Mostrando N de M" à esquerda, Anterior/números/Próxima
- * à direita (design/Personal Finance App.dc.html, rodapé da tabela).
+ * Paginação server-side — usada em `/transactions` e no histórico de
+ * transações do detalhe de conta (docs/04-DESIGN_SYSTEM.md, "Tabelas").
+ * Rodapé fixo do card da `DataTable`: "Mostrando N de M" à esquerda,
+ * Anterior/números/Próxima à direita (design/Personal Finance App.dc.html,
+ * rodapé da tabela).
  */
 export function DataTablePagination({
   page,

@@ -32,11 +32,13 @@ type AccountTransactionsHistoryProps = { accountId: string };
  * Histórico de transações da conta (docs/06-SCREENS.md, "Contas": "reaproveita
  * `DataTable` filtrada por `accountId`") — mesmas colunas/visual/ações de
  * linha da tela `/transactions` (`buildTransactionColumns`, `DataTable`,
- * `EditTransactionModal`, `useTransactionMutations`), com filtro próprio
- * restrito a período (Mês atual/Mês passado/Personalizado) em vez do filtro
- * bar completo — os demais filtros de `docs/21-ACCOUNTS.md` ("categoria/tipo/
- * tag/valor") e o gráfico de entradas/saídas ficam para uma iteração futura
- * (ver "Improvement Suggestions" no resumo).
+ * `EditTransactionModal`, `useTransactionMutations`), incluindo a MESMA
+ * paginação server-side (page/pageSize via `listTransactionsAction`,
+ * `DataTablePagination`) — com filtro próprio restrito a período (Mês atual/
+ * Mês passado/Personalizado) em vez do filtro bar completo. Os demais filtros
+ * de `docs/21-ACCOUNTS.md` ("categoria/tipo/tag/valor") e o gráfico de
+ * entradas/saídas ficam para uma iteração futura (ver "Improvement
+ * Suggestions" no resumo).
  */
 export function AccountTransactionsHistory({ accountId }: AccountTransactionsHistoryProps) {
   const router = useRouter();
@@ -45,6 +47,19 @@ export function AccountTransactionsHistory({ accountId }: AccountTransactionsHis
 
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState>({ column: "date", direction: "desc" });
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Qualquer mudança de filtro (busca/período/ordenação) invalida a página
+  // atual — mesmo comportamento de `useTransactionFilters.replace` (`/transactions`),
+  // só que em estado local em vez de query string. Ajuste durante o render
+  // (padrão React "adjusting state when a prop changes"), não em `useEffect`
+  // — evita o cascading render que a lint `react-hooks/set-state-in-effect` acusa.
+  const filtersKey = `${search}|${periodFilter.range.dateFrom ?? ""}|${periodFilter.range.dateTo ?? ""}|${sort?.column ?? ""}|${sort?.direction ?? ""}`;
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
+    setCurrentPage(1);
+  }
 
   const { page, installmentTotals, loading, error, reload } = useAccountTransactionsList({
     accountId,
@@ -52,6 +67,7 @@ export function AccountTransactionsHistory({ accountId }: AccountTransactionsHis
     dateFrom: periodFilter.range.dateFrom,
     dateTo: periodFilter.range.dateTo,
     sort: sortStateToTransactionSort(sort),
+    page: currentPage,
   });
 
   /** Além de invalidar a listagem client-side, força o Server Component da página a refazer `accountService.listWithBalances` — o saldo (KPICard) é derivado das transactions, então editar/excluir aqui precisa refletir lá também. */
@@ -121,13 +137,8 @@ export function AccountTransactionsHistory({ accountId }: AccountTransactionsHis
             </Button>
           </>
         )}
+        pagination={{ page: page.page, pageSize: page.pageSize, total: page.total, onPageChange: setCurrentPage }}
       />
-
-      {page.total > page.items.length && (
-        <p className="text-center text-[12.5px] font-medium text-muted-foreground">
-          Mostrando {page.items.length} de {page.total} lançamentos deste período — refine o período pra ver os demais.
-        </p>
-      )}
 
       <EditTransactionModal
         transaction={editing}

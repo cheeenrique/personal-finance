@@ -51,7 +51,7 @@ type DataTableProps<T> = {
   };
   rowActions?: (row: T) => ReactNode;
   bulkActions?: (selectedIds: string[]) => ReactNode;
-  /** Paginação server-side — só ligar em `/transactions` (única lista sem limite, docs/04-DESIGN_SYSTEM.md). */
+  /** Paginação server-side — usada em `/transactions` e no histórico de transações do detalhe de conta (`AccountTransactionsHistory`), as duas listas sem limite de itens (docs/04-DESIGN_SYSTEM.md). */
   pagination?: PaginationState & { onPageChange: (page: number) => void };
   /**
    * Opt-in: estica a tabela pra altura disponível do container pai (que

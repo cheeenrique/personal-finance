@@ -6,16 +6,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getInstallmentTotalsAction, listTransactionsAction } from "@/modules/transactions/actions";
 import type { ClientTransaction, PaginatedResult, TransactionSort } from "@/modules/transactions/types";
 
-/**
- * Sem paginação server-side nesta tela (docs/04-DESIGN_SYSTEM.md, "Tabelas":
- * paginação real é exclusiva de `/transactions`) — busca até 100 lançamentos
- * do período selecionado de uma vez (máximo aceito por `listFilterSchema`).
- * Períodos maiores que isso mostram um aviso pra refinar (ver
- * `account-transactions-history.tsx`).
- */
-const ACCOUNT_HISTORY_PAGE_SIZE = 100;
+/** Mesma paginação server-side (page/pageSize) da tela `/transactions` (`use-transactions-list.ts`) — ver `listFilterSchema`. */
+const DEFAULT_PAGE_SIZE = 20;
 
-const EMPTY_PAGE: PaginatedResult<ClientTransaction> = { items: [], total: 0, page: 1, pageSize: ACCOUNT_HISTORY_PAGE_SIZE };
+const EMPTY_PAGE: PaginatedResult<ClientTransaction> = { items: [], total: 0, page: 1, pageSize: DEFAULT_PAGE_SIZE };
 
 export type AccountTransactionsFilter = {
   accountId: string;
@@ -23,6 +17,7 @@ export type AccountTransactionsFilter = {
   dateFrom?: string;
   dateTo?: string;
   sort: TransactionSort;
+  page: number;
 };
 
 type AccountTransactionsListData = {
@@ -38,8 +33,8 @@ async function fetchAccountTransactionsList(filter: AccountTransactionsFilter): 
     dateFrom: filter.dateFrom,
     dateTo: filter.dateTo,
     sort: filter.sort,
-    page: 1,
-    pageSize: ACCOUNT_HISTORY_PAGE_SIZE,
+    page: filter.page,
+    pageSize: DEFAULT_PAGE_SIZE,
   });
   if (!result.success) throw new Error(result.error.message);
 
