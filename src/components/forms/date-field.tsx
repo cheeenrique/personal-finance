@@ -56,6 +56,9 @@ export function DateField({
 }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const selected = parseDateOnly(value || toDateInputValueSaoPaulo());
+  // Range navegável do dropdown de ano — 2000 até 10 anos à frente cobre
+  // patrimônio antigo (ex.: imóvel de 2020) e parcelas/previstos futuros.
+  const currentYear = new Date().getFullYear();
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -77,6 +80,10 @@ export function DateField({
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
+          captionLayout="dropdown"
+          startMonth={new Date(2000, 0)}
+          endMonth={new Date(currentYear + 10, 11)}
+          defaultMonth={selected}
           locale={ptBR}
           selected={selected}
           onSelect={(date) => {
