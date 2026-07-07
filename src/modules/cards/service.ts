@@ -1,14 +1,29 @@
-import { Prisma, type Card } from "@/generated/prisma/client";
+import { Prisma, type Card, type CardCycle as CardCycleRow } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db/client";
 import { nowInSaoPaulo } from "@/lib/date/timezone";
-import { cardRepository, type CreateCardData, type UpdateCardData, type InvoiceItemRow } from "./repository";
-import { cycleContaining, cycleForClosingMonth, type CardCycle } from "./cycle";
+import {
+  cardRepository,
+  type CreateCardData,
+  type UpdateCardData,
+  type InvoiceItemRow,
+  type CardWithCycles,
+} from "./repository";
+import { cycleContaining, cycleForClosingMonth, type CardCycle, type CycleRule } from "./cycle";
 import { CardNotFoundError } from "./errors";
 import type { CardWithSummary, Invoice, Money } from "./types";
 
 /** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `pay-invoice.ts`). */
 type Db = Prisma.TransactionClient;
+
+/** `CardCycle` (linha do banco) → `CycleRule` (formato solto de `cycle.ts`, sem `id`/`cardId`/`createdAt`). */
+function toCycleRules(cycles: CardCycleRow[]): CycleRule[] {
+  return cycles.map((cycle) => ({
+    closingDay: cycle.closingDay,
+    dueDay: cycle.dueDay,
+    effectiveFrom: cycle.effectiveFrom,
+  }));
+}
 
 function sumAmounts(rows: Array<{ amount: Prisma.Decimal }>): Prisma.Decimal {
   return rows.reduce((total, row) => total.plus(row.amount), new Prisma.Decimal(0));
@@ -39,7 +54,7 @@ async function deleteCard(userId: string, id: string): Promise<void> {
   if (!deleted) throw new CardNotFoundError(id);
 }
 
-async function getCard(userId: string, id: string, db: Db = prisma): Promise<Card> {
+async function getCard(userId: string, id: string, db: Db = prisma): Promise<CardWithCycles> {
   const card = await cardRepository.findById(userId, id, db);
   if (!card) throw new CardNotFoundError(id);
   return card;
@@ -71,14 +86,16 @@ async function buildInvoice(userId: string, cardId: string, cycle: CardCycle): P
  */
 async function currentInvoice(userId: string, cardId: string, refDate: Date = nowInSaoPaulo()): Promise<Invoice> {
   const card = await getCard(userId, cardId);
-  const cycle = cycleContaining(card.closingDay, card.dueDay, refDate);
+  const fallback = { closingDay: card.closingDay, dueDay: card.dueDay };
+  const cycle = cycleContaining(toCycleRules(card.cycles), fallback, refDate);
   return buildInvoice(userId, cardId, cycle);
 }
 
 /** Fatura de um ciclo específico, identificado pelo mês/ano em que o FECHAMENTO ocorre (docs/22, "Faturas Futuras"). */
 async function invoiceFor(userId: string, cardId: string, year: number, month: number): Promise<Invoice> {
   const card = await getCard(userId, cardId);
-  const cycle = cycleForClosingMonth(card.closingDay, card.dueDay, year, month);
+  const fallback = { closingDay: card.closingDay, dueDay: card.dueDay };
+  const cycle = cycleForClosingMonth(toCycleRules(card.cycles), fallback, year, month);
   return buildInvoice(userId, cardId, cycle);
 }
 
@@ -108,10 +125,11 @@ async function availableLimit(userId: string, cardId: string): Promise<Money> {
 
 /**
  * Cartões + fatura atual + limite disponível, sem N+1 (docs/22, "Cards na
- * listagem"). 2 queries no total (compras + soma por tipo), independente do
- * número de cartões — o agrupamento por ciclo (janela de data diferente por
- * cartão, já que cada um tem seu próprio closingDay/dueDay) é feito em
- * memória sobre o resultado já carregado.
+ * listagem"). 3 queries no total (compras + soma por tipo + histórico de
+ * ciclo), independente do número de cartões — o agrupamento por ciclo (janela
+ * de data diferente por cartão, já que cada um tem seu próprio
+ * closingDay/dueDay, e pode ainda ter mudado ao longo do tempo via
+ * `CardCycle`) é feito em memória sobre o resultado já carregado.
  */
 async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
   const cards = await cardRepository.list(userId);
@@ -120,9 +138,10 @@ async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
   const cardIds = cards.map((card) => card.id);
   const refDate = nowInSaoPaulo();
 
-  const [expenseRows, typeSums] = await Promise.all([
+  const [expenseRows, typeSums, cycleRows] = await Promise.all([
     cardRepository.listExpensesForCards(userId, cardIds),
     cardRepository.sumByCardAndType(userId, cardIds),
+    cardRepository.listCyclesForCards(cardIds),
   ]);
 
   const expensesByCard = new Map<string, Array<{ amount: Prisma.Decimal; date: Date }>>();
@@ -139,8 +158,16 @@ async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
     sumsByCard.set(row.cardId, bucket);
   }
 
+  const cyclesByCard = new Map<string, CardCycleRow[]>();
+  for (const row of cycleRows) {
+    const bucket = cyclesByCard.get(row.cardId) ?? [];
+    bucket.push(row);
+    cyclesByCard.set(row.cardId, bucket);
+  }
+
   return cards.map((card) => {
-    const cycle = cycleContaining(card.closingDay, card.dueDay, refDate);
+    const fallback = { closingDay: card.closingDay, dueDay: card.dueDay };
+    const cycle = cycleContaining(toCycleRules(cyclesByCard.get(card.id) ?? []), fallback, refDate);
     const cardExpenses = expensesByCard.get(card.id) ?? [];
     const currentInvoiceTotal = sumAmounts(
       cardExpenses.filter((row) => row.date >= cycle.periodStart && row.date < cycle.periodEnd),

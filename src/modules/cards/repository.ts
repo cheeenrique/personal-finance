@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/db/client";
-import { Prisma, type Card } from "@/generated/prisma/client";
+import { Prisma, type Card, type CardCycle } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 
 /** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `pay-invoice.ts`). */
 type Db = Prisma.TransactionClient;
+
+/** Card + histórico de troca de ciclo, ordenado por `effectiveFrom` (ver service.ts, `cycle.ts`). */
+export type CardWithCycles = Card & { cycles: CardCycle[] };
 
 export type CreateCardData = {
   name: string;
@@ -38,8 +41,12 @@ export type InvoiceItemRow = {
  * docs/03-DATABASE.md, "Princípio Principal": isolamento total por usuário).
  */
 
-async function findById(userId: string, id: string, db: Db = prisma): Promise<Card | null> {
-  return db.card.findFirst({ where: { id, userId, deletedAt: null } });
+/** Inclui `cycles` (histórico de troca de ciclo) sempre — tabela filha pequena, custo desprezível mesmo quando o chamador só precisa do cartão em si. */
+async function findById(userId: string, id: string, db: Db = prisma): Promise<CardWithCycles | null> {
+  return db.card.findFirst({
+    where: { id, userId, deletedAt: null },
+    include: { cycles: { orderBy: { effectiveFrom: "asc" } } },
+  });
 }
 
 async function list(userId: string): Promise<Card[]> {
@@ -194,12 +201,31 @@ async function sumByCardAndType(userId: string, cardIds: string[], db: Db = pris
     }));
 }
 
+/**
+ * Histórico de troca de ciclo (`CardCycle`) de todos os cartões informados,
+ * ordenado por `effectiveFrom` — insumo de `listWithSummary` (mesma razão de
+ * `listExpensesForCards`: cada cartão tem seu próprio ciclo vigente, o
+ * agrupamento é feito em memória no service). 1 query para N cartões, sem
+ * N+1. Sem `userId` — `CardCycle` não tem coluna própria (docs/03-DATABASE.md,
+ * exceção `TransactionTag`/`AssetSnapshot`); os `cardIds` já vêm escopados
+ * por `userId` do chamador (`cardRepository.list`).
+ */
+async function listCyclesForCards(cardIds: string[]): Promise<CardCycle[]> {
+  if (cardIds.length === 0) return [];
+
+  return prisma.cardCycle.findMany({
+    where: { cardId: { in: cardIds } },
+    orderBy: { effectiveFrom: "asc" },
+  });
+}
+
 export const cardRepository = {
   findById,
   list,
   create,
   update,
   softDelete,
+  listCyclesForCards,
   findExpensesInRange,
   listExpensesForCards,
   sumByCardAndType,

@@ -140,8 +140,34 @@ model Card {
   user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions         Transaction[]
   installmentPurchases InstallmentPurchase[]
+  cycles               CardCycle[]
 
   @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// CardCycle
+// ---------------------------------------------------------------------------
+
+// Histórico de mudança de ciclo (fechamento/vencimento) de um cartão — ver
+// docs/22-CREDIT_CARDS.md. Um cartão SEM linhas aqui continua usando
+// `Card.closingDay`/`Card.dueDay` direto (comportamento legado, zero
+// regressão). Com linhas, o ciclo vigente numa data D é o `CardCycle` com
+// maior `effectiveFrom <= D` (ver `src/modules/cards/cycle.ts`).
+// Sem `userId` próprio — mesma exceção consciente de `TransactionTag`/
+// `AssetSnapshot` (docs/03-DATABASE.md): isolamento vem da entidade-pai
+// (`Card.userId`), nunca consultado sem passar por ela.
+model CardCycle {
+  id            String   @id @default(cuid())
+  cardId        String
+  closingDay    Int
+  dueDay        Int
+  effectiveFrom DateTime
+  createdAt     DateTime @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId, effectiveFrom])
 }
 
 // ---------------------------------------------------------------------------
