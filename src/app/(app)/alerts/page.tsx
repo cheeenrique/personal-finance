@@ -1,9 +1,11 @@
 import { Suspense } from "react";
-import { Inbox } from "lucide-react";
+import { Inbox, Info } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { AlertType } from "@/generated/prisma/enums";
 import { alertService } from "@/modules/alerts/service";
+import { settingsService } from "@/modules/settings/service";
+import { formatBRL } from "@/lib/money/format";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertFilters, type StatusFilterValue } from "@/components/alerts/alert-filters";
@@ -47,6 +49,8 @@ async function AlertsContent({ searchParams }: AlertsPageProps) {
     ? (statusParam as StatusFilterValue)
     : "all";
 
+  const settings = await settingsService.getSettingsForClient(userId);
+
   // Query já filtra por `unreadOnly` quando o status é "Não lido" (usa o
   // filtro nativo do repository). "Lido" não tem filtro nativo equivalente
   // (repository só expõe `unreadOnly`) — busca tudo do tipo e filtra aqui,
@@ -67,6 +71,17 @@ async function AlertsContent({ searchParams }: AlertsPageProps) {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex items-start gap-2.5 rounded-lg bg-secondary/60 p-3 text-[13px] font-medium text-muted-foreground">
+        <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <p>
+          <span className="font-bold text-on-warning">Atenção</span> quando o gasto da semana numa
+          categoria passa de {settings.alertAnomalyMultiplier}x a média e é maior que{" "}
+          {formatBRL(settings.alertMinimumAmount)}.{" "}
+          <span className="font-bold text-on-success">Economia</span> quando o gasto fica abaixo de{" "}
+          {settings.alertGreenMultiplier}x a média.
+        </p>
+      </div>
+
       <Suspense fallback={<Skeleton className="h-9 w-full max-w-md" />}>
         <AlertFilters />
       </Suspense>
