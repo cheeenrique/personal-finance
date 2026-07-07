@@ -11,14 +11,13 @@
  */
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../src/generated/prisma/client";
 import { CategoryType } from "../src/generated/prisma/enums";
+// Reaproveita o client singleton (mesmo tratamento de SSL do Supabase) em vez
+// de montar um adapter próprio — senão o seed ignora o fix de TLS de
+// `src/lib/db/client.ts` e estoura em produção.
+import { prisma } from "../src/lib/db/client";
 
 const BCRYPT_SALT_ROUNDS = 10;
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
 
 type SeedUserEnv = {
   name: string;

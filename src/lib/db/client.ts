@@ -24,10 +24,30 @@ import { PrismaClient } from "@/generated/prisma/client";
  * crescer e a conexão direta estourar limite, aí sim migrar o runtime pro
  * pooler com prepared statements desabilitados.
  */
+/**
+ * Supabase exige TLS mas apresenta um cert fora do trust store padrão do `pg`.
+ * No `pg` 8.22, `sslmode=require` na connection string valida a cadeia inteira
+ * (e estoura `self-signed certificate in certificate chain`) — e um objeto
+ * `ssl` passado junto é IGNORADO quando `sslmode` está na string. A forma que
+ * funciona: REMOVER `sslmode` da string e passar `ssl: { rejectUnauthorized:
+ * false }` como objeto — TLS criptografado, sem validar a cadeia (padrão
+ * pragmático pra Supabase + node-postgres). Local (Docker, sem `sslmode` e sem
+ * host supabase) conecta sem SSL.
+ */
 function createPrismaClient() {
-  const connectionString =
-    process.env.DATABASE_URL ?? process.env.POSTGRES_URL_NON_POOLING;
-  const adapter = new PrismaPg({ connectionString });
+  const raw = process.env.DATABASE_URL ?? process.env.POSTGRES_URL_NON_POOLING;
+  const needsSsl = /[?&]sslmode=/.test(raw ?? "") || (raw ?? "").includes("supabase");
+
+  if (!needsSsl) {
+    return new PrismaClient({ adapter: new PrismaPg({ connectionString: raw }) });
+  }
+
+  const connectionString = (raw ?? "")
+    .replace(/([?&])sslmode=[^&]*/gi, "$1")
+    .replace(/\?&/, "?")
+    .replace(/[?&]$/, "");
+
+  const adapter = new PrismaPg({ connectionString, ssl: { rejectUnauthorized: false } });
   return new PrismaClient({ adapter });
 }
 
