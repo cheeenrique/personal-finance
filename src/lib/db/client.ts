@@ -47,7 +47,12 @@ function createPrismaClient() {
     .replace(/\?&/, "?")
     .replace(/[?&]$/, "");
 
-  const adapter = new PrismaPg({ connectionString, ssl: { rejectUnauthorized: false } });
+  // `max: 3` — o pooler do Supabase em session-mode (porta 5432) limita a 15
+  // clientes. Cada instância serverless da Vercel abre seu próprio pool; com o
+  // default do `pg` (max 10), poucas instâncias já estouram o limite
+  // (`EMAXCONNSESSION: max clients reached in session mode`). App de 2 usuários
+  // — 3 conexões por instância sobra e não satura o pooler.
+  const adapter = new PrismaPg({ connectionString, ssl: { rejectUnauthorized: false }, max: 3 });
   return new PrismaClient({ adapter });
 }
 

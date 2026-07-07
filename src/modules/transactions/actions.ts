@@ -100,6 +100,19 @@ export async function updateTransactionAction(
   }
 }
 
+/** Leitura pontual (sem revalidate — não muta nada). Ver `transactionService.getTransaction`. */
+export async function getTransactionAction(id: string): Promise<ActionResult<ClientTransaction>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  try {
+    const transaction = await transactionService.getTransaction(userId, id);
+    return { success: true, data: toClientTransaction(transaction) };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
 export async function deleteTransactionAction(id: string): Promise<ActionResult<null>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };

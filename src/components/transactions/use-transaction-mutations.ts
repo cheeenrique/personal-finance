@@ -9,7 +9,7 @@ import type { ClientTransaction } from "@/modules/transactions/types";
 import { notifyError, notifySuccess } from "@/lib/toast";
 
 /** Pernas de TRANSFER nunca são editadas/excluídas por aqui — `accounts/transfer.ts` não implementa propagação pro par ainda. */
-export function isTransferLeg(row: ClientTransaction): boolean {
+export function isTransferLeg(row: { transferId: string | null }): boolean {
   return Boolean(row.transferId);
 }
 
@@ -19,9 +19,15 @@ export function isTransferLeg(row: ClientTransaction): boolean {
  * 05-naming-size). Toda mutation termina revalidando a listagem via
  * `onMutated` (o `revalidatePath` do server action não recarrega dados
  * buscados client-side, ver `transactions-view.tsx`).
+ *
+ * `deleteOne`/`isTransferLeg` aceitam só o subconjunto de campos que usam
+ * (`id`/`transferId`, não `ClientTransaction` inteiro) — permite reaproveitar
+ * este hook em listas derivadas que não carregam o shape completo, ex.
+ * `InvoiceItemView` (`components/cards/invoice-items-table.tsx`), sem
+ * duplicar a lógica de excluir+undo.
  */
 export function useTransactionMutations(onMutated: () => void) {
-  async function deleteOne(row: ClientTransaction): Promise<void> {
+  async function deleteOne(row: { id: string }): Promise<void> {
     const result = await deleteTransactionAction(row.id);
     if (!result.success) {
       notifyError(result.error.message);

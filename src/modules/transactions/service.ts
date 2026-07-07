@@ -156,6 +156,20 @@ async function undoDeleteTransaction(userId: string, id: string): Promise<Transa
   return restored;
 }
 
+/**
+ * Busca UMA transação completa por id (escopada a `userId`). Insumo do fluxo
+ * de edição a partir de listas que só carregam um subconjunto de campos —
+ * ex.: `InvoiceItem` (docs/22-CREDIT_CARDS.md, "Detalhe do Cartão") não traz
+ * categoria/notas/tags porque a fatura é só leitura derivada; o form de
+ * edição (`EditTransactionModal`) busca a `Transaction` real sob demanda em
+ * vez de inflar o shape da fatura com campos que ela não usa.
+ */
+async function getTransaction(userId: string, id: string): Promise<TransactionWithTags> {
+  const transaction = await transactionRepository.findById(userId, id);
+  if (!transaction) throw new TransactionNotFoundError(id);
+  return transaction;
+}
+
 async function list(
   userId: string,
   filters: ListFilterInput,
@@ -329,6 +343,7 @@ export const transactionService = {
   updateTransaction,
   deleteTransaction,
   undoDeleteTransaction,
+  getTransaction,
   list,
   lastUsedCategory,
   monthlyExpenseTotal,
