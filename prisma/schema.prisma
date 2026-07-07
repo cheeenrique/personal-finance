@@ -79,6 +79,15 @@ enum Theme {
   SYSTEM
 }
 
+// Juros do Loan é OPCIONAL (docs/03-DATABASE.md, model Loan) — só faz sentido
+// junto de `interestRate`, nunca sozinho. ANNUAL = taxa efetiva ao ano
+// (comum em contrato de empréstimo pessoal/bancário, ex. CDC/DDC); MONTHLY =
+// taxa já ao mês. Conversão ANNUAL→mensal em `modules/loans/interest.ts`.
+enum InterestPeriod {
+  ANNUAL
+  MONTHLY
+}
+
 // ---------------------------------------------------------------------------
 // User
 // ---------------------------------------------------------------------------
@@ -453,9 +462,21 @@ model Loan {
   firstDueDate      DateTime
   accountId         String
   categoryId        String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  deletedAt         DateTime?
+
+  // Juros OPCIONAL — default DESLIGADO (docs/03-DATABASE.md). `null` em
+  // ambos = empréstimo sem juros (ex.: empréstimo entre família), parcela
+  // sempre cobra o valor cheio, sem desconto de antecipação. Preenchidos
+  // juntos = habilita `modules/loans/interest.ts` (taxa mensal derivada +
+  // valor presente na antecipação). `interestPeriod` só faz sentido com
+  // `interestRate` — nunca um sem o outro (validado no schema Zod da
+  // service, não em CHECK constraint: Prisma/Postgres não expressam bem
+  // "ambos nulos OU ambos preenchidos" sem trigger).
+  interestRate   Decimal?        @db.Decimal(9, 6)
+  interestPeriod InterestPeriod?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   account      Account       @relation(fields: [accountId], references: [id], onDelete: Restrict)

@@ -4,11 +4,19 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { loanService } from "./service";
 import { createLoan } from "./installments";
-import { createLoanSchema } from "./schemas";
+import { updateLoan } from "./update";
+import {
+  createLoanSchema,
+  updateLoanSchema,
+  suggestEarlyPaymentSchema,
+  settleLoanSchema,
+} from "./schemas";
 import { LoanDomainError } from "./errors";
+import type { EarlyPaymentSuggestion } from "./interest";
 import type {
   ActionResult,
   ClientCreateLoanResult,
+  ClientEarlyPaymentSuggestion,
   ClientLoanWithProgress,
   CreateLoanResult,
   LoanWithProgress,
@@ -59,6 +67,7 @@ function toClientLoan(loan: LoanWithProgress): ClientLoanWithProgress {
     nextInstallment: loan.nextInstallment
       ? { date: loan.nextInstallment.date, amount: loan.nextInstallment.amount.toString() }
       : null,
+    interestRate: loan.interestRate ? loan.interestRate.toString() : null,
   };
 }
 
@@ -69,11 +78,21 @@ function toClientCreateLoanResult(result: CreateLoanResult): ClientCreateLoanRes
       principal: result.loan.principal.toString(),
       totalToPay: result.loan.totalToPay.toString(),
       installmentAmount: result.loan.installmentAmount.toString(),
+      interestRate: result.loan.interestRate ? result.loan.interestRate.toString() : null,
     },
     transactions: result.transactions.map((transaction) => ({
       ...transaction,
       amount: transaction.amount.toString(),
     })),
+  };
+}
+
+/** `interest.ts` `EarlyPaymentSuggestion` → `ClientEarlyPaymentSuggestion` (`Prisma.Decimal` → `string` na borda). */
+function toClientEarlyPaymentSuggestion(suggestion: EarlyPaymentSuggestion): ClientEarlyPaymentSuggestion {
+  return {
+    suggested: suggestion.suggested.toString(),
+    fullAmount: suggestion.fullAmount.toString(),
+    discount: suggestion.discount.toString(),
   };
 }
 
@@ -130,6 +149,79 @@ export async function deleteLoanAction(id: string): Promise<ActionResult<null>> 
     await loanService.deleteLoan(userId, id);
     revalidateLoanRoutes();
     return { success: true, data: null };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Edita o contrato do empréstimo — regenera parcelas não pagas quando o contrato muda (ver `update.ts` `updateLoan`). */
+export async function updateLoanAction(id: string, input: unknown): Promise<ActionResult<ClientLoanWithProgress>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  const parsed = updateLoanSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Dados inválidos." },
+    };
+  }
+
+  try {
+    const loan = await updateLoan(userId, id, parsed.data);
+    revalidateLoanRoutes();
+    return { success: true, data: toClientLoan(loan) };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Sugestão de antecipação de uma parcela — só calcula, não grava (ver `service.ts` `suggestEarlyPayment`). */
+export async function suggestEarlyPaymentAction(
+  loanId: string,
+  input: unknown,
+): Promise<ActionResult<ClientEarlyPaymentSuggestion>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  const parsed = suggestEarlyPaymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Dados inválidos." },
+    };
+  }
+
+  try {
+    const suggestion = await loanService.suggestEarlyPayment(
+      userId,
+      loanId,
+      parsed.data.installmentId,
+      parsed.data.paymentDate,
+    );
+    return { success: true, data: toClientEarlyPaymentSuggestion(suggestion) };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Quita todas as parcelas não pagas do empréstimo de uma vez (ver `service.ts` `settleLoan`). Retorna o total quitado (string, `Prisma.Decimal` serializado). */
+export async function settleLoanAction(loanId: string, input: unknown): Promise<ActionResult<string>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  const parsed = settleLoanSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Dados inválidos." },
+    };
+  }
+
+  try {
+    const totalPaid = await loanService.settleLoan(userId, loanId, parsed.data.settleDate, parsed.data.totalPaid);
+    revalidateLoanRoutes();
+    return { success: true, data: totalPaid.toString() };
   } catch (error) {
     return toActionError(error);
   }

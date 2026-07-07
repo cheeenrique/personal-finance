@@ -1,10 +1,11 @@
 import { addMonths } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/db/client";
+import { Prisma } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 import { parseInSaoPaulo, TIMEZONE } from "@/lib/date/timezone";
 import { assertAccountOwnership, assertCategoryOwnership } from "./service";
-import { LoanInstallmentMismatchError } from "./errors";
+import { LoanInstallmentMismatchError, LoanInstallmentsBelowPaidCountError } from "./errors";
 import type { CreateLoanInput } from "./schemas";
 import type { CreateLoanResult } from "./types";
 
@@ -109,7 +110,7 @@ export async function createLoan(userId: string, input: CreateLoanInput): Promis
     for (let index = 0; index < input.installmentsCount; index += 1) {
       const installmentNumber = index + 1;
       const description = `${input.description} - parcela ${installmentNumber}/${input.installmentsCount}`;
-      // eslint-disable-next-line no-await-in-loop -- sequencial de propósito, ver JSDoc acima
+      // sequencial de propósito, ver JSDoc acima (regra no-await-in-loop não configurada neste projeto)
       const transaction = await tx.transaction.create({
         data: {
           userId,
@@ -129,3 +130,85 @@ export async function createLoan(userId: string, input: CreateLoanInput): Promis
     return { loan, transactions };
   });
 }
+
+/** Insumo de `regenerateUnpaidInstallments` — só o que a regeneração precisa do Loan MESCLADO (existente + patch, já resolvido pelo caller em `update.ts` `updateLoan`) + as parcelas já pagas (mantidas intactas, nunca tocadas aqui). */
+type RegenerateUnpaidInstallmentsParams = {
+  userId: string;
+  loanId: string;
+  description: string;
+  accountId: string;
+  categoryId: string | null;
+  totalToPay: Prisma.Decimal;
+  installmentAmount: Prisma.Decimal;
+  installmentsCount: number;
+  firstDueDate: Date;
+  paidInstallments: { amount: Prisma.Decimal }[];
+};
+
+/**
+ * Regenera SÓ as parcelas NÃO pagas de um empréstimo editado (`update.ts`
+ * `updateLoan`) — quando `installmentsCount`/`installmentAmount`/
+ * `firstDueDate`/`totalToPay` mudam, o contrato de parcelamento original
+ * (gerado por `createLoan`) fica desatualizado. Parcelas JÁ PAGAS
+ * (`paidInstallments`) são fatos financeiros ocorridos — NUNCA apagadas nem
+ * recriadas aqui (mesmo princípio de `service.ts` `deleteLoan`); o caller já
+ * fez `softDeleteUnpaidInstallments` ANTES de chamar esta função.
+ *
+ * O rateio roda sobre o RESTANTE, não sobre o contrato inteiro:
+ * `remainingCount` = `installmentsCount` (novo) − parcelas já pagas,
+ * `remainingToPay` = `totalToPay` (novo) − soma do que já foi pago (valor
+ * REAL pago, que pode ser menor que o previsto por causa de antecipação com
+ * desconto — ver `interest.ts`). As novas parcelas continuam a numeração
+ * (`paidCount+1` até `installmentsCount`) e usam `splitLoanInstallmentAmounts`
+ * (mesma função de `createLoan` — resíduo absorvido na ÚLTIMA parcela pra
+ * soma bater exato).
+ *
+ * `remainingCount < 0` (usuário reduziu `installmentsCount` pra menos do que
+ * já foi pago) → erro: reduziria um histórico que já aconteceu.
+ * `remainingCount === 0` (empréstimo já quitado pelas parcelas pagas, edição
+ * não mexe na contagem) → no-op, nada pra gerar.
+ */
+export async function regenerateUnpaidInstallments(
+  tx: Prisma.TransactionClient,
+  params: RegenerateUnpaidInstallmentsParams,
+): Promise<void> {
+  const paidCount = params.paidInstallments.length;
+  const remainingCount = params.installmentsCount - paidCount;
+
+  if (remainingCount < 0) {
+    throw new LoanInstallmentsBelowPaidCountError({ installmentsCount: params.installmentsCount, paidCount });
+  }
+  if (remainingCount === 0) return;
+
+  const paidTotal = params.paidInstallments.reduce(
+    (sum, installment) => sum.plus(installment.amount),
+    new Prisma.Decimal(0),
+  );
+  const remainingToPay = params.totalToPay.minus(paidTotal);
+
+  const amounts = splitLoanInstallmentAmounts(
+    remainingToPay.toFixed(2),
+    params.installmentAmount.toFixed(2),
+    remainingCount,
+  );
+
+  for (let index = 0; index < remainingCount; index += 1) {
+    const installmentNumber = paidCount + index + 1;
+    const description = `${params.description} - parcela ${installmentNumber}/${params.installmentsCount}`;
+    // sequencial de propósito, ver JSDoc de `createLoan` (regra no-await-in-loop não configurada neste projeto)
+    await tx.transaction.create({
+      data: {
+        userId: params.userId,
+        description,
+        type: TransactionType.EXPENSE,
+        amount: amounts[index],
+        accountId: params.accountId,
+        categoryId: params.categoryId,
+        date: installmentDueDate(params.firstDueDate, installmentNumber),
+        isPaid: false,
+        loanId: params.loanId,
+      },
+    });
+  }
+}
+

@@ -3,8 +3,10 @@ import { Prisma } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 import { loanRepository } from "./repository";
 import { loanOwnership } from "./ownership";
-import { LoanNotFoundError, LoanAccountNotFoundError, LoanCategoryNotFoundError } from "./errors";
-import type { LoanWithProgress, LoanWithTransactions, LoanWithInstallments, LoanDisbursement } from "./types";
+import { monthlyRate, monthsEarly, presentValue, earlyPaymentSuggestion, distributeProportionally } from "./interest";
+import { LoanNotFoundError, LoanAccountNotFoundError, LoanCategoryNotFoundError, LoanInstallmentNotFoundError, LoanAlreadySettledError } from "./errors";
+import type { LoanWithProgress, LoanWithTransactions, LoanWithInstallments, LoanDisbursement, Money } from "./types";
+import type { EarlyPaymentSuggestion } from "./interest";
 
 /** Exportado para reuso por `installments.ts` (mesma regra de ownership, sem duplicar query) — mesmo padrão de `modules/transactions/service.ts`. */
 export async function assertAccountOwnership(userId: string, accountId: string): Promise<void> {
@@ -29,8 +31,21 @@ export async function assertCategoryOwnership(userId: string, categoryId: string
  * pode conter também o desembolso (`type=INCOME`, ver `findDisbursement`
  * abaixo). Sem esse filtro, um desembolso linkado contaria como "parcela
  * paga" e explodiria `paidAmount`/`remainingAmount`.
+ *
+ * `totalToPay` (`Loan`) é sempre o valor CONTRATUAL, nunca recalculado por
+ * esta função. `paidAmount` é derivado somando o `amount` REAL de cada
+ * parcela paga — quando uma parcela foi quitada com desconto de antecipação
+ * (`interest.ts` `presentValue`/`settleLoan`), esse `amount` é MENOR que o
+ * previsto no contrato original. Ou seja: `remainingAmount` (`totalToPay -
+ * paidAmount`) pode ficar ligeiramente maior que a soma das parcelas ainda
+ * não pagas quando há antecipação no meio do caminho — o efetivo pago foi
+ * menor que o previsto, exatamente como acontece no empréstimo real do dono
+ * (ver tarefa "Cuidados"). Isso é esperado, não um bug.
+ *
+ * Exportada (além de usada internamente) pra reuso por `update.ts`
+ * `updateLoan` — mesma derivação, sem duplicar.
  */
-function deriveLoanProgress(loan: LoanWithTransactions): LoanWithProgress {
+export function deriveLoanProgress(loan: LoanWithTransactions): LoanWithProgress {
   const { transactions, ...loanFields } = loan;
   const installments = transactions.filter((transaction) => transaction.type === TransactionType.EXPENSE);
   const paid = installments.filter((transaction) => transaction.isPaid);
@@ -121,10 +136,92 @@ async function deleteLoan(userId: string, id: string): Promise<void> {
   });
 }
 
+/**
+ * Sugestão de antecipação pra UMA parcela (docs da tarefa, "Antecipação") —
+ * só CALCULA, nunca grava nada. O front chama isso quando o usuário marca
+ * uma parcela como paga com `paymentDate` antes do vencimento, pra
+ * pré-preencher o valor com desconto (editável — decisão do dono).
+ *
+ * Confirmar o pagamento em si (gravar `amount`/`isPaid`/`paidAt`) continua
+ * passando por `updateTransactionAction` (`modules/transactions`) — já
+ * cobre `amount`+`isPaid`+`paidAt=now()` na transição pendente→paga (ver
+ * `transactions/service.ts` `resolvePaidAtOnUpdate`), o mesmo caminho que
+ * `loan-detail-view.tsx` já usa hoje pra marcar parcela paga. Não duplicar
+ * esse update aqui.
+ */
+async function suggestEarlyPayment(
+  userId: string,
+  loanId: string,
+  installmentId: string,
+  paymentDate: Date,
+): Promise<EarlyPaymentSuggestion> {
+  const loan = await loanRepository.findById(userId, loanId);
+  if (!loan) throw new LoanNotFoundError(loanId);
+
+  const installment = await loanRepository.findInstallment(userId, loanId, installmentId);
+  if (!installment) throw new LoanInstallmentNotFoundError(installmentId);
+
+  return earlyPaymentSuggestion(loan, installment, paymentDate);
+}
+
+/**
+ * Quita TODAS as parcelas não pagas de um empréstimo de uma vez —
+ * diferente de marcar UMA parcela paga (`suggestEarlyPayment` +
+ * `updateTransactionAction`, ver JSDoc acima), aqui precisamos gravar N
+ * `Transaction`s atomicamente na MESMA `$transaction` com um valor
+ * RATEADO entre elas — capacidade que `updateTransactionAction` não tem
+ * (ele só toca UMA transação por chamada, sem noção de "ratear um total
+ * entre várias"). Por isso escreve direto via `loanRepository`, sem
+ * reusar o módulo `transactions`.
+ *
+ * `totalPaid` ausente → usa o total SUGERIDO (Σ valor presente de cada
+ * parcela não paga, `interest.ts` `presentValue` — sem juros configurado,
+ * PV = valor cheio, mesma regra de sempre). `totalPaid` informado → é o
+ * valor que o usuário editou/confirmou (mesma filosofia de `suggested` em
+ * `earlyPaymentSuggestion`: sugestão é só ponto de partida).
+ *
+ * O valor final é distribuído proporcional ao PV de cada parcela
+ * (`interest.ts` `distributeProportionally`) — parcelas mais distantes do
+ * vencimento (mais desconto) recebem uma fatia proporcionalmente menor.
+ * Todas ganham `isPaid=true`/`paidAt=settleDate` — `amount` de cada uma
+ * passa a refletir o valor REAL pago (menor que o prescrito no contrato
+ * quando há desconto de antecipação — ver `deriveLoanProgress` acima:
+ * `totalToPay` continua CONTRATUAL, o `paidAmount` derivado é que reflete
+ * o efetivo, exatamente como já acontece no empréstimo real do dono).
+ */
+async function settleLoan(userId: string, loanId: string, settleDate: Date, totalPaid?: string): Promise<Money> {
+  const loan = await loanRepository.findByIdWithTransactions(userId, loanId);
+  if (!loan) throw new LoanNotFoundError(loanId);
+
+  const installments = loan.transactions.filter((transaction) => transaction.type === TransactionType.EXPENSE);
+  const unpaid = installments.filter((transaction) => !transaction.isPaid);
+  if (unpaid.length === 0) throw new LoanAlreadySettledError(loanId);
+
+  const rate = monthlyRate(loan);
+  const presentValues = unpaid.map((installment) =>
+    presentValue(installment.amount, rate, monthsEarly(settleDate, installment.date)),
+  );
+  const suggestedTotal = presentValues.reduce((sum, pv) => sum.plus(pv), new Prisma.Decimal(0));
+  const finalTotal = totalPaid !== undefined ? new Prisma.Decimal(totalPaid) : suggestedTotal;
+
+  const amounts = distributeProportionally(finalTotal, presentValues);
+
+  await prisma.$transaction(async (tx) => {
+    for (let index = 0; index < unpaid.length; index += 1) {
+      // sequencial de propósito, mesmo padrão de installments.ts createLoan (regra no-await-in-loop não configurada neste projeto)
+      await loanRepository.markInstallmentPaid(unpaid[index].id, amounts[index], settleDate, tx);
+    }
+  });
+
+  return finalTotal;
+}
+
 export const loanService = {
   listLoans,
   listActiveLoans,
   getLoan,
   getLoanDetail,
   deleteLoan,
+  suggestEarlyPayment,
+  settleLoan,
 };

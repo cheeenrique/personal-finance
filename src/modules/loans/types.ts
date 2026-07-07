@@ -88,7 +88,14 @@ export type ClientNextLoanInstallment = { date: Date; amount: string } | null;
 
 export type ClientLoanWithProgress = Omit<
   LoanWithProgress,
-  "principal" | "totalToPay" | "installmentAmount" | "interest" | "paidAmount" | "remainingAmount" | "nextInstallment"
+  | "principal"
+  | "totalToPay"
+  | "installmentAmount"
+  | "interest"
+  | "paidAmount"
+  | "remainingAmount"
+  | "nextInstallment"
+  | "interestRate"
 > & {
   principal: string;
   totalToPay: string;
@@ -97,13 +104,19 @@ export type ClientLoanWithProgress = Omit<
   paidAmount: string;
   remainingAmount: string;
   nextInstallment: ClientNextLoanInstallment;
+  /** `null` = sem juros configurado (default do produto, docs/03-DATABASE.md) — nunca omitido, sempre presente pra o front saber se mostra o bloco de juros. */
+  interestRate: string | null;
 };
 
 export type ClientCreateLoanResult = {
-  loan: Omit<Loan, "principal" | "totalToPay" | "installmentAmount"> & {
+  loan: Omit<Loan, "principal" | "totalToPay" | "installmentAmount" | "interestRate"> & {
     principal: string;
     totalToPay: string;
     installmentAmount: string;
+    interestRate: string | null;
   };
   transactions: ClientLoanTransaction[];
 };
+
+/** `interest.ts` `EarlyPaymentSuggestion` cruzando a fronteira Server Action → Client Component (Decimal → string, mesma regra do resto do módulo). */
+export type ClientEarlyPaymentSuggestion = { suggested: string; fullAmount: string; discount: string };

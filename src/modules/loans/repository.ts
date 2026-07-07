@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/client";
 import type { Loan, Prisma } from "@/generated/prisma/client";
-import type { LoanWithTransactions } from "./types";
+import { TransactionType } from "@/generated/prisma/enums";
+import type { LoanWithTransactions, LoanInstallmentRow } from "./types";
 
 /** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `installments.ts`, `service.ts` `deleteLoan`). */
 type Db = Prisma.TransactionClient;
@@ -30,8 +31,15 @@ async function findById(userId: string, id: string, db: Db = prisma): Promise<Lo
   return db.loan.findFirst({ where: { id, userId, deletedAt: null } });
 }
 
-async function findByIdWithTransactions(userId: string, id: string): Promise<LoanWithTransactions | null> {
-  return prisma.loan.findFirst({
+/**
+ * `db` opcional (default `prisma`) — diferente das outras leituras deste
+ * repository, PRECISA aceitar o client de uma `$transaction` interativa
+ * quando chamada DEPOIS de escrever nessa mesma transação (ver `update.ts`
+ * `updateLoan`): ler pelo `prisma` global nesse caso enxergaria o estado
+ * ANTES do commit (conexão separada), não as escritas pendentes.
+ */
+async function findByIdWithTransactions(userId: string, id: string, db: Db = prisma): Promise<LoanWithTransactions | null> {
+  return db.loan.findFirst({
     where: { id, userId, deletedAt: null },
     include: TRANSACTIONS_INCLUDE,
   });
@@ -61,6 +69,50 @@ async function softDelete(userId: string, id: string, db: Db = prisma): Promise<
 }
 
 /**
+ * Update genérico do Loan (edição de contrato — `update.ts` `updateLoan`).
+ * Reconfirma ownership via `findById` antes de escrever (mesmo padrão de
+ * `softDelete`) — nunca um `update` direto por `id` sem revalidar
+ * `userId`/`deletedAt` primeiro.
+ */
+async function update(userId: string, id: string, data: Prisma.LoanUncheckedUpdateInput, db: Db = prisma): Promise<Loan | null> {
+  const existing = await findById(userId, id, db);
+  if (!existing) return null;
+
+  return db.loan.update({ where: { id }, data });
+}
+
+/**
+ * Uma parcela (`Transaction` `type=EXPENSE`) específica de um empréstimo,
+ * escopada por `userId` E `loanId` — insumo de `suggestEarlyPayment` e da
+ * quitação (`settleLoan`). Filtra `type=EXPENSE` pra nunca confundir com o
+ * desembolso (`type=INCOME`) linkado ao mesmo `loanId` (ver service.ts
+ * `findDisbursement`).
+ */
+async function findInstallment(
+  userId: string,
+  loanId: string,
+  installmentId: string,
+  db: Db = prisma,
+): Promise<LoanInstallmentRow | null> {
+  return db.transaction.findFirst({
+    where: { id: installmentId, userId, loanId, type: TransactionType.EXPENSE, deletedAt: null },
+    select: { id: true, amount: true, date: true, isPaid: true },
+  });
+}
+
+/**
+ * Marca UMA parcela como paga com o valor CONFIRMADO (cheio ou com desconto
+ * de antecipação editado pelo usuário) — usado só por `settleLoan`
+ * (quitação em lote, escrita direta porque precisa rodar N vezes dentro da
+ * MESMA `$transaction` atômica). Marcar uma parcela avulsa fora da quitação
+ * já é coberto por `updateTransactionAction` (ver service.ts, JSDoc de
+ * `settleLoan` — decisão de não duplicar essa função pro caso avulso).
+ */
+async function markInstallmentPaid(installmentId: string, amount: Prisma.Decimal, paidAt: Date, db: Db = prisma): Promise<void> {
+  await db.transaction.update({ where: { id: installmentId }, data: { amount, isPaid: true, paidAt } });
+}
+
+/**
  * Soft-delete das parcelas FUTURAS ainda não pagas (`isPaid=false`) de um
  * empréstimo — parcelas já pagas mantêm o histórico intacto (decisão de
  * `deleteLoan`, ver service.ts). Escopado por `userId` além de `loanId` —
@@ -80,4 +132,7 @@ export const loanRepository = {
   list,
   softDelete,
   softDeleteUnpaidInstallments,
+  update,
+  findInstallment,
+  markInstallmentPaid,
 };

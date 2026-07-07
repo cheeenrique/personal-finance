@@ -53,3 +53,52 @@ export class LoanInstallmentMismatchError extends LoanDomainError {
     );
   }
 }
+
+/** Uma parcela específica do empréstimo não existe, não pertence ao usuário/empréstimo, ou não é `type=EXPENSE` (docs/10-AUTH.md). */
+export class LoanInstallmentNotFoundError extends LoanDomainError {
+  constructor(installmentId: string) {
+    super("Parcela não encontrada", "LOAN_INSTALLMENT_NOT_FOUND", undefined, { installmentId });
+  }
+}
+
+/**
+ * `interestRate`/`interestPeriod` só fazem sentido juntos — juros é
+ * OPCIONAL (docs/03-DATABASE.md, model Loan), mas "taxa sem período" ou
+ * "período sem taxa" é dado de contrato incompleto, nunca um estado válido.
+ */
+export class LoanInterestInvariantError extends LoanDomainError {
+  constructor(context: Record<string, unknown>) {
+    super(
+      "Informe taxa de juros e período juntos, ou nenhum dos dois",
+      "LOAN_INTEREST_INVARIANT",
+      undefined,
+      context,
+    );
+  }
+}
+
+/** `totalToPay` não pode ficar menor que `principal` após a edição (mesma invariante de `createLoanSchema`, reavaliada aqui contra o estado MESCLADO — ver service.ts `updateLoan`). */
+export class LoanTotalBelowPrincipalError extends LoanDomainError {
+  constructor(context: Record<string, unknown>) {
+    super("Total a pagar não pode ser menor que o principal", "LOAN_TOTAL_BELOW_PRINCIPAL", undefined, context);
+  }
+}
+
+/** `installmentsCount` editado pra um valor menor que o número de parcelas JÁ PAGAS — reduziria um histórico que já aconteceu, nunca uma edição válida. */
+export class LoanInstallmentsBelowPaidCountError extends LoanDomainError {
+  constructor(context: Record<string, unknown>) {
+    super(
+      "Número de parcelas não pode ser menor que o número de parcelas já pagas",
+      "LOAN_INSTALLMENTS_BELOW_PAID_COUNT",
+      undefined,
+      context,
+    );
+  }
+}
+
+/** `settleLoan` chamado num empréstimo que já não tem nenhuma parcela pendente — não há o que quitar. */
+export class LoanAlreadySettledError extends LoanDomainError {
+  constructor(loanId: string) {
+    super("Empréstimo já está totalmente pago", "LOAN_ALREADY_SETTLED", undefined, { loanId });
+  }
+}
