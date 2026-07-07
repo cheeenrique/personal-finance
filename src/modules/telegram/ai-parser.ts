@@ -151,7 +151,11 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
   ];
 
   if (caption) {
-    lines.push("", `O usuário também mandou este texto junto da foto (use como dica extra): "${caption}"`);
+    lines.push(
+      "",
+      `IMPORTANTE — o usuário escreveu esta legenda junto da foto, que é o RÓTULO/intenção dele para o lançamento: "${caption}".`,
+      "A legenda tem PRIORIDADE sobre o texto cru da imagem para a DESCRIÇÃO e a CATEGORIA (a imagem serve pro VALOR/data/canal). Ex.: se a imagem é uma transferência para 'FULANO CONSULTORIA' mas a legenda diz 'Imposto TFE', a description é 'Imposto TFE' e a categoria é a de imposto — não o nome do destinatário. Se a legenda citar conta/cartão (ex.: 'pix Nubank'), use como origem também.",
+    );
   }
 
   return lines.join("\n");
