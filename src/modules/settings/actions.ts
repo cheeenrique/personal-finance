@@ -112,6 +112,23 @@ export async function installTelegramBotAction(token: unknown): Promise<ActionRe
   }
 }
 
+/**
+ * Revalida (re-registra) o webhook de um bot já instalado, sem exigir que o
+ * usuário recole o token (docs/30-TELEGRAM.md).
+ */
+export async function retryTelegramWebhookAction(): Promise<ActionResult<InstallTelegramBotResult>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  try {
+    const result = await settingsService.retryTelegramWebhook(userId);
+    revalidatePath(SETTINGS_PATH);
+    return { success: true, data: result };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
 export async function uninstallTelegramBotAction(): Promise<ActionResult<ClientUserSettings>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };

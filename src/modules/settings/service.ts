@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { UserSettings } from "@/generated/prisma/client";
 import { telegramApi } from "@/modules/telegram/telegram-api";
 import { settingsRepository, type UpdateSettingsData } from "./repository";
-import { TelegramInvalidTokenError } from "./errors";
+import { TelegramBotNotInstalledError, TelegramInvalidTokenError } from "./errors";
 import type { ClientUserSettings, InstallTelegramBotResult, TelegramLinkCode } from "./types";
 
 /** Lazy-create idempotente — garante UserSettings mesmo se o seed não rodou pra esse usuário (docs/12-SETTINGS.md, "Regra 1"). */
@@ -110,6 +110,47 @@ async function installTelegramBot(userId: string, botToken: string): Promise<Ins
 }
 
 /**
+ * Revalida (re-registra) o webhook de um bot já instalado, sem exigir que o
+ * usuário recole o token (docs/30-TELEGRAM.md) — cobre o caso do
+ * `setWebhook` original ter falhado (ex.: instalado em localhost antes do
+ * deploy) ou o webhook ter sido revogado externamente. Reaproveita
+ * token/secret/username já salvos: NUNCA gera um novo `webhookSecret` — o
+ * Telegram valida o header `X-Telegram-Bot-Api-Secret-Token` contra o secret
+ * atual, trocar ele aqui invalidaria o vínculo à toa.
+ */
+async function retryTelegramWebhook(userId: string): Promise<InstallTelegramBotResult> {
+  const current = await settingsRepository.findOrCreate(userId);
+
+  if (!current.telegramBotToken || !current.telegramWebhookSecret || !current.telegramBotUsername) {
+    throw new TelegramBotNotInstalledError();
+  }
+
+  const webhookUrl = `${publicBaseUrl()}/api/telegram`;
+  const webhookResult = await telegramApi.setWebhook(
+    current.telegramBotToken,
+    webhookUrl,
+    current.telegramWebhookSecret,
+  );
+
+  await settingsRepository.setTelegramBot(userId, {
+    botToken: current.telegramBotToken,
+    webhookSecret: current.telegramWebhookSecret,
+    botUsername: current.telegramBotUsername,
+    webhookRegistered: webhookResult.ok,
+  });
+
+  if (!webhookResult.ok) {
+    return {
+      botUsername: current.telegramBotUsername,
+      webhookRegistered: false,
+      warning: `Webhook não registrado (${webhookResult.error}). Isso é esperado em localhost — funciona automaticamente depois do deploy com uma URL pública.`,
+    };
+  }
+
+  return { botUsername: current.telegramBotUsername, webhookRegistered: true };
+}
+
+/**
  * Desinstala o bot: remove o webhook no Telegram (best-effort — falha aqui
  * nunca bloqueia a limpeza do banco) e limpa token/secret/username/chat/código
  * (`settingsRepository.clearTelegramBot`).
@@ -191,6 +232,7 @@ export const settingsService = {
   generateTelegramLinkCode,
   unlinkTelegram,
   installTelegramBot,
+  retryTelegramWebhook,
   uninstallTelegramBot,
   activeTelegramLinkCode,
   getSettingsForClient,

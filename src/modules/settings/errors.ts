@@ -33,3 +33,17 @@ export class TelegramInvalidTokenError extends SettingsDomainError {
     );
   }
 }
+
+/**
+ * `retryTelegramWebhook` chamado sem bot instalado — não há
+ * `telegramBotToken`/`telegramWebhookSecret` salvos pra reenviar ao Telegram
+ * (modules/settings/service.ts). Usuário precisa instalar um bot primeiro.
+ */
+export class TelegramBotNotInstalledError extends SettingsDomainError {
+  constructor() {
+    super(
+      "Nenhum bot instalado — instale um bot antes de revalidar o webhook.",
+      "TELEGRAM_BOT_NOT_INSTALLED",
+    );
+  }
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition, type FormEvent } from "react";
-import { CircleHelp, Copy, Link2, Loader2, Trash2, Unlink } from "lucide-react";
+import { CircleHelp, Copy, Link2, Loader2, RefreshCw, Trash2, Unlink } from "lucide-react";
 
 import {
   Card,
@@ -15,13 +15,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { TelegramHelpModal } from "@/components/settings/telegram-help-modal";
 import {
   generateTelegramLinkCodeAction,
   getSettingsAction,
   installTelegramBotAction,
+  retryTelegramWebhookAction,
   uninstallTelegramBotAction,
   unlinkTelegramAction,
 } from "@/modules/settings/actions";
@@ -40,18 +40,6 @@ type TelegramCardProps = {
 
 /** Enquanto o código pendente está visível, checa a cada 4s se o vínculo já foi confirmado pelo bot (sem precisar de reload manual). */
 const POLL_INTERVAL_MS = 4000;
-
-/**
- * Checkboxes de preferência de envio — stub visual (docs/12-SETTINGS.md não
- * define persistência para isso ainda; task pediu explicitamente "sem
- * persistência"). `disabled` + rótulo "(em breve)" deixam claro que ainda
- * não fazem nada.
- */
-const STUB_PREFERENCES = [
-  { id: "telegram-pref-weekly", label: "Receber resumo semanal" },
-  { id: "telegram-pref-anomaly", label: "Receber alertas de atenção" },
-  { id: "telegram-pref-green", label: "Receber alertas verdes" },
-] as const;
 
 /**
  * "Traga seu próprio bot" (docs/30-TELEGRAM.md): cada usuário cria o próprio
@@ -108,6 +96,25 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
     setLinkedChatId(null);
     setCode(null);
     notifySuccess("Bot desinstalado.");
+  }
+
+  /** Re-registra o webhook do bot já instalado, sem exigir recolar o token (docs/30-TELEGRAM.md). */
+  function handleRetryWebhook() {
+    startTransition(async () => {
+      const result = await retryTelegramWebhookAction();
+      if (!result.success) {
+        notifyError(result.error.message);
+        return;
+      }
+
+      setWebhookOk(result.data.webhookRegistered);
+
+      if (result.data.warning) {
+        notifyError(result.data.warning);
+      } else {
+        notifySuccess("Webhook revalidado com sucesso.");
+      }
+    });
   }
 
   function handleGenerateCode() {
@@ -227,9 +234,22 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
                   )}
                 </p>
                 {!webhookOk && (
-                  <p className="mt-1 text-[13px] font-medium text-warning">
-                    Webhook não registrado — precisa de uma URL pública (funciona automaticamente após o deploy).
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <p className="text-[13px] font-medium text-warning">
+                      Webhook não registrado — precisa de uma URL pública (funciona automaticamente após o deploy).
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRetryWebhook}
+                      disabled={isPending}
+                    >
+                      {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                      <RefreshCw className="size-4" aria-hidden="true" />
+                      Revalidar webhook
+                    </Button>
+                  </div>
                 )}
               </div>
               <Badge
@@ -290,22 +310,6 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
             )}
           </>
         )}
-
-        <div className="flex flex-col gap-2.5 border-t border-border pt-4 opacity-60">
-          <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-            Preferências de envio (em breve)
-          </p>
-          {STUB_PREFERENCES.map((preference) => (
-            <label
-              key={preference.id}
-              htmlFor={preference.id}
-              className="flex items-center gap-2 text-sm font-medium text-foreground"
-            >
-              <Checkbox id={preference.id} disabled />
-              {preference.label}
-            </label>
-          ))}
-        </div>
       </CardContent>
 
       <ConfirmDialog
