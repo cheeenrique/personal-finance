@@ -13,18 +13,33 @@ import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity
 import { FormField } from "@/components/forms/form-field";
 import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
-import { createLoanAction } from "@/modules/loans/actions";
+import { createLoanAction, updateLoanAction } from "@/modules/loans/actions";
 import { listAccountOptionsAction } from "@/components/shared/entity-options-actions";
 import { listCategoryTreeAction } from "@/modules/categories/actions";
 import { CategoryType } from "@/generated/prisma/enums";
+import { InterestPeriod } from "@/generated/prisma/enums";
 import type { CategoryTreeNode } from "@/modules/categories/types";
 import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
-import { notifySuccess } from "@/lib/toast";
+import { notifyError, notifySuccess } from "@/lib/toast";
+import { LoanInterestFields } from "./loan-interest-fields";
+import type { LoanDetailData } from "./types";
 
 type LoanFormModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** `null`/omitido = criação; empréstimo existente = edição (mesmo padrão de `CardFormModal`). */
+  loan?: LoanDetailData | null;
+  /**
+   * Chamado após salvar com sucesso (create OU edit), além de
+   * `onOpenChange(false)`. O detalhe (`/loans/[id]`) usa isso pra forçar
+   * `router.refresh()` — `revalidateLoanRoutes()` (`modules/loans/actions.ts`)
+   * só cobre `/loans` (literal), não o segmento dinâmico `/loans/[id]` (mesmo
+   * racional de `handleMarkPaid` em `loan-detail-view.tsx`). `loans-board.tsx`
+   * (criação em `/loans`) não precisa passar isso — `revalidatePath("/loans")`
+   * já cobre a própria página.
+   */
+  onSaved?: () => void;
 };
 
 type FormState = {
@@ -39,6 +54,9 @@ type FormState = {
   firstDueDate: string;
   accountId: string | undefined;
   categoryId: string | undefined;
+  hasInterest: boolean;
+  interestRate: string;
+  interestPeriod: InterestPeriod;
 };
 
 function emptyFormState(): FormState {
@@ -53,6 +71,33 @@ function emptyFormState(): FormState {
     firstDueDate: toDateInputValueSaoPaulo(),
     accountId: undefined,
     categoryId: undefined,
+    hasInterest: false,
+    interestRate: "",
+    interestPeriod: InterestPeriod.ANNUAL,
+  };
+}
+
+/** Pré-preenche o form a partir de um empréstimo existente (modo edição). */
+function formStateFromLoan(loan: LoanDetailData): FormState {
+  return {
+    description: loan.description,
+    lender: loan.lender ?? "",
+    principal: loan.principal,
+    installmentsCount: String(loan.installmentsCount),
+    installmentAmount: loan.installmentAmount,
+    totalToPay: loan.totalToPay,
+    // Editando um contrato já existente — o auto-cálculo (installmentAmount ×
+    // installmentsCount) nunca deveria sobrescrever um totalToPay que já
+    // reflete juros/resíduo reais do contrato salvo.
+    totalToPayTouched: true,
+    firstDueDate: toDateInputValueSaoPaulo(loan.firstDueDate),
+    accountId: loan.accountId,
+    categoryId: loan.categoryId ?? undefined,
+    hasInterest: Boolean(loan.interestRate),
+    // `Number(...)` remove os zeros de padding do `Decimal(9,6)` serializado
+    // (ex.: "12.500000" → "12.5") — puramente de apresentação no input.
+    interestRate: loan.interestRate ? String(Number(loan.interestRate)) : "",
+    interestPeriod: loan.interestPeriod ?? InterestPeriod.ANNUAL,
   };
 }
 
@@ -82,17 +127,23 @@ function computeAutoTotal(installmentAmount: string, installmentsCount: string):
 }
 
 /**
- * Criação de empréstimo (análogo a `InstallmentFormModal`, mas na CONTA e com
- * principal/juros): finalidade, credor, valor emprestado, nº parcelas, valor
- * da parcela, total a pagar (auto-sugerido, editável), 1º vencimento, conta,
- * categoria opcional (default "Empréstimos" se o usuário já tiver essa
- * categoria de despesa). `createLoanAction` cria o `Loan` + as N
- * `Transaction` (parcelas previstas) atomicamente — este formulário só
- * coleta o input.
+ * Criação/edição de empréstimo (análogo a `InstallmentFormModal`, mas na
+ * CONTA e com principal/juros): finalidade, credor, valor emprestado, nº
+ * parcelas, valor da parcela, total a pagar (auto-sugerido, editável), 1º
+ * vencimento, conta, categoria opcional, juros opcional (`LoanInterestFields`).
+ * `loan` presente = edição (mesmo componente pros dois fluxos, mesmo padrão
+ * de `CardFormModal`).
+ *
+ * `createLoanSchema` (`modules/loans/schemas.ts`) NÃO aceita
+ * `interestRate`/`interestPeriod` — só `updateLoanSchema` aceita. Criar com
+ * juros habilitado grava em 2 passos: `createLoanAction` (contrato base) e,
+ * em seguida, `updateLoanAction` só com os campos de juros. Editar sempre
+ * usa `updateLoanAction` direto (1 passo, já aceita os campos).
  */
-export function LoanFormModal({ open, onOpenChange }: LoanFormModalProps) {
+export function LoanFormModal({ open, onOpenChange, loan = null, onSaved }: LoanFormModalProps) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<FormState>(emptyFormState());
+  const isEditing = Boolean(loan);
+  const [form, setForm] = useState<FormState>(() => (loan ? formStateFromLoan(loan) : emptyFormState()));
   const [accountOptions, setAccountOptions] = useState<EntitySelectOption[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<EntitySelectOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -101,15 +152,16 @@ export function LoanFormModal({ open, onOpenChange }: LoanFormModalProps) {
   const [isPending, startTransition] = useTransition();
 
   /**
-   * Reset ao reabrir — "adjusting state when a prop changes"
-   * (react.dev/learn/you-might-not-need-an-effect), mesmo padrão de
-   * `InstallmentFormModal`/`CardFormModal`.
+   * Reset ao abrir (criar ou trocar de empréstimo editado) — "adjusting
+   * state when a prop changes" (react.dev/learn/you-might-not-need-an-effect),
+   * feito durante o render, mesmo padrão de `CardFormModal`.
    */
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) {
-      setForm(emptyFormState());
+  const syncKey = open ? (loan?.id ?? "__new__") : null;
+  const [lastSyncKey, setLastSyncKey] = useState<string | null>(syncKey);
+  if (syncKey !== lastSyncKey) {
+    setLastSyncKey(syncKey);
+    if (syncKey) {
+      setForm(loan ? formStateFromLoan(loan) : emptyFormState());
       setFormError(null);
       setFieldErrors({});
     }
@@ -137,7 +189,9 @@ export function LoanFormModal({ open, onOpenChange }: LoanFormModalProps) {
           : [];
         setCategoryOptions(expenseOptions);
 
-        // Default "Empréstimos" se o usuário já tiver essa categoria de despesa.
+        // Default "Empréstimos" se o usuário já tiver essa categoria de
+        // despesa E nenhuma categoria já estiver selecionada (não sobrescreve
+        // o prefill de edição quando o empréstimo já tem categoria própria).
         const loanCategory = expenseOptions.find((option) => normalizeLabel(option.label) === "emprestimos");
         if (loanCategory) {
           setForm((previous) => (previous.categoryId ? previous : { ...previous, categoryId: loanCategory.value }));
@@ -182,19 +236,48 @@ export function LoanFormModal({ open, onOpenChange }: LoanFormModalProps) {
     if (isBlank(form.installmentAmount)) errors.installmentAmount = "Informe o valor da parcela.";
     if (isBlank(form.totalToPay)) errors.totalToPay = "Informe o total a pagar.";
     if (!accountId) errors.accountId = "Selecione a conta.";
+    if (form.hasInterest && isBlank(form.interestRate)) errors.interestRate = "Informe a taxa de juros.";
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0 || !accountId) return;
 
+    const interestFields = form.hasInterest
+      ? { interestRate: form.interestRate, interestPeriod: form.interestPeriod }
+      : { interestRate: null, interestPeriod: null };
+
+    const baseInput = {
+      description: form.description,
+      principal: form.principal,
+      totalToPay: form.totalToPay,
+      installmentsCount: Number(form.installmentsCount),
+      installmentAmount: form.installmentAmount,
+      firstDueDate: form.firstDueDate,
+      accountId,
+    };
+
     startTransition(async () => {
+      if (isEditing && loan) {
+        const result = await updateLoanAction(loan.id, {
+          ...baseInput,
+          lender: form.lender.trim() || null,
+          categoryId: form.categoryId ?? null,
+          ...interestFields,
+        });
+
+        if (!result.success) {
+          setFormError(result.error.message);
+          return;
+        }
+
+        invalidateAllTransactionLists(queryClient);
+        notifySuccess("Empréstimo atualizado");
+        onOpenChange(false);
+        onSaved?.();
+        return;
+      }
+
       const result = await createLoanAction({
-        description: form.description,
+        ...baseInput,
         lender: form.lender.trim() || undefined,
-        principal: form.principal,
-        totalToPay: form.totalToPay,
-        installmentsCount: Number(form.installmentsCount),
-        installmentAmount: form.installmentAmount,
-        firstDueDate: form.firstDueDate,
-        accountId,
         categoryId: form.categoryId,
       });
 
@@ -208,8 +291,24 @@ export function LoanFormModal({ open, onOpenChange }: LoanFormModalProps) {
       // usada aqui, ex. `/accounts/[id]`), mesmo padrão de
       // `InstallmentFormModal`/`useTransactionMutations`.
       invalidateAllTransactionLists(queryClient);
+
+      // Ver JSDoc do componente: `createLoanSchema` não aceita juros — 2º
+      // passo só quando habilitado. Falha aqui NÃO desfaz a criação (o
+      // empréstimo já existe); o usuário edita o juros depois pelo mesmo form.
+      if (form.hasInterest) {
+        const interestResult = await updateLoanAction(result.data.loan.id, interestFields);
+        if (!interestResult.success) {
+          notifySuccess("Empréstimo criado");
+          notifyError(`Os juros não foram salvos: ${interestResult.error.message} Edite o empréstimo pra tentar de novo.`);
+          onOpenChange(false);
+          onSaved?.();
+          return;
+        }
+      }
+
       notifySuccess("Empréstimo criado");
       onOpenChange(false);
+      onSaved?.();
     });
   }
 
@@ -217,8 +316,12 @@ export function LoanFormModal({ open, onOpenChange }: LoanFormModalProps) {
     <FormModal
       open={open}
       onOpenChange={onOpenChange}
-      title="Novo empréstimo"
-      description="As parcelas são criadas automaticamente na conta escolhida."
+      title={isEditing ? "Editar empréstimo" : "Novo empréstimo"}
+      description={
+        isEditing
+          ? "Parcelas ainda não pagas são recalculadas se o contrato mudar."
+          : "As parcelas são criadas automaticamente na conta escolhida."
+      }
       size="wide"
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -331,6 +434,16 @@ export function LoanFormModal({ open, onOpenChange }: LoanFormModalProps) {
             disabled={isPending || loadingOptions}
           />
         </FormField>
+
+        <LoanInterestFields
+          value={{ hasInterest: form.hasInterest, interestRate: form.interestRate, interestPeriod: form.interestPeriod }}
+          onChange={(next) => {
+            setForm((previous) => ({ ...previous, ...next }));
+            clearFieldError("interestRate");
+          }}
+          error={fieldErrors.interestRate}
+          disabled={isPending}
+        />
 
         {formError && (
           <p role="alert" className="text-sm font-medium text-destructive">

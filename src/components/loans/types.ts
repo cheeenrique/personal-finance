@@ -1,3 +1,5 @@
+import type { InterestPeriod } from "@/generated/prisma/enums";
+
 /**
  * Tipos "view" do módulo Empréstimos — versões serializáveis (Decimal →
  * string, Date → ISO string) de `modules/loans/types.ts`. Necessário porque
@@ -38,4 +40,15 @@ export type LoanDetailData = LoanCardView & {
   installmentAmount: string;
   installments: LoanInstallmentView[];
   disbursement: LoanDisbursementView;
+  /**
+   * Campos do contrato que só a EDIÇÃO precisa (`LoanFormModal` pré-preenche
+   * a partir daqui quando `loan` é passado) — a listagem/card não usa nada
+   * disso, só o form de edição aberto a partir do detalhe.
+   */
+  firstDueDate: string;
+  accountId: string;
+  categoryId: string | null;
+  /** `null` = sem juros configurado (default do produto) — mesmo contrato de `ClientLoanWithProgress.interestRate`. */
+  interestRate: string | null;
+  interestPeriod: InterestPeriod | null;
 };
