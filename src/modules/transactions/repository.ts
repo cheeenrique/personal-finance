@@ -278,24 +278,27 @@ async function sumAmountByTypeInRange(
   range: { gte: Date; lt: Date },
   isPaid = true,
 ): Promise<Prisma.Decimal> {
-  const result = await prisma.transaction.aggregate({
-    where: {
-      userId,
-      deletedAt: null,
-      isPaid,
-      type,
-      transferId: null,
-      // KPIs mensais são FLUXO DE CAIXA (conta): compra no cartão de crédito é
-      // dívida (accrual), não saída de dinheiro — ela entra no caixa quando a
-      // fatura é paga (um EXPENSE da conta, "Pagamento de fatura"). Contar as
-      // compras do cartão AQUI dobraria com o pagamento da fatura.
-      cardId: null,
-      date: { gte: range.gte, lt: range.lt },
-    },
-    _sum: { amount: true },
-  });
+  // KPIs mensais são FLUXO DE CAIXA (conta): compra no cartão de crédito é
+  // dívida (accrual), não saída de dinheiro — entra no caixa quando a fatura é
+  // paga (EXPENSE da conta), então `cardId IS NULL` evita dobrar. O mês é o do
+  // MOVIMENTO do dinheiro: `paidAt` quando paga (pagamento antecipado cai no
+  // mês do pagamento, não do vencimento), `date` quando prevista
+  // (isPaid=false ⇒ paidAt sempre null). O aggregate do Prisma não expressa
+  // COALESCE no filtro, daí o $queryRaw parametrizado.
+  const rows = await prisma.$queryRaw<{ total: Prisma.Decimal | string | number }[]>`
+    SELECT COALESCE(SUM("amount"), 0) AS total
+    FROM "Transaction"
+    WHERE "userId" = ${userId}
+      AND "deletedAt" IS NULL
+      AND "isPaid" = ${isPaid}
+      AND "type" = ${type}::"TransactionType"
+      AND "transferId" IS NULL
+      AND "cardId" IS NULL
+      AND COALESCE("paidAt", "date") >= ${range.gte}
+      AND COALESCE("paidAt", "date") < ${range.lt}
+  `;
 
-  return result._sum.amount ?? new Prisma.Decimal(0);
+  return new Prisma.Decimal(rows[0]?.total ?? 0);
 }
 
 /** Agrupamento de despesas por categoria numa janela — insumo do gráfico de gastos por categoria. */
