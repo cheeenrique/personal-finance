@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  CartesianGrid,
-  Line,
-  LineChart as RechartsLineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+import { formatBRL } from "@/lib/money/format";
 
 export type LineChartPoint = {
   label: string;
@@ -16,15 +10,35 @@ export type LineChartPoint = {
   expense: number;
 };
 
+/** Tick compacto do eixo Y — "R$ 1.2k"/"R$ 15k"/"R$ 1.1M". Evita cortar dígito com valores de 5+ casas. */
+function formatCompactBRL(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (abs >= 1_000) return `R$ ${(value / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return `R$ ${value}`;
+}
+
 /**
  * Receita vs. despesa (Dashboard "Evolução mensal", Reports "Fluxo de
  * Caixa"). Cores travadas no design system: receita `--success`, despesa
- * `--destructive` (docs/04-DESIGN_SYSTEM.md, "Gráficos").
+ * `--destructive` (docs/04-DESIGN_SYSTEM.md, "Gráficos"). Área suave sob cada
+ * linha (gradiente leve) + tooltip com mês/receitas/despesas em BRL.
  */
 export function AppLineChart({ data }: { data: LineChartPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <RechartsLineChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="incomeAreaFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--success)" stopOpacity={0.25} />
+            <stop offset="95%" stopColor="var(--success)" stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="expenseAreaFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--destructive)" stopOpacity={0.25} />
+            <stop offset="95%" stopColor="var(--destructive)" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+
         <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
         <XAxis
           dataKey="label"
@@ -36,7 +50,8 @@ export function AppLineChart({ data }: { data: LineChartPoint[] }) {
           tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
-          width={48}
+          width={64}
+          tickFormatter={formatCompactBRL}
         />
         <Tooltip
           contentStyle={{
@@ -45,28 +60,30 @@ export function AppLineChart({ data }: { data: LineChartPoint[] }) {
             borderRadius: 10,
             fontSize: 12,
           }}
-          labelStyle={{ color: "var(--foreground)", fontWeight: 700 }}
-          formatter={(value) =>
-            new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value))
-          }
+          labelStyle={{ color: "var(--foreground)", fontWeight: 700, marginBottom: 4 }}
+          formatter={(value, name) => [formatBRL(Number(value)), name]}
         />
-        <Line
+        <Area
           type="monotone"
           dataKey="income"
           name="Receitas"
           stroke="var(--success)"
           strokeWidth={2}
-          dot={false}
+          fill="url(#incomeAreaFill)"
+          dot={{ r: 3, fill: "var(--success)", strokeWidth: 0 }}
+          activeDot={{ r: 4 }}
         />
-        <Line
+        <Area
           type="monotone"
           dataKey="expense"
           name="Despesas"
           stroke="var(--destructive)"
           strokeWidth={2}
-          dot={false}
+          fill="url(#expenseAreaFill)"
+          dot={{ r: 3, fill: "var(--destructive)", strokeWidth: 0 }}
+          activeDot={{ r: 4 }}
         />
-      </RechartsLineChart>
+      </AreaChart>
     </ResponsiveContainer>
   );
 }

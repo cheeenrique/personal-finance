@@ -35,6 +35,7 @@ export function MonthlyEvolutionChart({ points }: MonthlyEvolutionChartProps) {
       title="Evolução mensal"
       empty={!hasMovement}
       emptyMessage="Nenhuma movimentação registrada este ano ainda."
+      height={300}
       legend={
         <>
           <span className="inline-flex items-center gap-1.5">
