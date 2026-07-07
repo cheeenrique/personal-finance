@@ -209,7 +209,11 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
     lines.push(
       "",
       `IMPORTANTE — o usuário escreveu esta legenda junto da foto, que é o RÓTULO/intenção dele para o lançamento: "${caption}".`,
-      "A legenda tem PRIORIDADE sobre o texto cru da imagem para a DESCRIÇÃO e a CATEGORIA (a imagem serve pro VALOR/data/canal). Ex.: se a imagem é uma transferência para 'FULANO CONSULTORIA' mas a legenda diz 'Imposto TFE', a description é 'Imposto TFE' e a categoria é a de imposto — não o nome do destinatário. Se a legenda citar conta/cartão (ex.: 'pix Nubank'), use como origem também.",
+      "A CATEGORIA sempre vem do produto/serviço descrito na legenda (a imagem serve pro VALOR/data/canal, nunca pra categoria quando há legenda).",
+      "Para a DESCRIÇÃO, DECIDA pelo contexto se deve COMBINAR o pagador/destinatário da imagem com o produto da legenda, ou usar SÓ a legenda:",
+      "  - COMBINE no formato \"Pagador - Produto\" quando o pagador/destinatário da imagem AGREGA informação nova (é uma pessoa ou estabelecimento específico, diferente do próprio usuário). Ex.: imagem = pagamento para 'LucasDeLimaSilva', legenda = 'Açaí delivery' → description = \"LucasDeLimaSilva - Açaí\".",
+      "  - Use SÓ a legenda quando o pagador/destinatário da imagem é RUÍDO ou REDUNDANTE — não agrega nada (ex.: é a própria empresa/PJ do usuário recebendo uma transferência do próprio usuário, então repetir o nome dela na descrição não ajuda). Ex.: imagem = transferência para a PJ do próprio usuário, legenda = 'Imposto TFE' → description = \"Imposto TFE\", sem o nome da PJ.",
+      "Se a legenda citar conta/cartão (ex.: 'pix Nubank'), use como origem também.",
     );
   }
 

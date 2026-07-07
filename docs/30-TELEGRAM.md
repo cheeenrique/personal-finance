@@ -49,7 +49,8 @@ Sistema interpreta:
 
 * tipo: EXPENSE
 * valor: 120
-* categoria: Alimentação (inferida)
+* categoria: Mercado (inferida — categoria ESPECÍFICA que casou, filha de
+  Alimentação, sem subir pro pai)
 
 ````
 
@@ -181,7 +182,12 @@ livre passa por IA.
 * **Resolução de categoria** — match EXATO (case/acento-insensível) contra os
   nomes reais do usuário (`resolve.ts`, `resolveCategoryByName`); sem match →
   cai no fallback de sempre: categoria "Outros"/"Outros (Receita)". Categoria
-  NUNCA bloqueia o lançamento nem gera pergunta.
+  NUNCA bloqueia o lançamento nem gera pergunta. Sempre usa a categoria
+  ESPECÍFICA que casou — própria OU filha —, **sem subir pro pai** (ex.:
+  "Delivery" casa com "Delivery", não vira "Alimentação"); só usa o pai quando
+  o próprio usuário/IA citou o nome do pai diretamente. Mesma regra vale pro
+  parser regex (`resolveCategoryId`) e pro match por palavra-chave/histórico —
+  granularidade específica em texto e foto, pros relatórios ficarem mais úteis.
 * **Resolução de origem no caminho de sucesso da IA** — `resolve.ts`,
   `resolveOriginStrict`: DIFERENTE do fallback acima, aqui NÃO existe default
   de conta. Sem `originName` resolvido pro tipo esperado (`expectedOriginKind`

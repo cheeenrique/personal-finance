@@ -58,21 +58,11 @@ function matchByKeyword(candidates: string[], categories: Category[]): Category 
 }
 
 /**
- * Categoria FILHA casada por palavra-chave é atribuída/exibida no nível PAI
- * (ex.: "mercado" bate com a filha "Mercado" de "Alimentação", mas a
- * transação usa "Alimentação") — mesma granularidade dos exemplos de
- * resposta do bot em docs/30-TELEGRAM.md ("Respostas do Bot", "Resumo").
- */
-function toDisplayCategory(match: Category, byId: Map<string, Category>): Category {
-  if (!match.parentId) return match;
-  return byId.get(match.parentId) ?? match;
-}
-
-/**
  * Resolve a categoria de uma transação criada via Telegram (docs/30-TELEGRAM.md,
  * Regra 2 + "Estrutura de Interpretação"): 1) palavra-chave explícita ou a
- * própria descrição batendo com nome de categoria (própria ou filha, com
- * rollup pro pai) já existente do usuário; 2) HISTÓRICO — categoria da
+ * própria descrição batendo com nome de categoria (própria OU filha) já
+ * existente do usuário — usa a categoria EXATA que casou, sem subir pro pai
+ * (granularidade específica pros relatórios); 2) HISTÓRICO — categoria da
  * transação mais recente com essa MESMA descrição (`transactionService.
  * lastCategoryForDescription`, reusado do módulo transactions — mesma função
  * do autocomplete de Descrição, sem reimplementar); 3) fallback fixo
@@ -88,18 +78,15 @@ export async function resolveCategoryId(
   const expectedType = type === "INCOME" ? CategoryType.INCOME : CategoryType.EXPENSE;
   const tree = await categoryService.listTree(userId);
   const categories = flattenTree(tree).filter((category) => category.type === expectedType);
-  const byId = new Map(categories.map((category) => [category.id, category]));
 
   const keywordMatch = matchByKeyword(keywordCandidates, categories);
   if (keywordMatch) {
-    const display = toDisplayCategory(keywordMatch, byId);
-    return { id: display.id, name: display.name };
+    return { id: keywordMatch.id, name: keywordMatch.name };
   }
 
   const historyCategory = await transactionService.lastCategoryForDescription(userId, description);
   if (historyCategory && historyCategory.type === expectedType) {
-    const display = toDisplayCategory(historyCategory, byId);
-    return { id: display.id, name: display.name };
+    return { id: historyCategory.id, name: historyCategory.name };
   }
 
   const fallback = categories.find((category) => category.name === FALLBACK_CATEGORY_NAME[type]);
@@ -114,7 +101,8 @@ export async function resolveCategoryId(
  * (case/acento-insensível) — diferente de `matchByKeyword` acima (usado pelo
  * parser regex, que casa uma palavra isolada contra PARTES do nome, porque
  * ali as candidatas são palavras soltas da mensagem, não o nome completo
- * escolhido pela IA a partir da lista real). Sem match exato → cai no
+ * escolhido pela IA a partir da lista real). Usa a categoria EXATA que casou
+ * (própria OU filha), sem subir pro pai. Sem match exato → cai no
  * `resolveCategoryId` existente (keyword → histórico → fallback
  * "Outros"/"Outros (Receita)", sem duplicar essa regra) — cobre tanto o
  * lançamento por texto quanto por foto (ambos passam por aqui, `draft.ts`).
@@ -130,13 +118,11 @@ export async function resolveCategoryByName(
     const expectedType = type === "INCOME" ? CategoryType.INCOME : CategoryType.EXPENSE;
     const tree = await categoryService.listTree(userId);
     const categories = flattenTree(tree).filter((category) => category.type === expectedType);
-    const byId = new Map(categories.map((category) => [category.id, category]));
     const normalizedTarget = normalizeWord(categoryName);
 
     const exactMatch = categories.find((category) => normalizeWord(category.name) === normalizedTarget);
     if (exactMatch) {
-      const display = toDisplayCategory(exactMatch, byId);
-      return { id: display.id, name: display.name };
+      return { id: exactMatch.id, name: exactMatch.name };
     }
   }
 
