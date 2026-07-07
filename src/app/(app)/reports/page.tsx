@@ -1,12 +1,14 @@
 import { Suspense } from "react";
 
 import { auth } from "@/lib/auth";
+import { CardType } from "@/generated/prisma/enums";
 import { reportService } from "@/modules/reports/service";
 import { cardService } from "@/modules/cards/service";
 import { budgetService } from "@/modules/budgets/service";
 import { categoryService } from "@/modules/categories/service";
 import { accountService } from "@/modules/accounts/service";
 import { parseFlexibleDate } from "@/lib/date/schema";
+import { nowInSaoPaulo } from "@/lib/date/timezone";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReportsFiltersBar } from "@/components/reports/reports-filters-bar";
 import { ExportCsvButton } from "@/components/reports/export-csv-button";
@@ -79,6 +81,14 @@ async function ReportsContent({ filters }: { filters: ReturnType<typeof parseRep
     accountService.listWithBalances(userId),
   ]);
 
+  // Corta os meses FUTUROS do ano corrente: a série de 12 meses é zero-preenchida,
+  // então ago–dez (que ainda não aconteceram) fariam a linha do Fluxo de Caixa
+  // despencar pra zero depois do mês atual. Mesmo tratamento do dashboard
+  // (`monthly-evolution` slice). Anos passados mostram os 12 meses cheios.
+  const nowMonth = nowInSaoPaulo();
+  const cashflowPoints =
+    year === nowMonth.getFullYear() ? monthlyPoints.slice(0, nowMonth.getMonth() + 1) : monthlyPoints;
+
   const categoryOptions = flattenCategoryOptions(categoryTree);
   const categoryNameById = buildCategoryNameMap(categoryTree);
   const accountOptions = accountsWithBalance.map((account) => ({ value: account.id, label: account.name }));
@@ -104,8 +114,12 @@ async function ReportsContent({ filters }: { filters: ReturnType<typeof parseRep
     .map((card) => ({
       cardId: card.id,
       cardName: card.name,
+      isMeal: card.type === CardType.MEAL,
       currentInvoiceTotal: card.currentInvoiceTotal.toNumber(),
       availableLimit: card.availableLimit.toNumber(),
+      mealSpent: card.mealSpent?.toNumber() ?? 0,
+      mealRecharged: card.mealRecharged?.toNumber() ?? 0,
+      mealBalance: card.mealBalance?.toNumber() ?? 0,
     }));
 
   const budgetReportRows: BudgetReportRow[] = budgetsWithProgress
@@ -137,7 +151,7 @@ async function ReportsContent({ filters }: { filters: ReturnType<typeof parseRep
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CategoryReportSection categories={categoryTotals} totalAll={totalAll} />
-        <CashflowSection monthlyPoints={monthlyPoints} />
+        <CashflowSection monthlyPoints={cashflowPoints} />
         <KpiSummaryCard
           income={cashflowSummary.income.toNumber()}
           expense={cashflowSummary.expense.toNumber()}

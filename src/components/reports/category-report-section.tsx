@@ -26,7 +26,7 @@ export function CategoryReportSection({ categories, totalAll }: CategoryReportSe
       emptyMessage="Nenhum gasto por categoria neste período."
       height={280}
     >
-      <ul className="flex h-full flex-col justify-center gap-3 overflow-y-auto">
+      <ul className="flex h-full flex-col justify-start gap-3 overflow-y-auto">
         {categories.map((category) => {
           const total = category.total.toNumber();
           const percent = totalAll > 0 ? (total / totalAll) * 100 : 0;

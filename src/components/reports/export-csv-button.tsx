@@ -61,7 +61,7 @@ export function ExportCsvButton({ filters }: ExportCsvButtonProps) {
   }
 
   return (
-    <Button type="button" variant="outline" onClick={() => void handleExport()} disabled={loading} className="gap-1.5">
+    <Button type="button" variant="neutral" onClick={() => void handleExport()} disabled={loading} className="gap-1.5">
       {loading ? (
         <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
       ) : (
