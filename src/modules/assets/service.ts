@@ -52,40 +52,48 @@ function startOfDaySP(date: Date): Date {
   return parseInSaoPaulo(new Date(zoned.getFullYear(), zoned.getMonth(), zoned.getDate(), 0, 0, 0, 0));
 }
 
-type RawSnapshot = { assetId: string; value: Prisma.Decimal; date: Date };
+/** Um evento de valor de UM asset numa data — compra (âncora inicial) ou snapshot. */
+type EvolutionEvent = { assetId: string; value: Prisma.Decimal; date: Date };
 
 /**
- * Constrói a série de evolução do patrimônio TOTAL a partir dos snapshots de
- * TODOS os assets ativos do usuário (docs/27-ASSETS.md, "Evolução").
+ * Constrói a série de evolução do patrimônio TOTAL a partir de dois tipos de
+ * evento por asset (docs/27-ASSETS.md, "Evolução"):
+ * - a COMPRA (`purchaseDate` + `purchaseValue`) — asset entra na soma a
+ *   partir daqui, nunca antes. Sem essa âncora, um asset com um único
+ *   snapshot (o valor atual) "nasce" no gráfico já nesse valor e esconde a
+ *   valorização real desde a compra (ex.: imóvel comprado em 2020 por
+ *   R$186k, hoje valendo R$320k, mas só com o snapshot do valor atual).
+ * - cada `AssetSnapshot` — atualização de valor registrada pelo usuário.
  *
- * Abordagem (simplificada — YAGNI, sem tabela de agregação dedicada):
- * 1. Cada snapshot é bucketizado por dia-calendário em America/Sao_Paulo. Se
- *    um asset tiver >1 snapshot no mesmo dia, fica o mais recente (a lista
- *    de entrada já vem ordenada por `date asc`, então o último grava por
- *    cima).
+ * Abordagem (step function — YAGNI, sem tabela de agregação dedicada):
+ * 1. Cada evento é bucketizado por dia-calendário em America/Sao_Paulo. Se
+ *    um asset tiver >1 evento no mesmo dia (ex.: compra e 1º snapshot no
+ *    mesmo dia), fica o último processado — `events` chega ordenado por
+ *    data asc com a compra antes do snapshot em caso de empate (ver
+ *    `evolutionTotal`), então o snapshot (mais preciso) grava por cima.
  * 2. Os dias-âncora da série são a união de todos os dias em que QUALQUER
- *    asset recebeu um snapshot novo.
+ *    asset teve um evento novo (compra ou snapshot).
  * 3. Em cada dia-âncora, o valor de cada asset é "carregado" (forward-fill)
- *    do snapshot mais recente já conhecido até aquele dia — um asset sem
- *    nenhum snapshot ainda não entra na soma (equivalente a valor 0).
+ *    do evento mais recente já conhecido até aquele dia — um asset cuja
+ *    `purchaseDate` ainda não chegou não entra na soma (valor 0 implícito).
  * 4. O total do dia é a soma dos valores carregados de todos os assets.
  *
  * Não é recalculado a partir de Transactions — é histórico real do que foi
- * informado, igual à evolução de um asset isolado.
+ * informado (compra + atualizações), igual à evolução de um asset isolado.
  */
-function buildTotalEvolution(snapshots: RawSnapshot[]): TotalEvolutionPoint[] {
-  if (snapshots.length === 0) return [];
+function buildTotalEvolution(events: EvolutionEvent[]): TotalEvolutionPoint[] {
+  if (events.length === 0) return [];
 
   const lastValueByAssetPerDay = new Map<string, Map<string, Prisma.Decimal>>();
   const dayDateByKey = new Map<string, Date>();
 
-  for (const snapshot of snapshots) {
-    const key = dayKeySP(snapshot.date);
+  for (const event of events) {
+    const key = dayKeySP(event.date);
     if (!lastValueByAssetPerDay.has(key)) {
       lastValueByAssetPerDay.set(key, new Map());
-      dayDateByKey.set(key, startOfDaySP(snapshot.date));
+      dayDateByKey.set(key, startOfDaySP(event.date));
     }
-    lastValueByAssetPerDay.get(key)!.set(snapshot.assetId, snapshot.value);
+    lastValueByAssetPerDay.get(key)!.set(event.assetId, event.value);
   }
 
   const sortedDayKeys = Array.from(dayDateByKey.keys()).sort();
@@ -106,10 +114,27 @@ function buildTotalEvolution(snapshots: RawSnapshot[]): TotalEvolutionPoint[] {
   });
 }
 
-/** Série temporal do patrimônio total — ver `buildTotalEvolution` para a abordagem de agregação. */
+/**
+ * Série temporal do patrimônio total — ver `buildTotalEvolution` para a
+ * abordagem de agregação. Combina a compra de cada asset (âncora inicial)
+ * com os snapshots, ordenados por data (compra antes de snapshot em caso de
+ * empate no mesmo dia — `Array.prototype.sort` é estável).
+ */
 async function evolutionTotal(userId: string): Promise<TotalEvolutionPoint[]> {
-  const snapshots = await assetRepository.listAllSnapshotsForUser(userId);
-  return buildTotalEvolution(snapshots);
+  const [purchaseAnchors, snapshots] = await Promise.all([
+    assetRepository.listPurchaseAnchors(userId),
+    assetRepository.listAllSnapshotsForUser(userId),
+  ]);
+
+  const purchaseEvents: EvolutionEvent[] = purchaseAnchors.map((asset) => ({
+    assetId: asset.id,
+    value: asset.purchaseValue,
+    date: asset.purchaseDate,
+  }));
+
+  const events = [...purchaseEvents, ...snapshots].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  return buildTotalEvolution(events);
 }
 
 export const assetService = {

@@ -109,8 +109,9 @@ async function sumCurrentValues(userId: string): Promise<Prisma.Decimal> {
 
 /**
  * Todos os snapshots de todos os assets ATIVOS do usuário, ordenados por
- * data — insumo bruto de `service.ts` `evolutionTotal` (agregação por data
- * acontece em memória, ver comentário lá).
+ * data — um dos dois insumos brutos de `service.ts` `evolutionTotal` (o
+ * outro é `listPurchaseAnchors`; agregação por data acontece em memória, ver
+ * comentário lá).
  */
 async function listAllSnapshotsForUser(
   userId: string,
@@ -119,6 +120,23 @@ async function listAllSnapshotsForUser(
     where: { asset: { userId, deletedAt: null } },
     select: { assetId: true, value: true, date: true },
     orderBy: { date: "asc" },
+  });
+}
+
+/**
+ * `id` + `purchaseValue` + `purchaseDate` de todos os assets ATIVOS do
+ * usuário — a COMPRA é a âncora inicial de cada asset na evolução do
+ * patrimônio total (segundo insumo bruto de `service.ts` `evolutionTotal`,
+ * ver `listAllSnapshotsForUser`). Sem ela, um asset com um único snapshot
+ * "nasce" no gráfico já no valor atual e esconde a valorização real desde a
+ * compra (docs/27-ASSETS.md, "Evolução").
+ */
+async function listPurchaseAnchors(
+  userId: string,
+): Promise<Array<Pick<Asset, "id" | "purchaseValue" | "purchaseDate">>> {
+  return prisma.asset.findMany({
+    where: { userId, deletedAt: null },
+    select: { id: true, purchaseValue: true, purchaseDate: true },
   });
 }
 
@@ -131,4 +149,5 @@ export const assetRepository = {
   listSnapshots,
   sumCurrentValues,
   listAllSnapshotsForUser,
+  listPurchaseAnchors,
 };

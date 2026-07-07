@@ -11,6 +11,14 @@ type AssetEvolutionChartProps = {
   emptyMessage?: string;
 };
 
+/** Tick compacto do eixo Y — "R$ 1.2k"/"R$ 15k"/"R$ 1.1M" (mesmo formato de `AppLineChart`, componente próprio — ver comentário abaixo). */
+function formatCompactBRL(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (abs >= 1_000) return `R$ ${(value / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return `R$ ${value}`;
+}
+
 /**
  * Série única de valor ao longo do tempo (patrimônio total ou de um asset
  * isolado — docs/27-ASSETS.md, "Evolução"/"Detalhe do Asset"). `AppLineChart`
@@ -39,7 +47,7 @@ export function AssetEvolutionChart({ title, points, emptyMessage }: AssetEvolut
       }
     >
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+        <LineChart data={points} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="label"
@@ -51,7 +59,8 @@ export function AssetEvolutionChart({ title, points, emptyMessage }: AssetEvolut
             tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            width={48}
+            width={64}
+            tickFormatter={formatCompactBRL}
           />
           <Tooltip
             contentStyle={{
