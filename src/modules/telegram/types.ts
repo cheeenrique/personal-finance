@@ -31,3 +31,31 @@ export type CommandResult = {
   text: string;
   resultCode: string;
 };
+
+/** Origem citada numa mensagem de lançamento livre — "cartão X" vs "conta X" (ver `ai-parser.ts`/`resolve.ts`). */
+export type TelegramOriginKind = "account" | "card";
+
+/** Origem já resolvida pra um `accountId`/`cardId` real do usuário, com label pronto pra exibição na confirmação (ver `reply.ts`). */
+export type TelegramOrigin =
+  | { kind: "account"; id: string; label: string }
+  | { kind: "card"; id: string; label: string };
+
+/**
+ * Saída estruturada do parsing por IA (docs/30-TELEGRAM.md, "Parsing por
+ * IA") — já validada contra `aiResponseSchema` (zod) em `ai-parser.ts`.
+ * `isTransaction=false` quando a mensagem não é um lançamento (saudação,
+ * pergunta etc.). `date`/`categoryName`/`originKind`/`originName` vêm `null`
+ * quando a mensagem não menciona o respectivo dado — resolução determinística
+ * (data default = hoje, categoria/origem = fallback) fica por conta do
+ * chamador (`handlers.ts`), nunca da IA.
+ */
+export type AiParsedTransaction = {
+  isTransaction: boolean;
+  type: TelegramTransactionType;
+  amount: string;
+  description: string;
+  date: string | null;
+  categoryName: string | null;
+  originKind: TelegramOriginKind | null;
+  originName: string | null;
+};

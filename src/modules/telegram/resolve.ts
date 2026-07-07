@@ -1,10 +1,11 @@
 import { CategoryType } from "@/generated/prisma/enums";
 import { categoryService } from "@/modules/categories/service";
 import { accountService } from "@/modules/accounts/service";
+import { cardService } from "@/modules/cards/service";
 import type { Category, CategoryTreeNode } from "@/modules/categories/types";
 import { normalizeWord } from "./normalize";
 import { FallbackCategoryMissingError, NoActiveAccountError } from "./errors";
-import type { TelegramTransactionType } from "./types";
+import type { TelegramOrigin, TelegramOriginKind, TelegramTransactionType } from "./types";
 
 /**
  * Fallback fixo por tipo (docs/24-CATEGORIES.md + docs/30-TELEGRAM.md, Regra
@@ -90,15 +91,93 @@ export async function resolveCategoryId(
 }
 
 /**
- * Conta padrão para lançamento rápido via Telegram: a mais antiga (1ª
- * criada) entre as ativas do usuário. O módulo accounts não expõe "última
- * conta usada" hoje (só `transactionService.lastUsedCategory` existe pro
- * caso de categoria) — adicionar isso é sugestão de melhoria separada, fora
- * do escopo desta task (ver retorno).
+ * Resolve o `categoryName` sugerido pela IA (docs/30-TELEGRAM.md, "Parsing
+ * por IA") contra as categorias REAIS do usuário: match EXATO por nome
+ * (case/acento-insensível) — diferente de `matchByKeyword` acima (usado pelo
+ * parser regex, que casa uma palavra isolada contra PARTES do nome, porque
+ * ali as candidatas são palavras soltas da mensagem, não o nome completo
+ * escolhido pela IA a partir da lista real). Sem match exato → cai no
+ * `resolveCategoryId` existente (mesmo fallback "Outros"/"Outros (Receita)",
+ * sem duplicar essa regra).
  */
-export async function resolveDefaultAccountId(userId: string): Promise<string> {
+export async function resolveCategoryByName(
+  userId: string,
+  type: TelegramTransactionType,
+  categoryName: string | null,
+  fallbackKeywordCandidates: string[],
+): Promise<{ id: string; name: string }> {
+  if (categoryName) {
+    const expectedType = type === "INCOME" ? CategoryType.INCOME : CategoryType.EXPENSE;
+    const tree = await categoryService.listTree(userId);
+    const categories = flattenTree(tree).filter((category) => category.type === expectedType);
+    const byId = new Map(categories.map((category) => [category.id, category]));
+    const normalizedTarget = normalizeWord(categoryName);
+
+    const exactMatch = categories.find((category) => normalizeWord(category.name) === normalizedTarget);
+    if (exactMatch) {
+      const display = toDisplayCategory(exactMatch, byId);
+      return { id: display.id, name: display.name };
+    }
+  }
+
+  return resolveCategoryId(userId, type, fallbackKeywordCandidates);
+}
+
+/** Conta ATIVA mais antiga (1ª criada) do usuário — origem default quando nada mais resolve. */
+async function findDefaultActiveAccount(userId: string) {
   const accounts = await accountService.listWithBalances(userId);
   const active = accounts.find((account) => account.isActive);
   if (!active) throw new NoActiveAccountError(userId);
-  return active.id;
+  return active;
+}
+
+/**
+ * Resolve a origem (conta OU cartão) de um lançamento via Telegram
+ * (docs/30-TELEGRAM.md, "Parsing por IA"): se a IA identificou uma origem
+ * (`originKind`/`originName`) e ela bate — case/acento-insensível — com uma
+ * conta/cartão ATIVO real do usuário, usa essa origem; senão cai na conta
+ * default (mesmo comportamento de hoje do lançamento rápido regex, ver
+ * `findDefaultActiveAccount`). Chamado também pelo caminho regex com
+ * `originKind`/`originName` nulos — sempre cai direto no default, sem mudar
+ * o comportamento existente.
+ */
+export async function resolveOrigin(
+  userId: string,
+  originKind: TelegramOriginKind | null,
+  originName: string | null,
+): Promise<TelegramOrigin> {
+  const normalizedTarget = originName ? normalizeWord(originName) : null;
+
+  if (normalizedTarget && originKind === "card") {
+    const cards = await cardService.listCards(userId);
+    const match = cards.find((card) => card.isActive && normalizeWord(card.name) === normalizedTarget);
+    if (match) return { kind: "card", id: match.id, label: `Cartão ${match.name}` };
+  }
+
+  if (normalizedTarget && originKind === "account") {
+    const accounts = await accountService.listWithBalances(userId);
+    const match = accounts.find((account) => account.isActive && normalizeWord(account.name) === normalizedTarget);
+    if (match) return { kind: "account", id: match.id, label: `Conta ${match.name}` };
+  }
+
+  const fallback = await findDefaultActiveAccount(userId);
+  return { kind: "account", id: fallback.id, label: `Conta ${fallback.name}` };
+}
+
+/** Nomes das categorias (ambos os tipos) do usuário — insumo do prompt da IA pra escolher a categoria mais próxima. */
+export async function listCategoryNamesForAI(userId: string): Promise<string[]> {
+  const tree = await categoryService.listTree(userId);
+  return flattenTree(tree).map((category) => category.name);
+}
+
+/** Nomes de contas + cartões ATIVOS do usuário — insumo do prompt da IA pra escolher a origem do lançamento. */
+export async function listOriginNamesForAI(
+  userId: string,
+): Promise<{ accountNames: string[]; cardNames: string[] }> {
+  const [accounts, cards] = await Promise.all([accountService.listWithBalances(userId), cardService.listCards(userId)]);
+
+  return {
+    accountNames: accounts.filter((account) => account.isActive).map((account) => account.name),
+    cardNames: cards.filter((card) => card.isActive).map((card) => card.name),
+  };
 }

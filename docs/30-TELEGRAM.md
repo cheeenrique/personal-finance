@@ -123,6 +123,61 @@ Se houver múltiplas palavras → primeira é descrição
 
 ---
 
+# Parsing por IA (lançamento livre)
+
+Híbrido: comandos determinísticos continuam 100% regex; só o lançamento
+livre passa por IA.
+
+* **Nunca chamam a IA** (resolvidos 100% pelo parser regex, `parser.ts`,
+  rápido e grátis): `saldo`, `hoje`, `gastos mes`, `/vincular`, `/start`.
+* **Passa pela IA**: qualquer mensagem que hoje cairia em
+  `create_transaction` ou `unknown` (o lançamento livre em si) —
+  `modules/telegram/ai-parser.ts`, `parseTransactionWithAI`. Modelo: Gemini
+  Flash (`gemini-2.5-flash`), REST `generateContent` (`v1beta`) com
+  `responseMimeType: "application/json"` + `responseSchema` (structured
+  output) — **sem SDK**, `fetch` nativo (Vercel serverless já tem fetch).
+* A IA extrai, a partir da mensagem + do contexto do usuário (categorias,
+  contas, cartões reais, passados no prompt):
+  * `isTransaction` — `false` se a mensagem não for um lançamento (saudação,
+    pergunta etc.), aí cai na resposta padrão de "não entendi".
+  * `type` (EXPENSE/INCOME), `amount`, `description`.
+  * `date` — resolve relativos ("hoje"/"ontem"/"amanhã") e absolutos ("dia
+    18/06") contra a data de referência (`todaySaoPaulo`, "hoje" em
+    America/Sao_Paulo); `null` se a mensagem não menciona data (vira "hoje").
+  * `categoryName` — nome mais próximo dentre as categorias REAIS do usuário
+    (ambos os tipos, passadas no prompt); `null` se nada bate.
+  * `originKind`/`originName` — se a mensagem citar um CARTÃO ("cartão X", "X
+    crédito/débito") ou uma CONTA/banco/pix, a IA escolhe o nome mais próximo
+    dentre as contas/cartões ATIVOS reais do usuário (passados no prompt);
+    ambos `null` se não mencionou origem nenhuma.
+* **Fallback determinístico** — sem `GEMINI_API_KEY`, erro de rede, timeout
+  (~8s, `AbortController`) ou JSON fora do shape esperado (validado com zod,
+  nunca confiamos cegamente na saída de um LLM) → `parseTransactionWithAI`
+  retorna `null` e o webhook cai automaticamente no resultado do parser regex
+  de sempre: `create_transaction` vira o lançamento clássico (hoje + pago),
+  `unknown` vira a resposta padrão de "não entendi". **A IA nunca pode
+  derrubar o bot.**
+* **Regra determinística de `isPaid` (fora da IA, sempre em código)**: data
+  resolvida > hoje (America/Sao_Paulo) → `isPaid=false` (lançamento
+  previsto/futuro); senão `isPaid=true`. A IA só sugere a data — quem decide
+  "previsto vs. pago" é `handlers.ts`.
+* **Resolução de categoria/origem** — match EXATO (case/acento-insensível)
+  contra os nomes reais do usuário (`resolve.ts`, `resolveCategoryByName`/
+  `resolveOrigin`); sem match → cai no MESMO fallback de sempre: categoria
+  "Outros"/"Outros (Receita)"; origem = conta ativa mais antiga do usuário
+  (comportamento idêntico ao lançamento rápido regex, nunca muda).
+* Um cartão/conta só é escolhido se **existir de fato** cadastrado e ATIVO no
+  app do usuário — nome sugerido pela IA que não bate com nada real cai no
+  fallback default, nunca quebra/erra.
+* A confirmação (`reply.ts`) mostra origem ("Conta X"/"Cartão X") e data
+  (`dd/mm/aaaa`, com "(previsto)" quando `isPaid=false`), além de
+  descrição/valor/categoria já existentes.
+* `GEMINI_API_KEY` precisa estar setada tanto local (`.env`) quanto na Vercel
+  (Production) — sem ela, o bot continua funcionando normalmente, só no modo
+  regex-only (nenhuma feature quebra por falta da key).
+
+---
+
 # Comandos
 
 ## Nova transação
@@ -166,7 +221,12 @@ hoje
 
 Mercado - R$ 120
 Categoria: Alimentação
+Origem: Conta Nubank
+Data: 06/07/2026
 ```
+
+Com data futura (lançamento previsto) a linha de data ganha o sufixo
+"(previsto)" (ex.: `Data: 18/06/2026 (previsto)`) — ver "Parsing por IA".
 
 Confirmação inline por botão (ex.: trocar categoria antes de salvar) é opcional, não obrigatória no MVP.
 

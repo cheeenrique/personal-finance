@@ -1,4 +1,5 @@
 import { formatBRL } from "@/lib/money/format";
+import { formatDateSaoPaulo } from "@/lib/date/format";
 import type { TelegramTransactionType } from "./types";
 
 function capitalize(text: string): string {
@@ -6,20 +7,33 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** Confirmação de transação (docs/30-TELEGRAM.md, "Respostas do Bot"). */
+/**
+ * Confirmação de transação (docs/30-TELEGRAM.md, "Respostas do Bot"). `date`
+ * é a data JÁ PERSISTIDA (`transaction.date`, sempre um `Date` real resolvido
+ * pelo schema) — nunca reformatar a partir de uma string `YYYY-MM-DD` crua
+ * aqui (mesma pegadinha de timezone documentada em `lib/date/schema.ts`).
+ * `isPaid=false` marca "(previsto)" — lançamento com data futura
+ * (docs/30-TELEGRAM.md, "Parsing por IA").
+ */
 export function buildTransactionConfirmationReply(params: {
   type: TelegramTransactionType;
   description: string;
   amount: string;
   categoryName: string;
+  originLabel: string;
+  date: Date;
+  isPaid: boolean;
 }): string {
   const label = params.type === "INCOME" ? "Receita registrada" : "Gasto registrado";
+  const dateLabel = formatDateSaoPaulo(params.date) + (params.isPaid ? "" : " (previsto)");
 
   return [
     `✔ ${label}`,
     "",
     `${capitalize(params.description)} - ${formatBRL(params.amount)}`,
     `Categoria: ${params.categoryName}`,
+    `Origem: ${params.originLabel}`,
+    `Data: ${dateLabel}`,
   ].join("\n");
 }
 

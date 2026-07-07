@@ -74,7 +74,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const command = telegramParser.parseMessage(text);
-  const result = await telegramHandlers.executeCommand(userId, command);
+  const result = await telegramHandlers.executeCommand(userId, command, text);
   await telegramApi.sendMessage(botToken, chatId, result.text);
 
   // Log só chat_id + resultado — nunca corpo da mensagem nem valores (docs/30-TELEGRAM.md, "Segurança").

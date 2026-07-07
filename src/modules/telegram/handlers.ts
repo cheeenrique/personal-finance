@@ -5,7 +5,15 @@ import { TransactionDomainError } from "@/modules/transactions/errors";
 import { accountService } from "@/modules/accounts/service";
 import { AccountDomainError } from "@/modules/accounts/errors";
 import { nowInSaoPaulo, parseInSaoPaulo } from "@/lib/date/timezone";
-import { resolveCategoryId, resolveDefaultAccountId } from "./resolve";
+import { toDateInputValueSaoPaulo } from "@/lib/date/format";
+import { parseTransactionWithAI } from "./ai-parser";
+import {
+  listCategoryNamesForAI,
+  listOriginNamesForAI,
+  resolveCategoryByName,
+  resolveCategoryId,
+  resolveOrigin,
+} from "./resolve";
 import {
   buildBalanceReply,
   buildErrorReply,
@@ -15,7 +23,7 @@ import {
   buildUnknownReply,
 } from "./reply";
 import { TelegramDomainError } from "./errors";
-import type { CommandResult, ParsedCommand } from "./types";
+import type { AiParsedTransaction, CommandResult, ParsedCommand, TelegramOrigin } from "./types";
 
 function isKnownDomainError(error: unknown): error is Error {
   return (
@@ -25,14 +33,19 @@ function isKnownDomainError(error: unknown): error is Error {
   );
 }
 
-/** Regra 2/3 (docs/30-TELEGRAM.md): categoria nunca fica nula, data default = agora. Conta default = `resolveDefaultAccountId` (ver resolve.ts). */
+/** `{ accountId }` ou `{ cardId } ` pro payload de `createTransactionSchema` — nunca os dois juntos (invariante do schema). */
+function originPayload(origin: TelegramOrigin): { accountId: string } | { cardId: string } {
+  return origin.kind === "card" ? { cardId: origin.id } : { accountId: origin.id };
+}
+
+/** Regra 2/3 (docs/30-TELEGRAM.md): categoria nunca fica nula, data default = agora. Origem default = `resolveOrigin` sem kind/name (mesma conta ativa mais antiga de sempre, ver resolve.ts). */
 async function handleCreateTransaction(
   userId: string,
   command: Extract<ParsedCommand, { kind: "create_transaction" }>,
 ): Promise<CommandResult> {
-  const [category, accountId] = await Promise.all([
+  const [category, origin] = await Promise.all([
     resolveCategoryId(userId, command.type, command.keywordCandidates),
-    resolveDefaultAccountId(userId),
+    resolveOrigin(userId, null, null),
   ]);
 
   const parsed = createTransactionSchema.safeParse({
@@ -40,7 +53,7 @@ async function handleCreateTransaction(
     amount: command.amount,
     type: command.type,
     categoryId: category.id,
-    accountId,
+    ...originPayload(origin),
   });
 
   if (!parsed.success) {
@@ -50,7 +63,7 @@ async function handleCreateTransaction(
     };
   }
 
-  await transactionService.createTransaction(userId, parsed.data);
+  const created = await transactionService.createTransaction(userId, parsed.data);
 
   return {
     text: buildTransactionConfirmationReply({
@@ -58,9 +71,107 @@ async function handleCreateTransaction(
       description: command.description,
       amount: command.amount,
       categoryName: category.name,
+      originLabel: origin.label,
+      date: created.date,
+      isPaid: created.isPaid,
     }),
     resultCode: "transaction_created",
   };
+}
+
+/**
+ * Lançamento a partir da saída já validada da IA (docs/30-TELEGRAM.md,
+ * "Parsing por IA"). Regra determinística — NUNCA decidida pela IA: data
+ * resolvida > hoje (America/Sao_Paulo) = previsto (`isPaid=false`); senão
+ * pago (`isPaid=true`). Comparação por string `YYYY-MM-DD` (ISO, ordena
+ * lexicograficamente igual a cronologicamente — sem parse de Date aqui).
+ */
+async function handleAiTransaction(userId: string, ai: AiParsedTransaction): Promise<CommandResult> {
+  const today = toDateInputValueSaoPaulo();
+  const dateStr = ai.date ?? today;
+  const isPaid = dateStr <= today;
+  const keywordCandidates = [ai.categoryName, ai.description].filter((value): value is string => Boolean(value));
+
+  const [category, origin] = await Promise.all([
+    resolveCategoryByName(userId, ai.type, ai.categoryName, keywordCandidates),
+    resolveOrigin(userId, ai.originKind, ai.originName),
+  ]);
+
+  const parsed = createTransactionSchema.safeParse({
+    description: ai.description,
+    amount: ai.amount,
+    type: ai.type,
+    categoryId: category.id,
+    ...originPayload(origin),
+    date: dateStr,
+    isPaid,
+  });
+
+  if (!parsed.success) {
+    return {
+      text: buildErrorReply(parsed.error.issues[0]?.message ?? "Dados inválidos."),
+      resultCode: "validation_error",
+    };
+  }
+
+  const created = await transactionService.createTransaction(userId, parsed.data);
+
+  return {
+    text: buildTransactionConfirmationReply({
+      type: ai.type,
+      description: ai.description,
+      amount: ai.amount,
+      categoryName: category.name,
+      originLabel: origin.label,
+      date: created.date,
+      isPaid: created.isPaid,
+    }),
+    resultCode: "transaction_created",
+  };
+}
+
+/** Insumo do prompt da IA — categorias/contas/cartões reais do usuário + "hoje" em SP (docs/30-TELEGRAM.md, "Parsing por IA"). */
+async function buildAiContext(userId: string) {
+  const [categoryNames, origins] = await Promise.all([
+    listCategoryNamesForAI(userId),
+    listOriginNamesForAI(userId),
+  ]);
+
+  return {
+    todaySaoPaulo: toDateInputValueSaoPaulo(),
+    categoryNames,
+    accountNames: origins.accountNames,
+    cardNames: origins.cardNames,
+  };
+}
+
+/**
+ * Lançamento livre (docs/30-TELEGRAM.md, "Parsing por IA") — híbrido: tenta
+ * o Gemini primeiro (data relativa, categoria e origem por nome real);
+ * IA indisponível/erro/timeout/JSON inválido (`null`) → fallback pro
+ * resultado do parser regex já calculado em `route.ts` (`fallbackCommand`):
+ * `create_transaction` vira o lançamento de sempre (hoje + pago), `unknown`
+ * vira a resposta de "não entendi".
+ */
+async function handleFreeformEntry(
+  userId: string,
+  rawText: string,
+  fallbackCommand: Extract<ParsedCommand, { kind: "create_transaction" | "unknown" }>,
+): Promise<CommandResult> {
+  const ctx = await buildAiContext(userId);
+  const ai = await parseTransactionWithAI(rawText, ctx);
+
+  if (ai === null) {
+    return fallbackCommand.kind === "create_transaction"
+      ? handleCreateTransaction(userId, fallbackCommand)
+      : { text: buildUnknownReply(), resultCode: "unknown_message" };
+  }
+
+  if (!ai.isTransaction) {
+    return { text: buildUnknownReply(), resultCode: "unknown_message" };
+  }
+
+  return handleAiTransaction(userId, ai);
 }
 
 async function handleQueryBalance(userId: string): Promise<CommandResult> {
@@ -108,20 +219,23 @@ async function handleQueryToday(userId: string): Promise<CommandResult> {
  * amigável (mesma mensagem já usada nas Server Actions do app); erros
  * inesperados nunca vazam detalhe interno — resposta genérica + log só do
  * `kind` do comando (nunca o texto/valor da mensagem).
+ *
+ * `rawText` só é usado no caminho de lançamento livre (`create_transaction`/
+ * `unknown` — docs/30-TELEGRAM.md, "Parsing por IA"); os comandos
+ * determinísticos (saldo/hoje/gastos mes) nunca chamam a IA.
  */
-async function executeCommand(userId: string, command: ParsedCommand): Promise<CommandResult> {
+async function executeCommand(userId: string, command: ParsedCommand, rawText: string): Promise<CommandResult> {
   try {
     switch (command.kind) {
       case "create_transaction":
-        return await handleCreateTransaction(userId, command);
+      case "unknown":
+        return await handleFreeformEntry(userId, rawText, command);
       case "query_balance":
         return await handleQueryBalance(userId);
       case "query_month_expenses":
         return await handleQueryMonthExpenses(userId);
       case "query_today":
         return await handleQueryToday(userId);
-      case "unknown":
-        return { text: buildUnknownReply(), resultCode: "unknown_message" };
     }
   } catch (error) {
     if (isKnownDomainError(error)) {
