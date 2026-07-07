@@ -3,7 +3,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { loanRepository } from "./repository";
 import { loanOwnership } from "./ownership";
 import { LoanNotFoundError, LoanAccountNotFoundError, LoanCategoryNotFoundError } from "./errors";
-import type { LoanWithProgress, LoanWithTransactions } from "./types";
+import type { LoanWithProgress, LoanWithTransactions, LoanWithInstallments } from "./types";
 
 /** Exportado para reuso por `installments.ts` (mesma regra de ownership, sem duplicar query) — mesmo padrão de `modules/transactions/service.ts`. */
 export async function assertAccountOwnership(userId: string, accountId: string): Promise<void> {
@@ -54,6 +54,32 @@ async function getLoan(userId: string, id: string): Promise<LoanWithProgress> {
 }
 
 /**
+ * Mesma busca de `getLoan`, mas mantém as parcelas cruas (`transactions`) no
+ * retorno — insumo exclusivo da tela `/loans/[id]` (lista de parcelas +
+ * "marcar paga"). Função própria em vez de alterar `getLoan`: preserva o
+ * contrato existente de `getLoanAction` (que serializa `LoanWithProgress`
+ * pra Client Component — um `Prisma.Decimal` esquecido dentro de
+ * `installments` quebraria essa serialização) sem duplicar a query;
+ * duplica só a composição do retorno (rule 02-dry-kiss-yagni: 2ª ocorrência,
+ * aceitável).
+ */
+async function getLoanDetail(userId: string, id: string): Promise<LoanWithInstallments> {
+  const loan = await loanRepository.findByIdWithTransactions(userId, id);
+  if (!loan) throw new LoanNotFoundError(id);
+  return { ...deriveLoanProgress(loan), installments: loan.transactions };
+}
+
+/**
+ * Empréstimos com saldo devedor (`paidCount < installmentsCount`) — insumo
+ * do bloco "Empréstimos ativos" do Dashboard, mesmo filtro de
+ * `transactionService.listActiveInstallmentPurchases`.
+ */
+async function listActiveLoans(userId: string): Promise<LoanWithProgress[]> {
+  const loans = await listLoans(userId);
+  return loans.filter((loan) => loan.paidCount < loan.installmentsCount);
+}
+
+/**
  * Soft delete do empréstimo (docs/03-DATABASE.md, "Soft Delete"). Decisão:
  * parcelas FUTURAS ainda não pagas (`isPaid=false`) recebem soft delete junto
  * — deixar de existir como dívida prevista faz sentido ao cancelar o
@@ -77,6 +103,8 @@ async function deleteLoan(userId: string, id: string): Promise<void> {
 
 export const loanService = {
   listLoans,
+  listActiveLoans,
   getLoan,
+  getLoanDetail,
   deleteLoan,
 };

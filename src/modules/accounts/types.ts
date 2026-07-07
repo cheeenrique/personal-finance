@@ -32,3 +32,26 @@ export type TransferResult = {
   fromTransactionId: string;
   toTransactionId: string;
 };
+
+/**
+ * Item do alerta "Saldo insuficiente" (topo do Dashboard) — uma despesa
+ * prevista (EXPENSE, isPaid=false) que o saldo da própria conta não cobre,
+ * waterfall por data (ver service.ts `getInsufficientBalanceReport`). Já
+ * client-ready (`amount`/`falta` como string) — este relatório não tem
+ * nenhum outro consumidor além do Dashboard, então não há motivo pra manter
+ * uma forma intermediária em `Decimal` cruzando módulos.
+ */
+export type InsufficientBalanceItem = {
+  id: string;
+  description: string;
+  date: Date;
+  accountName: string;
+  amount: string;
+  falta: string;
+};
+
+/** Relatório completo do alerta "Saldo insuficiente" — `items: []` quando o saldo de toda conta cobre suas próprias previstas. */
+export type InsufficientBalanceReport = {
+  deficitTotal: string;
+  items: InsufficientBalanceItem[];
+};

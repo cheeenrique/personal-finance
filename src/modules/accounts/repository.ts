@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { Prisma, type Account } from "@/generated/prisma/client";
-import type { AccountType } from "@/generated/prisma/enums";
+import { TransactionType, type AccountType } from "@/generated/prisma/enums";
 
 export type CreateAccountData = {
   name: string;
@@ -111,6 +111,46 @@ async function sumAmountsByType(userId: string, accountIds: string[]): Promise<A
     }));
 }
 
+/** Uma despesa prevista (EXPENSE, isPaid=false) — insumo do waterfall de "Saldo insuficiente" (ver service.ts `getInsufficientBalanceReport`). */
+export type UnpaidExpenseRow = {
+  id: string;
+  description: string;
+  amount: Prisma.Decimal;
+  date: Date;
+  accountId: string;
+};
+
+/**
+ * Despesas previstas (EXPENSE, `isPaid=false`) das contas informadas, até
+ * `before` (exclusive) — vencidas + do mês corrente, nunca meses futuros
+ * (`before` é o início do PRÓXIMO mês, calculado no service). 1 query para N
+ * contas, sem N+1 (mesmo padrão de `sumAmountsByType`/`cardRepository.
+ * listExpensesForCards`). Ordenada por `date` asc: o waterfall cobre a
+ * previsão mais antiga primeiro.
+ */
+async function listUnpaidExpensesByAccount(
+  userId: string,
+  accountIds: string[],
+  before: Date,
+): Promise<UnpaidExpenseRow[]> {
+  if (accountIds.length === 0) return [];
+
+  const rows = await prisma.transaction.findMany({
+    where: {
+      userId,
+      accountId: { in: accountIds },
+      type: TransactionType.EXPENSE,
+      isPaid: false,
+      deletedAt: null,
+      date: { lt: before },
+    },
+    select: { id: true, description: true, amount: true, date: true, accountId: true },
+    orderBy: { date: "asc" },
+  });
+
+  return rows.filter((row): row is typeof row & { accountId: string } => row.accountId !== null);
+}
+
 export const accountRepository = {
   findById,
   list,
@@ -118,4 +158,5 @@ export const accountRepository = {
   update,
   softDelete,
   sumAmountsByType,
+  listUnpaidExpensesByAccount,
 };

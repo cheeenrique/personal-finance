@@ -1,0 +1,171 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { Check, HandCoins, PiggyBank, Trash2, TrendingDown, Wallet } from "lucide-react";
+
+import { KPICard } from "@/components/shared/kpi-card";
+import { ProgressBar } from "@/components/dashboard/progress-bar";
+import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { IconActionButton } from "@/components/shared/icon-action-button";
+import { Button } from "@/components/ui/button";
+import { deleteLoanAction } from "@/modules/loans/actions";
+import { updateTransactionAction } from "@/modules/transactions/actions";
+import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
+import { formatBRL } from "@/lib/money/format";
+import { formatDateSaoPaulo } from "@/lib/date/format";
+import { notifyError, notifySuccess } from "@/lib/toast";
+import { cn } from "@/lib/utils";
+import type { LoanDetailData, LoanInstallmentView } from "./types";
+
+type LoanDetailViewProps = { loan: LoanDetailData };
+
+type InstallmentRow = LoanInstallmentView & { number: number };
+
+/**
+ * Detalhe de `/loans/[id]`: KPIs (principal/total/juros/saldo devedor),
+ * progresso e a lista completa das parcelas (sem paginação — mesmo racional
+ * de `InstallmentDetailsModal`: lista de tamanho fixo definido na criação,
+ * não cresce sem limite como Transactions, docs/04-DESIGN_SYSTEM.md,
+ * "Tabelas"). "Marcar como paga" reaproveita `updateTransactionAction` do
+ * módulo de transações — a parcela do empréstimo É uma Transaction
+ * (`modules/loans/installments.ts` `createLoan`), então o mesmo fluxo de
+ * pagar qualquer despesa de conta se aplica aqui. Excluir usa
+ * `deleteLoanAction` + `ConfirmDialog`, mesmo padrão de `AccountGrid`.
+ */
+export function LoanDetailView({ loan }: LoanDetailViewProps) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  const percent = (Number(loan.paidAmount) / Number(loan.totalToPay)) * 100;
+  const isSettled = Number(loan.remainingAmount) <= 0;
+
+  const rows: InstallmentRow[] = loan.installments.map((installment, index) => ({
+    ...installment,
+    number: index + 1,
+  }));
+
+  async function handleMarkPaid(installmentId: string) {
+    setPendingId(installmentId);
+    const result = await updateTransactionAction(installmentId, { isPaid: true });
+    setPendingId(null);
+
+    if (!result.success) {
+      notifyError(result.error.message);
+      return;
+    }
+
+    // A parcela também pode aparecer em `/transactions`/`/accounts/[id]` —
+    // invalida o cache client-side de todas as listagens de transação
+    // (mesmo padrão de `useTransactionMutations`), além de atualizar o
+    // progresso desta própria página (Server Component).
+    invalidateAllTransactionLists(queryClient);
+    notifySuccess("Parcela marcada como paga");
+    router.refresh();
+  }
+
+  async function handleDelete() {
+    const result = await deleteLoanAction(loan.id);
+    if (!result.success) throw new Error(result.error.message);
+    notifySuccess("Empréstimo excluído");
+    router.push("/loans");
+  }
+
+  const columns: DataTableColumn<InstallmentRow>[] = [
+    { key: "number", header: "Parcela", render: (row) => `${row.number}/${loan.installmentsCount}` },
+    { key: "date", header: "Vencimento", render: (row) => formatDateSaoPaulo(row.date) },
+    {
+      key: "amount",
+      header: "Valor",
+      align: "right",
+      render: (row) => <span className="font-mono font-bold text-foreground">{formatBRL(row.amount)}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => (
+        <span
+          className={cn(
+            "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap",
+            row.isPaid ? "bg-success/16 text-on-success" : "bg-warning/16 text-on-warning",
+          )}
+        >
+          {row.isPaid ? "Paga" : "Pendente"}
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-primary/18 text-on-primary">
+            <HandCoins className="size-5" aria-hidden="true" />
+          </span>
+          <div>
+            <h2 className="text-lg font-extrabold text-foreground">{loan.description}</h2>
+            {loan.lender && <p className="text-[13px] font-semibold text-muted-foreground">{loan.lender}</p>}
+          </div>
+        </div>
+
+        <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
+          <Trash2 className="size-4" aria-hidden="true" />
+          Excluir empréstimo
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KPICard icon={Wallet} title="Valor emprestado" value={formatBRL(loan.principal)} tone="neutral" />
+        <KPICard icon={PiggyBank} title="Total a pagar" value={formatBRL(loan.totalToPay)} tone="neutral" />
+        <KPICard icon={TrendingDown} title="Juros" value={formatBRL(loan.interest)} tone="warning" />
+        <KPICard
+          icon={HandCoins}
+          title="Saldo devedor"
+          value={formatBRL(loan.remainingAmount)}
+          tone={isSettled ? "success" : "danger"}
+        />
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-5">
+        <ProgressBar
+          percent={percent}
+          tone="neutral"
+          label={`${loan.paidCount}/${loan.installmentsCount} parcelas pagas · ${formatBRL(loan.paidAmount)} de ${formatBRL(loan.totalToPay)}`}
+        />
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h3 className="text-sm font-extrabold text-foreground">Parcelas</h3>
+        <DataTable
+          data={rows}
+          columns={columns}
+          getRowId={(row) => row.id}
+          emptyState={{ icon: HandCoins, title: "Nenhuma parcela encontrada" }}
+          rowActions={(row) =>
+            row.isPaid ? null : (
+              <IconActionButton
+                icon={Check}
+                label="Marcar como paga"
+                onClick={() => void handleMarkPaid(row.id)}
+                disabled={pendingId === row.id}
+              />
+            )
+          }
+        />
+      </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={`Excluir "${loan.description}"?`}
+        description="Parcelas futuras ainda não pagas são removidas junto. Parcelas já pagas continuam no histórico."
+        onConfirm={handleDelete}
+      />
+    </div>
+  );
+}

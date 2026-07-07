@@ -34,6 +34,15 @@ export type LoanWithProgress = Loan & {
   nextInstallment: NextLoanInstallment;
 };
 
+/**
+ * `LoanWithProgress` + as parcelas cruas, ordenadas por `date asc` (mesma
+ * ordem de `LoanWithTransactions`) — insumo exclusivo da tela de detalhe
+ * (`/loans/[id]`, ver service.ts `getLoanDetail`). `listLoans`/`getLoan`
+ * continuam sem esse array: o card/listagem de `/loans` só precisa dos
+ * agregados, não da lista completa de parcelas.
+ */
+export type LoanWithInstallments = LoanWithProgress & { installments: LoanInstallmentRow[] };
+
 /** Uma parcela recém-criada (ver `installments.ts` `createLoan`). */
 export type LoanTransaction = { id: string; description: string; amount: Money; date: Date; isPaid: boolean };
 

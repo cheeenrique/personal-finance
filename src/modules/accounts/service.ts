@@ -1,8 +1,15 @@
 import { Prisma, type Account } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
-import { accountRepository, type CreateAccountData, type UpdateAccountData } from "./repository";
+import { calendarPartsSP, startOfDaySP } from "@/lib/date/calendar-sp";
+import { nowInSaoPaulo } from "@/lib/date/timezone";
+import {
+  accountRepository,
+  type CreateAccountData,
+  type UpdateAccountData,
+  type UnpaidExpenseRow,
+} from "./repository";
 import { AccountNotFoundError } from "./errors";
-import type { AccountWithBalance } from "./types";
+import type { AccountWithBalance, InsufficientBalanceItem, InsufficientBalanceReport } from "./types";
 
 /**
  * Sinal de cada tipo de Transaction no saldo da conta. INCOME soma, EXPENSE e
@@ -87,6 +94,97 @@ async function deleteAccount(userId: string, id: string): Promise<void> {
   if (!deleted) throw new AccountNotFoundError(id);
 }
 
+/**
+ * Início do PRÓXIMO mês (America/Sao_Paulo) — limite exclusivo do waterfall
+ * de "Saldo insuficiente" (ver `getInsufficientBalanceReport`): inclui
+ * previstas vencidas + do mês corrente, nunca de meses futuros.
+ */
+function startOfNextMonthSP(refDate: Date): Date {
+  const { year, month } = calendarPartsSP(refDate);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  return startOfDaySP(nextYear, nextMonth, 1);
+}
+
+/**
+ * Waterfall de UMA conta: cobre `previstas` (já ordenadas por `date` asc, ver
+ * `accountRepository.listUnpaidExpensesByAccount`) com `available`, da mais
+ * antiga pra mais nova — regra confirmada pelo dono do produto. Retorna só as
+ * previstas com `falta > 0`.
+ */
+function waterfallShortfall(
+  available: Prisma.Decimal,
+  previstas: UnpaidExpenseRow[],
+): Array<UnpaidExpenseRow & { falta: Prisma.Decimal }> {
+  let restante = available;
+  const shortfalls: Array<UnpaidExpenseRow & { falta: Prisma.Decimal }> = [];
+
+  for (const previsto of previstas) {
+    const coberto = restante.lessThan(previsto.amount) ? restante : previsto.amount;
+    const falta = previsto.amount.minus(coberto);
+    restante = restante.minus(coberto);
+
+    if (falta.greaterThan(0)) shortfalls.push({ ...previsto, falta });
+  }
+
+  return shortfalls;
+}
+
+/**
+ * Alerta "Saldo insuficiente" (topo do Dashboard): por conta, saldo
+ * disponível vs. despesas previstas (EXPENSE, `isPaid=false`, vencidas + do
+ * mês corrente) — waterfall da previsão mais antiga pra mais nova.
+ * Reaproveita `listWithBalances` (mesmo saldo já usado no resto do app,
+ * NUNCA reimplementado aqui — `available` de cada conta já é só
+ * `isPaid=true`). Retorna client-ready (`amount`/`falta`/`deficitTotal` como
+ * string, ver types.ts `InsufficientBalanceReport`) porque não há outro
+ * consumidor do relatório além do Dashboard.
+ */
+async function getInsufficientBalanceReport(
+  userId: string,
+  refDate: Date = nowInSaoPaulo(),
+): Promise<InsufficientBalanceReport> {
+  const accounts = await listWithBalances(userId);
+  if (accounts.length === 0) return { deficitTotal: "0.00", items: [] };
+
+  const before = startOfNextMonthSP(refDate);
+  const previstas = await accountRepository.listUnpaidExpensesByAccount(
+    userId,
+    accounts.map((account) => account.id),
+    before,
+  );
+
+  const previstasByAccount = new Map<string, UnpaidExpenseRow[]>();
+  for (const previsto of previstas) {
+    const bucket = previstasByAccount.get(previsto.accountId) ?? [];
+    bucket.push(previsto);
+    previstasByAccount.set(previsto.accountId, bucket);
+  }
+
+  let deficitTotal = new Prisma.Decimal(0);
+  const items: InsufficientBalanceItem[] = [];
+
+  for (const account of accounts) {
+    const shortfalls = waterfallShortfall(account.balance, previstasByAccount.get(account.id) ?? []);
+
+    for (const shortfall of shortfalls) {
+      deficitTotal = deficitTotal.plus(shortfall.falta);
+      items.push({
+        id: shortfall.id,
+        description: shortfall.description,
+        date: shortfall.date,
+        accountName: account.name,
+        amount: shortfall.amount.toString(),
+        falta: shortfall.falta.toString(),
+      });
+    }
+  }
+
+  items.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  return { deficitTotal: deficitTotal.toString(), items };
+}
+
 export const accountService = {
   getBalance,
   listWithBalances,
@@ -94,4 +192,5 @@ export const accountService = {
   createAccount,
   updateAccount,
   deleteAccount,
+  getInsufficientBalanceReport,
 };

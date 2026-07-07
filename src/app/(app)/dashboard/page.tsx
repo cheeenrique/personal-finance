@@ -7,15 +7,18 @@ import { transactionService } from "@/modules/transactions/service";
 import { alertService } from "@/modules/alerts/service";
 import { assetService } from "@/modules/assets/service";
 import { cardService } from "@/modules/cards/service";
+import { loanService } from "@/modules/loans/service";
 import { reportService } from "@/modules/reports/service";
 import { nowInSaoPaulo } from "@/lib/date/timezone";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuickActions } from "@/components/dashboard/quick-actions";
 import { WeeklySummaryBox } from "@/components/dashboard/weekly-summary-box";
 import { AlertsSection } from "@/components/dashboard/alerts-section";
+import { InsufficientBalanceAlert } from "@/components/dashboard/insufficient-balance-alert";
 import { KPIGrid, type KPIGridData } from "@/components/dashboard/kpi-grid";
 import { CardsSummary } from "@/components/dashboard/cards-summary";
 import { InstallmentsSummary } from "@/components/dashboard/installments-summary";
+import { LoansSummary } from "@/components/dashboard/loans-summary";
 import { ExpenseCategoryChart } from "@/components/dashboard/expense-category-chart";
 import { MonthlyEvolutionChart } from "@/components/dashboard/monthly-evolution-chart";
 import { RecentTransactionsTable } from "@/components/dashboard/recent-transactions-table";
@@ -50,6 +53,7 @@ async function DashboardContent() {
   const month = now.getMonth() + 1;
 
   const [
+    insufficientBalanceReport,
     totalBalance,
     monthlyIncome,
     monthlyExpense,
@@ -59,10 +63,12 @@ async function DashboardContent() {
     activeAlertsRaw,
     cards,
     installmentPurchases,
+    activeLoans,
     expenseByCategory,
     incomeVsExpenseByMonth,
     recentTransactions,
   ] = await Promise.all([
+    accountService.getInsufficientBalanceReport(userId),
     accountService.totalBalance(userId),
     transactionService.monthlyIncomeTotal(userId, year, month),
     transactionService.monthlyExpenseTotal(userId, year, month),
@@ -72,6 +78,7 @@ async function DashboardContent() {
     alertService.listActiveForDashboard(userId),
     cardService.listWithSummary(userId),
     transactionService.listActiveInstallmentPurchases(userId),
+    loanService.listActiveLoans(userId),
     reportService.expenseByCategory(userId, year, month),
     reportService.incomeVsExpenseByMonth(userId, year),
     transactionService.listRecentForDashboard(userId, RECENT_TRANSACTIONS_LIMIT),
@@ -100,13 +107,19 @@ async function DashboardContent() {
 
       {weeklySummary && <WeeklySummaryBox summary={weeklySummary} />}
 
+      <InsufficientBalanceAlert
+        deficitTotal={insufficientBalanceReport.deficitTotal}
+        items={insufficientBalanceReport.items}
+      />
+
       <AlertsSection alerts={activeAlerts} />
 
       <KPIGrid data={kpiData} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CardsSummary cards={cards} />
         <InstallmentsSummary purchases={installmentPurchases} />
+        <LoansSummary loans={activeLoans} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -141,7 +154,8 @@ function DashboardSkeleton() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Skeleton className="h-56 w-full rounded-xl" />
         <Skeleton className="h-56 w-full rounded-xl" />
         <Skeleton className="h-56 w-full rounded-xl" />
       </div>

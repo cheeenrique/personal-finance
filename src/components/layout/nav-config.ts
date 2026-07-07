@@ -4,6 +4,7 @@ import {
   Wallet,
   CreditCard,
   Layers3,
+  HandCoins,
   PiggyBank,
   Landmark,
   FolderTree,
@@ -56,6 +57,12 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/installments",
     icon: Layers3,
     description: "Compras parceladas em progresso",
+  },
+  {
+    label: "Empréstimos",
+    href: "/loans",
+    icon: HandCoins,
+    description: "Parcelas e saldo devedor dos seus empréstimos",
   },
   {
     label: "Orçamentos",
