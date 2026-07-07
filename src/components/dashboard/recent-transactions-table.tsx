@@ -6,6 +6,7 @@ import { Receipt } from "lucide-react";
 import type { RecentTransactionRowClient } from "@/modules/transactions/types";
 import { CategoryType, TransactionType } from "@/generated/prisma/enums";
 import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
+import { buttonVariants } from "@/components/ui/button";
 import { TruncatedText } from "@/components/tables/truncated-text";
 import { TransactionInlineBadges } from "@/components/shared/badges/transaction-type-badge";
 import { useShell } from "@/components/providers/shell-provider";
@@ -125,7 +126,7 @@ export function RecentTransactionsTable({ transactions }: RecentTransactionsTabl
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-extrabold text-foreground">Últimas transações</h3>
-        <Link href="/transactions" className="text-[12.5px] font-bold text-primary hover:underline">
+        <Link href="/transactions" className={buttonVariants({ variant: "neutral", size: "sm" })}>
           Ver todas
         </Link>
       </div>

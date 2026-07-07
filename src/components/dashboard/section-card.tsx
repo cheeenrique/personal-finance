@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { CARD_SHADOW_CLASS, cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 type SectionCardProps = {
   title: string;
@@ -22,7 +23,7 @@ export function SectionCard({ title, action, children, className }: SectionCardP
       <div className="flex items-center justify-between gap-3 border-b border-border px-[18px] py-[15px]">
         <h3 className="text-sm font-extrabold text-foreground">{title}</h3>
         {action && (
-          <Link href={action.href} className="text-[12.5px] font-bold text-on-primary transition-opacity hover:opacity-80">
+          <Link href={action.href} className={buttonVariants({ variant: "neutral", size: "sm" })}>
             {action.label}
           </Link>
         )}
