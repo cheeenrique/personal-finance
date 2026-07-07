@@ -58,6 +58,9 @@ export type ExpenseCategoryGroup = { categoryId: string | null; sum: Prisma.Deci
 
 const TAG_INCLUDE = { transactionTags: true } as const;
 
+/** Client Prisma padrão ou escopado a uma `$transaction` interativa (mesmo padrão de `modules/loans/repository.ts`). */
+type Db = Prisma.TransactionClient;
+
 /**
  * Acesso a dados do módulo transactions. SEMPRE escopado por `userId` +
  * `deletedAt: null` — nunca query sem essas duas condições (ver
@@ -405,6 +408,35 @@ async function findInstallmentTotalsByIds(userId: string, ids: string[]): Promis
   return new Map(purchases.map((purchase) => [purchase.id, purchase.installmentsCount]));
 }
 
+/** Ownership check de uma `InstallmentPurchase` — insumo de `installments.ts` `cancelInstallmentPurchase` (docs/10-AUTH.md). */
+async function findInstallmentPurchaseById(
+  userId: string,
+  id: string,
+): Promise<{ id: string } | null> {
+  return prisma.installmentPurchase.findFirst({ where: { id, userId }, select: { id: true } });
+}
+
+/**
+ * Soft-delete das parcelas (`Transaction`) FUTURAS (`date > cutoff`) ainda
+ * vivas de uma compra parcelada — insumo de `installments.ts`
+ * `cancelInstallmentPurchase` (docs/23-INSTALLMENTS.md, "Cancelamento").
+ * Parcelas com `date <= cutoff` (já vencidas/pagas) nunca são tocadas aqui —
+ * mesmo padrão de `loanRepository.softDeleteUnpaidInstallments`. Escopado por
+ * `userId` além de `installmentPurchaseId` — defesa em profundidade, mesmo o
+ * `installmentPurchaseId` já vindo de uma compra validada pelo chamador.
+ */
+async function softDeleteFutureInstallments(
+  userId: string,
+  installmentPurchaseId: string,
+  cutoff: Date,
+  db: Db = prisma,
+): Promise<void> {
+  await db.transaction.updateMany({
+    where: { userId, installmentPurchaseId, date: { gt: cutoff }, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+}
+
 /**
  * Preview do Dashboard (docs/11-DASHBOARD.md, "Últimas Transações") — resolve
  * nome de categoria/conta/cartão e dados de parcelamento direto no `select`,
@@ -506,6 +538,8 @@ export const transactionRepository = {
   groupExpensesByCategoryInRange,
   findCategoryNamesByIds,
   findInstallmentTotalsByIds,
+  findInstallmentPurchaseById,
+  softDeleteFutureInstallments,
   listRecentForDashboard,
   listInstallmentPurchasesWithTransactions,
 };

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { transactionService } from "./service";
-import { createInstallmentPurchase } from "./installments";
+import { createInstallmentPurchase, cancelInstallmentPurchase } from "./installments";
 import {
   createTransactionSchema,
   updateTransactionSchema,
@@ -197,6 +197,21 @@ export async function createInstallmentPurchaseAction(
     revalidateTransactionRoutes();
     revalidatePath(INSTALLMENTS_PATH);
     return { success: true, data: result };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Cancela uma compra parcelada — soft-delete das parcelas futuras (ver `installments.ts` `cancelInstallmentPurchase`, docs/23-INSTALLMENTS.md "Cancelamento"). */
+export async function cancelInstallmentPurchaseAction(purchaseId: string): Promise<ActionResult<null>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  try {
+    await cancelInstallmentPurchase(userId, purchaseId);
+    revalidateTransactionRoutes();
+    revalidatePath(INSTALLMENTS_PATH);
+    return { success: true, data: null };
   } catch (error) {
     return toActionError(error);
   }

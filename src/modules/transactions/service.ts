@@ -375,6 +375,15 @@ async function listRecentForDashboard(userId: string, limit: number): Promise<Re
  * (`date <= agora`) — mesma regra de compra confirmada no cartão, não existe
  * pagamento manual de parcela individual. `cardId` opcional filtra pelo
  * cartão (filtro `?cardId=` da tela `/installments`).
+ *
+ * `remainingAmount` soma as parcelas futuras AINDA VIVAS (`upcoming`), não
+ * `totalAmount - paidAmount` — as duas contas batem no caso comum (nenhuma
+ * parcela futura foi tocada, a soma de todas bate com `totalAmount` por
+ * construção do rateio), mas SÓ a soma de `upcoming` continua correta depois
+ * de `installments.ts` `cancelInstallmentPurchase` soft-deletar parcelas
+ * futuras (elas já saem de `purchase.transactions`, filtrado por
+ * `deletedAt: null` no repository) — sem isso, uma compra cancelada
+ * continuaria mostrando "restante" como se a dívida futura ainda existisse.
  */
 async function listInstallmentPurchasesWithProgress(
   userId: string,
@@ -387,6 +396,7 @@ async function listInstallmentPurchasesWithProgress(
     const paid = purchase.transactions.filter((transaction) => transaction.date.getTime() <= refDate.getTime());
     const upcoming = purchase.transactions.filter((transaction) => transaction.date.getTime() > refDate.getTime());
     const paidAmount = paid.reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
+    const remainingAmount = upcoming.reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
 
     return {
       id: purchase.id,
@@ -396,7 +406,7 @@ async function listInstallmentPurchasesWithProgress(
       installmentsCount: purchase.installmentsCount,
       paidCount: paid.length,
       paidAmount,
-      remainingAmount: purchase.totalAmount.minus(paidAmount),
+      remainingAmount,
       nextDueDate: upcoming[0]?.date ?? null,
       installments: purchase.transactions.map((transaction) => ({
         // `installmentNumber` é sempre preenchido nas Transactions de uma InstallmentPurchase
@@ -415,6 +425,13 @@ async function listInstallmentPurchasesWithProgress(
  * Compras parceladas ATIVAS (parcelas restantes > 0) — subconjunto de
  * `listInstallmentPurchasesWithProgress` sem o detalhe das parcelas (insumo
  * do Dashboard, docs/11-DASHBOARD.md, "Parcelamentos Ativos").
+ *
+ * Filtra por `nextDueDate !== null` (existe parcela futura AINDA VIVA), não
+ * por `paidCount < installmentsCount` — depois de
+ * `cancelInstallmentPurchase`, `installmentsCount` continua sendo o contrato
+ * ORIGINAL (Regra 1, docs/23-INSTALLMENTS.md: nunca muda), então comparar
+ * contra ele classificaria uma compra cancelada como "ativa" mesmo sem
+ * nenhuma parcela futura de fato pendente.
  */
 async function listActiveInstallmentPurchases(
   userId: string,
@@ -423,7 +440,7 @@ async function listActiveInstallmentPurchases(
   const purchases = await listInstallmentPurchasesWithProgress(userId, refDate);
 
   return purchases
-    .filter((purchase) => purchase.paidCount < purchase.installmentsCount)
+    .filter((purchase) => purchase.nextDueDate !== null)
     .map((purchase) => ({
       id: purchase.id,
       description: purchase.description,

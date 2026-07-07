@@ -75,3 +75,12 @@ export class InstallmentInvalidCountError extends TransactionDomainError {
     });
   }
 }
+
+/** Compra parcelada não existe ou não pertence ao usuário (docs/10-AUTH.md, "Regra Principal de Segurança"). */
+export class InstallmentPurchaseNotFoundError extends TransactionDomainError {
+  constructor(installmentPurchaseId: string) {
+    super("Parcelamento não encontrado", "INSTALLMENT_PURCHASE_NOT_FOUND", undefined, {
+      installmentPurchaseId,
+    });
+  }
+}

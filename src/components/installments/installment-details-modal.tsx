@@ -1,11 +1,19 @@
 "use client";
 
-import { Layers3 } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { Ban, Layers3 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
+import { cancelInstallmentPurchaseAction } from "@/modules/transactions/actions";
+import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
 import { formatBRL } from "@/lib/money/format";
 import { formatDateSaoPaulo } from "@/lib/date/format";
+import { notifySuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { InstallmentLineItemView, InstallmentPurchaseView } from "./types";
 
@@ -47,8 +55,34 @@ const COLUMNS: DataTableColumn<InstallmentLineItemView>[] = [
  * Reaproveita `FormModal` (par Modal/Drawer padrão do app) mesmo sem ser um
  * formulário — é o wrapper Dialog(desktop)/Sheet(mobile) genérico do
  * projeto, e `DataTable` já lista "Parcelamentos" entre seus consumidores.
+ *
+ * "Cancelar parcelamento" (docs/23-INSTALLMENTS.md, "Cancelamento") só
+ * aparece havendo parcela futura ainda viva (`!isPaid`) — mesmo racional de
+ * "Quitar empréstimo" em `LoanDetailView` (só aparece com parcela pendente).
+ * `ConfirmDialog` + `cancelInstallmentPurchaseAction` soft-deletam só as
+ * parcelas futuras; pagas/vencidas ficam intactas. As parcelas são
+ * Transactions — invalida os caches client-side de listagem de transação
+ * (`invalidateAllTransactionLists`) além do `router.refresh()` do RSC.
  */
 export function InstallmentDetailsModal({ purchase, onOpenChange }: InstallmentDetailsModalProps) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [cancelOpen, setCancelOpen] = useState(false);
+
+  const hasFutureInstallments = purchase?.installments.some((installment) => !installment.isPaid) ?? false;
+
+  async function handleCancel() {
+    if (!purchase) return;
+
+    const result = await cancelInstallmentPurchaseAction(purchase.id);
+    if (!result.success) throw new Error(result.error.message);
+
+    invalidateAllTransactionLists(queryClient);
+    notifySuccess("Parcelamento cancelado");
+    onOpenChange(false);
+    router.refresh();
+  }
+
   return (
     <FormModal
       open={purchase !== null}
@@ -57,14 +91,34 @@ export function InstallmentDetailsModal({ purchase, onOpenChange }: InstallmentD
       description={purchase ? `${purchase.installmentsCount} parcelas · ${purchase.cardName}` : undefined}
       size="wide"
     >
-      <DataTable
-        data={purchase?.installments ?? []}
-        columns={COLUMNS}
-        getRowId={(item) => String(item.installmentNumber)}
-        emptyState={{
-          icon: Layers3,
-          title: "Nenhuma parcela encontrada",
-        }}
+      <div className="flex flex-col gap-3">
+        {hasFutureInstallments && (
+          <div className="flex justify-end">
+            <Button type="button" variant="destructive" size="sm" onClick={() => setCancelOpen(true)}>
+              <Ban className="size-4" aria-hidden="true" />
+              Cancelar parcelamento
+            </Button>
+          </div>
+        )}
+
+        <DataTable
+          data={purchase?.installments ?? []}
+          columns={COLUMNS}
+          getRowId={(item) => String(item.installmentNumber)}
+          emptyState={{
+            icon: Layers3,
+            title: "Nenhuma parcela encontrada",
+          }}
+        />
+      </div>
+
+      <ConfirmDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title={`Cancelar "${purchase?.description ?? ""}"?`}
+        description="As parcelas futuras ainda não vencidas são removidas. Parcelas já pagas ou vencidas continuam no histórico."
+        confirmLabel="Cancelar parcelamento"
+        onConfirm={handleCancel}
       />
     </FormModal>
   );

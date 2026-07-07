@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db/client";
 import { TransactionType } from "@/generated/prisma/enums";
 import { parseInSaoPaulo, TIMEZONE } from "@/lib/date/timezone";
 import { assertCardOwnership, assertCategoryOwnership } from "./service";
-import { InstallmentInvalidCountError } from "./errors";
+import { transactionRepository } from "./repository";
+import { InstallmentInvalidCountError, InstallmentPurchaseNotFoundError } from "./errors";
 import type { CreateInstallmentPurchaseInput } from "./schemas";
 import type { InstallmentPurchaseResult } from "./types";
 
@@ -111,5 +112,48 @@ export async function createInstallmentPurchase(
     }
 
     return { installmentPurchaseId: purchase.id, transactions };
+  });
+}
+
+/**
+ * Cancela uma compra parcelada (docs/23-INSTALLMENTS.md, "Cancelamento"):
+ * soft-delete das Transactions das parcelas FUTURAS (`date > hoje`). Parcelas
+ * já vencidas/pagas (`date <= hoje`) nunca são tocadas — mesmo histórico
+ * intacto, mesmo padrão de `modules/loans/service.ts` `deleteLoan`
+ * (`softDeleteUnpaidInstallments`).
+ *
+ * "Hoje" aqui é o mesmo instante usado por
+ * `transactionService.listInstallmentPurchasesWithProgress` pra decidir
+ * parcela "paga" (`transaction.date.getTime() <= refDate.getTime()`, default
+ * `new Date()`) — reusar QUALQUER outra base (ex.: `nowInSaoPaulo()`, que
+ * desloca os getters do Date pro horário de parede de SP) quebraria essa
+ * consistência: `nowInSaoPaulo()` retorna um `Date` cujo epoch NÃO é o
+ * instante real (serve só pra aritmética de calendário, ver
+ * `installmentDueDate` acima), e compará-lo direto contra a `date`
+ * (timestamptz real) da parcela daria um corte errado. Como cada parcela
+ * nasce fixada à meia-noite de SP de um dia específico (`installmentDueDate`),
+ * um corte por instante (`new Date()`) e um corte por dia calendário de SP
+ * concordam sempre — não há necessidade de conversão de timezone aqui.
+ *
+ * Decisão de schema: `InstallmentPurchase` NÃO ganha um campo
+ * `canceledAt`/`deletedAt` próprio — docs/23-INSTALLMENTS.md, "Estrutura da
+ * Compra Parcelada" é explícito ("Sem ... status persistidos — tudo isso é
+ * derivado") e a Regra 4 do doc proíbe um terceiro registro pro mesmo fato.
+ * `totalAmount`/`installmentsCount` continuam intactos (Regra 1: "nunca
+ * altera o totalAmount da compra depois de criado") — servem como registro
+ * histórico do contrato original. O efeito de "cancelado" é 100% derivado:
+ * sem nenhuma parcela futura viva, a compra naturalmente vira "Finalizada"
+ * (`nextDueDate: null`) e `remainingAmount` some da leitura (ver ajuste em
+ * `service.ts` `listInstallmentPurchasesWithProgress`/`listActiveInstallmentPurchases`).
+ */
+export async function cancelInstallmentPurchase(userId: string, installmentPurchaseId: string): Promise<void> {
+  const purchase = await transactionRepository.findInstallmentPurchaseById(userId, installmentPurchaseId);
+  if (!purchase) throw new InstallmentPurchaseNotFoundError(installmentPurchaseId);
+
+  // Único write hoje — `$transaction` mantido por padronização com o
+  // gêmeo `loanService.deleteLoan` (2 writes) e como ponto de extensão caso
+  // uma futura escrita adicional precise entrar atomicamente aqui.
+  await prisma.$transaction(async (tx) => {
+    await transactionRepository.softDeleteFutureInstallments(userId, installmentPurchaseId, new Date(), tx);
   });
 }
