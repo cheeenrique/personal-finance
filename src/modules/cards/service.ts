@@ -52,6 +52,18 @@ function computeMealBalance(sums: Array<{ type: string; sum: Prisma.Decimal }>):
   }, new Prisma.Decimal(0));
 }
 
+/** Σ INCOME (recarga) do cartão MEAL — metade de `computeMealBalance` isolada pra exibir a barra `gasto / recarga` na UI (dashboard "Cartões e dívidas" + tile). */
+function sumMealRecharged(sums: Array<{ type: string; sum: Prisma.Decimal }>): Prisma.Decimal {
+  const row = sums.find((entry) => entry.type === TransactionType.INCOME);
+  return row ? row.sum : new Prisma.Decimal(0);
+}
+
+/** Σ EXPENSE (gasto) do cartão MEAL — a outra metade de `computeMealBalance`, mesma razão de `sumMealRecharged`. */
+function sumMealSpent(sums: Array<{ type: string; sum: Prisma.Decimal }>): Prisma.Decimal {
+  const row = sums.find((entry) => entry.type === TransactionType.EXPENSE);
+  return row ? row.sum : new Prisma.Decimal(0);
+}
+
 async function createCard(userId: string, input: CreateCardData): Promise<Card> {
   return cardRepository.create(userId, input);
 }
@@ -181,12 +193,16 @@ async function mealBalance(userId: string, cardId: string, db: Db = prisma): Pro
  * Ramifica por `card.type` (ver types.ts `CardWithSummary` — shape único, não
  * discriminado, de propósito: task é só backend, ver JSDoc do tipo): CREDIT
  * calcula fatura atual + devedor + limite disponível igual a antes (fluxo
- * INTACTO, zero regressão) e `mealBalance=null`; MEAL preenche os 4 campos
- * CREDIT com placeholder neutro (nunca consumido por UI hoje — nenhum cartão
- * MEAL existe ainda) e calcula `mealBalance` de verdade (recargas − gastos,
- * `computeMealBalance`). `expenseRows`/`cycleRows` são buscados pra TODOS os
- * cartões (query única, sem N+1) mas só usados no ramo CREDIT — overhead
- * desprezível pro volume do app (poucos cartões por usuário).
+ * INTACTO, zero regressão) e `mealBalance`/`mealRecharged`/`mealSpent=null`;
+ * MEAL preenche os 4 campos CREDIT com placeholder neutro (nunca consumido
+ * por UI hoje — nenhum cartão MEAL existe ainda) e calcula `mealBalance`,
+ * `mealRecharged` (Σ INCOME) e `mealSpent` (Σ EXPENSE) de verdade a partir do
+ * MESMO `sumByCardAndType` (sem query nova) — a UI usa `mealSpent`/
+ * `mealRecharged` pra desenhar a barra `gasto / recarga` igual à de limite do
+ * CREDIT (`mealBalance` continua sendo só o saldo derivado). `expenseRows`/
+ * `cycleRows` são buscados pra TODOS os cartões (query única, sem N+1) mas só
+ * usados no ramo CREDIT — overhead desprezível pro volume do app (poucos
+ * cartões por usuário).
  */
 async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
   const cards = await cardRepository.list(userId);
@@ -237,6 +253,8 @@ async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
         availableLimit: card.limit,
         invoiceDueDate: refDate,
         mealBalance: computeMealBalance(sums),
+        mealRecharged: sumMealRecharged(sums),
+        mealSpent: sumMealSpent(sums),
       };
     }
 
@@ -255,6 +273,8 @@ async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
       availableLimit: card.limit.minus(outstanding),
       invoiceDueDate: cycle.dueDate,
       mealBalance: null,
+      mealRecharged: null,
+      mealSpent: null,
     };
   });
 }

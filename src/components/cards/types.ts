@@ -29,6 +29,10 @@ export type CardSummaryView = {
   invoiceDueDate: string;
   /** `null` para CREDIT. Saldo (recargas − gastos) para MEAL — ver `modules/cards/service.ts` `computeMealBalance`. */
   mealBalance: string | null;
+  /** `null` para CREDIT. Total recarregado (Σ INCOME) para MEAL — "total" da barra `gasto / recarga` (mesmo padrão da barra `usado / limite` do CREDIT). */
+  mealRecharged: string | null;
+  /** `null` para CREDIT. Total gasto (Σ EXPENSE) para MEAL — "usado" da barra `gasto / recarga`. */
+  mealSpent: string | null;
 };
 
 export type InvoiceView = {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, Pencil, PiggyBank, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, PiggyBank, Plus, Receipt, Trash2, Wallet } from "lucide-react";
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -97,24 +97,26 @@ export function CardDetailViewMeal({ card }: CardDetailViewMealProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <KPICard icon={Wallet} title="Recarregado" value={formatBRL(card.mealRecharged ?? "0")} />
+        <KPICard icon={Receipt} title="Gasto" value={formatBRL(card.mealSpent ?? "0")} />
         <KPICard
           icon={PiggyBank}
           title="Saldo disponível"
           value={formatBRL(card.mealBalance ?? "0")}
           tone="success"
-          className="sm:col-span-2"
         />
-        <Button
-          type="button"
-          variant="accent"
-          className="h-full min-h-16 flex-col gap-1.5 text-[13px]"
-          onClick={() => openTransactionModal(TransactionType.INCOME, card.id)}
-        >
-          <Plus className="size-5" aria-hidden="true" />
-          Recarga
-        </Button>
       </div>
+
+      <Button
+        type="button"
+        variant="accent"
+        className="w-full gap-1.5 sm:w-fit"
+        onClick={() => openTransactionModal(TransactionType.INCOME, card.id)}
+      >
+        <Plus className="size-4" aria-hidden="true" />
+        Recarga
+      </Button>
 
       <div className="flex flex-col gap-2">
         <h3 className="text-base font-extrabold text-foreground">Movimentações</h3>

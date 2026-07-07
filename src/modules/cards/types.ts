@@ -43,7 +43,10 @@ export type Invoice = {
  *   este tipo) — vêm com placeholder neutro (zero / `refDate`, ver
  *   `service.ts` `listWithSummary`), nunca consumidos por UI hoje (nenhum
  *   cartão MEAL existe ainda). `mealBalance` traz o saldo real (recargas −
- *   gastos, ver `computeMealBalance`).
+ *   gastos, ver `computeMealBalance`); `mealRecharged`/`mealSpent` trazem os
+ *   dois lados desse cálculo separados — a UI usa os dois pra desenhar a
+ *   barra `gasto / recarga` (mesmo componente da barra `usado / limite` do
+ *   CREDIT).
  */
 export type CardWithSummary = Card & {
   currentInvoiceTotal: Money;
@@ -52,6 +55,10 @@ export type CardWithSummary = Card & {
   invoiceDueDate: Date;
   /** `null` para CREDIT. Saldo (recargas − gastos) para MEAL — ver `service.ts` `computeMealBalance`. */
   mealBalance: Money | null;
+  /** `null` para CREDIT. Total recarregado (Σ INCOME isPaid) para MEAL — "total" da barra `gasto / recarga`. */
+  mealRecharged: Money | null;
+  /** `null` para CREDIT. Total gasto (Σ EXPENSE isPaid) para MEAL — "usado" da barra `gasto / recarga`. */
+  mealSpent: Money | null;
 };
 
 export type PayInvoiceResult = {

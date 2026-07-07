@@ -58,22 +58,35 @@ export function CardsSummary({ cards }: CardsSummaryProps) {
       <div className="flex flex-col gap-4">
         {recentCards.map((card) => {
           // MEAL não tem limite/fatura (docs/22-CREDIT_CARDS.md não cobre esse
-          // tipo, ver `modules/cards/service.ts` `assertCreditCard`) — mostra
-          // só o saldo (recargas − gastos), sem barra de uso de limite.
+          // tipo, ver `modules/cards/service.ts` `assertCreditCard`) — usa a
+          // MESMA barra do crédito com total = recarga (Σ INCOME) e usado =
+          // gasto (Σ EXPENSE). Tom neutro (gastar o benefício não é "estouro").
           if (card.type === CardType.MEAL) {
-            const mealBalance = card.mealBalance?.toNumber() ?? 0;
+            const recharged = card.mealRecharged?.toNumber() ?? 0;
+            const spent = card.mealSpent?.toNumber() ?? 0;
+            const mealPercent = recharged > 0 ? (spent / recharged) * 100 : 0;
 
             return (
               <Link key={card.id} href={`/cards/${card.id}`} className="block">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[13px] font-extrabold text-foreground">{card.name}</span>
-                  <span className="shrink-0 rounded-full bg-success/16 px-2 py-0.5 text-[11px] font-bold text-on-success">
-                    Alimentação
+                <div className="mb-[7px] flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-[13px] font-extrabold text-foreground">{card.name}</span>
+                    <span className="shrink-0 rounded-full bg-success/16 px-2 py-0.5 text-[11px] font-bold text-on-success">
+                      Alimentação
+                    </span>
+                  </span>
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                    {formatBRL(spent)} / {formatBRL(recharged)}
                   </span>
                 </div>
-                <p className="mt-[7px] font-mono text-xs font-bold text-on-success">
-                  Saldo: {formatBRL(mealBalance)}
-                </p>
+
+                <ProgressBar
+                  percent={mealPercent}
+                  tone="neutral"
+                  label={`${formatBRL(spent)} / ${formatBRL(recharged)}`}
+                  showLabel={false}
+                  className="space-y-0"
+                />
               </Link>
             );
           }
