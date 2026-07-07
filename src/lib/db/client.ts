@@ -35,24 +35,38 @@ import { PrismaClient } from "@/generated/prisma/client";
  * host supabase) conecta sem SSL.
  */
 function createPrismaClient() {
-  const raw = process.env.DATABASE_URL ?? process.env.POSTGRES_URL_NON_POOLING;
+  // Runtime prefere o TRANSACTION pooler do Supabase (`POSTGRES_PRISMA_URL`,
+  // porta 6543) — feito pra serverless: libera a sessão do banco a cada
+  // transação, então função fria da Vercel não segura conexão. O session-mode
+  // (porta 5432, `POSTGRES_URL_NON_POOLING`) trava em 15 sessões idle presas ->
+  // `EMAXCONNSESSION`. Local: `DATABASE_URL` (Docker) vence. Migrations seguem
+  // na conexão direta (`prisma.config.ts`), não no transaction pooler.
+  const raw =
+    process.env.DATABASE_URL ??
+    process.env.POSTGRES_PRISMA_URL ??
+    process.env.POSTGRES_URL_NON_POOLING;
   const needsSsl = /[?&]sslmode=/.test(raw ?? "") || (raw ?? "").includes("supabase");
 
   if (!needsSsl) {
     return new PrismaClient({ adapter: new PrismaPg({ connectionString: raw }) });
   }
 
+  // Tira `sslmode` (cert do Supabase estoura o `pg` 8.22 — ver acima) e
+  // `pgbouncer=true` (flag do query-engine do Prisma, sem sentido pro driver pg).
   const connectionString = (raw ?? "")
-    .replace(/([?&])sslmode=[^&]*/gi, "$1")
+    .replace(/([?&])(sslmode|pgbouncer)=[^&]*/gi, "$1")
     .replace(/\?&/, "?")
     .replace(/[?&]$/, "");
 
-  // `max: 3` — o pooler do Supabase em session-mode (porta 5432) limita a 15
-  // clientes. Cada instância serverless da Vercel abre seu próprio pool; com o
-  // default do `pg` (max 10), poucas instâncias já estouram o limite
-  // (`EMAXCONNSESSION: max clients reached in session mode`). App de 2 usuários
-  // — 3 conexões por instância sobra e não satura o pooler.
-  const adapter = new PrismaPg({ connectionString, ssl: { rejectUnauthorized: false }, max: 3 });
+  // `idleTimeoutMillis`/`allowExitOnIdle`: fecha conexão ociosa rápido pra não
+  // acumular sessão no pooler. `max` modesto — 2 usuários, tráfego trivial.
+  const adapter = new PrismaPg({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+    max: 5,
+    idleTimeoutMillis: 10_000,
+    allowExitOnIdle: true,
+  });
   return new PrismaClient({ adapter });
 }
 
