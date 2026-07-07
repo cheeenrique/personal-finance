@@ -77,6 +77,10 @@ Toda Transaction referencia **exatamente uma** origem: `accountId` (conta bancá
 
 Tags **não** ficam inline em Transaction. Associação via junction `TransactionTag` (ver abaixo).
 
+### Importação de Extrato OFX
+
+`fitId String?` guarda o `<FITID>` (id único do lançamento no extrato OFX) — só para dedup na importação (`modules/imports/`, ver `@@index([accountId, fitId])`): reimportar o mesmo arquivo não duplica lançamentos já existentes na mesma conta. `null` em toda Transaction que não veio de importação OFX (a maioria) e no raro caso de um `<STMTTRN>` sem `<FITID>` no arquivo — nesse caso o módulo cai num fallback de dedup por `(accountId, date, amount, description)`. Sem `@@unique`: um `fitId` pode, em tese, se repetir entre contas diferentes.
+
 ### Transferências
 
 `type=TRANSFER` sempre gera **2 Transactions com o mesmo `transferId`**: uma `EXPENSE` na conta origem, uma `INCOME` na conta destino. `categoryId=null` nas duas pernas. KPIs de receita/despesa excluem transferências filtrando `transferId IS NOT NULL` (as 2 pernas são EXPENSE/INCOME com transferId compartilhado), e excluem `type=CARD_PAYMENT` — é movimentação, não gasto nem ganho.

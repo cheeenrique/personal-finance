@@ -325,6 +325,18 @@ model Transaction {
 
   transferId String?
 
+  // Id único do lançamento no extrato OFX de origem (`<FITID>`) — usado só
+  // para dedup na importação (docs/03-DATABASE.md, "Importação de Extrato
+  // OFX"): reimportar o mesmo arquivo não duplica lançamentos já existentes
+  // na mesma conta. Null em toda Transaction que não veio de importação OFX
+  // (a imensa maioria) e também no raro caso de um `<STMTTRN>` sem `<FITID>`
+  // no arquivo — nesse caso o módulo de importação (`modules/imports/`) cai
+  // num fallback de dedup por (accountId+date+amount+description) em vez
+  // deste campo. Sem `@@unique`: um mesmo fitId pode, em tese, se repetir
+  // entre CONTAS diferentes (bancos não coordenam esse id entre si), e o
+  // índice composto abaixo já cobre a query de dedup (por conta).
+  fitId String?
+
   installmentPurchaseId String?
   installmentNumber     Int?
 
@@ -354,6 +366,7 @@ model Transaction {
   @@index([transferId])
   @@index([installmentPurchaseId])
   @@index([loanId])
+  @@index([accountId, fitId])
 }
 
 // ---------------------------------------------------------------------------
