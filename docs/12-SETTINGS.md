@@ -56,15 +56,19 @@ alertAnomalyMultiplier    // default 1.5
 alertMinimumAmount        // Decimal, default 50.00
 alertGreenMultiplier      // default 0.6
 
-telegramChatId              // String? @unique — vínculo self-service confirmado
-telegramLinkCode            // String? @unique — código de 6 chars, válido 15min
-telegramLinkCodeExpiresAt   // DateTime?
+telegramBotToken            // String? — token do bot do @BotFather (nunca exposto ao client)
+telegramWebhookSecret        // String? @unique — gerado no install (nunca exposto ao client)
+telegramBotUsername          // String? — @usuário do bot, só exibição
+telegramWebhookRegistered    // Boolean, default false — status do último setWebhook
+telegramChatId               // String? @unique — vínculo self-service confirmado
+telegramLinkCode             // String? @unique — código de 6 chars, válido 15min
+telegramLinkCodeExpiresAt    // DateTime?
 
 createdAt
 updatedAt
 ```
 
-O vínculo do Telegram (`telegramChatId`) é 100% gerenciado pelo próprio usuário nesta tela — gera um código, confirma pelo bot, sem precisar editar `.env` (ver seção Telegram abaixo). Fallback legado via `TELEGRAM_ALLOWED_CHAT_IDS` (env var) continua existindo pro webhook, mas não é mais o caminho principal.
+Modelo "traga seu próprio bot" (docs/30-TELEGRAM.md): cada usuário cria o bot no @BotFather e cola o token nesta tela (`installTelegramBotAction`) — sem bot único global via env. Depois de instalado, o vínculo do chat (`telegramChatId`) continua 100% self-service, igual antes: gera um código, confirma pelo bot. `telegramBotToken`/`telegramWebhookSecret` são secrets — nunca saem do backend; o client só recebe `hasBot` (booleano) + `telegramBotUsername`/`telegramWebhookRegistered` (status de exibição).
 
 ---
 
@@ -145,26 +149,34 @@ Alterar esses valores só afeta as próximas execuções do cron semanal. Alerta
 
 # 3. Telegram
 
-## Vínculo por código (self-service)
+## Estados
 
 ```text
-Vinculado         → badge verde + chat_id: 123456789 + botão "Desvincular"
-Não vinculado     → botão "Vincular Telegram" (gera código)
-Código pendente   → código de 6 chars em destaque + instrução "/vincular <CODE>" + expiração
+Sem bot instalado    → input do token do bot + botão "Instalar bot"
+Bot instalado         → @username + status do webhook + botão "Vincular chat" + "Desinstalar bot"
+Totalmente vinculado  → @username + chat_id + "Desvincular chat" + "Desinstalar bot"
 ```
 
-## Fluxo
+## Fluxo — instalar o bot
 
-1. Usuário clica "Vincular Telegram" → `generateTelegramLinkCodeAction` gera um código de 6 caracteres (charset sem `0/O/1/I`, `crypto.randomInt`), válido por **15 minutos**.
-2. Usuário envia `/vincular <CODE>` (ou abre o deep-link `/start <CODE>`) pro bot no Telegram.
+1. Usuário cria um bot no @BotFather e recebe um token.
+2. Cola o token nesta tela → `installTelegramBotAction` valida via `getMe`, gera um `telegramWebhookSecret` próprio e tenta registrar o webhook (`setWebhook`).
+3. Sucesso → mostra `@username` do bot, badge de status. Se o webhook não pôde ser registrado (ex.: sem URL pública em dev/localhost), o token fica salvo mesmo assim e a tela mostra um aviso — funciona automaticamente depois do deploy.
+4. Token inválido/revogado → erro `TELEGRAM_INVALID_TOKEN`, nada é salvo.
+
+## Fluxo — vincular o chat (self-service, inalterado)
+
+1. Usuário clica "Vincular chat" → `generateTelegramLinkCodeAction` gera um código de 6 caracteres (charset sem `0/O/1/I`, `crypto.randomInt`), válido por **15 minutos**.
+2. Usuário envia `/vincular <CODE>` (ou abre o deep-link `/start <CODE>`) pro PRÓPRIO bot no Telegram.
 3. Webhook confirma o vínculo, gravando `telegramChatId` em `UserSettings` e limpando o código. A tela detecta a confirmação via polling curto (ou refresh manual) e atualiza para o estado "Vinculado".
 4. Código expirado nunca é exibido como válido — expirar é tratado como "sem código pendente".
 
 ## Regras
 
 * Gerar um novo código com um `chat_id` já vinculado é permitido — troca de celular é caso de uso legítimo (o vínculo antigo só é sobrescrito quando o novo código for confirmado).
-* "Desvincular" (com confirmação, `ConfirmDialog`) limpa `telegramChatId` — para de receber notificações e lançar por lá até um novo vínculo.
-* Fallback legado: `TELEGRAM_ALLOWED_CHAT_IDS` (env var) continua funcionando no webhook para setups antigos, mas não aparece nesta tela — é só um caminho de leitura no bot, nunca editável pela UI.
+* "Desvincular chat" (com confirmação, `ConfirmDialog`) limpa `telegramChatId` — para de receber notificações e lançar por lá até um novo vínculo. Não mexe no bot instalado.
+* "Desinstalar bot" (com confirmação) remove o webhook no Telegram (best-effort) e limpa token/secret/username/chat/código — para voltar a usar, precisa colar o token de novo.
+* Legado removido: não existe mais bot único global nem `TELEGRAM_ALLOWED_CHAT_IDS` (env) — cada usuário tem seu próprio bot.
 
 Ver `30-TELEGRAM.md` para o fluxo completo do bot.
 

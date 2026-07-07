@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { settingsService, toClientUserSettings } from "./service";
-import { updateSettingsSchema } from "./schemas";
+import { telegramBotTokenSchema, updateSettingsSchema } from "./schemas";
 import { SettingsDomainError } from "./errors";
-import type { ActionResult, ClientUserSettings, TelegramLinkCode } from "./types";
+import type { ActionResult, ClientUserSettings, InstallTelegramBotResult, TelegramLinkCode } from "./types";
 
 const SETTINGS_PATH = "/settings";
 
@@ -83,6 +83,41 @@ export async function unlinkTelegramAction(): Promise<ActionResult<ClientUserSet
 
   try {
     const settings = await settingsService.unlinkTelegram(userId);
+    revalidatePath(SETTINGS_PATH);
+    return { success: true, data: toClientUserSettings(settings) };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Instala o bot "traga seu próprio bot" do usuário (docs/30-TELEGRAM.md) a partir do token colado na UI. */
+export async function installTelegramBotAction(token: unknown): Promise<ActionResult<InstallTelegramBotResult>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  const parsed = telegramBotTokenSchema.safeParse(token);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Token inválido." },
+    };
+  }
+
+  try {
+    const result = await settingsService.installTelegramBot(userId, parsed.data);
+    revalidatePath(SETTINGS_PATH);
+    return { success: true, data: result };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function uninstallTelegramBotAction(): Promise<ActionResult<ClientUserSettings>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  try {
+    const settings = await settingsService.uninstallTelegramBot(userId);
     revalidatePath(SETTINGS_PATH);
     return { success: true, data: toClientUserSettings(settings) };
   } catch (error) {

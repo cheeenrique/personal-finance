@@ -394,12 +394,23 @@ model UserSettings {
   alertMinimumAmount     Decimal @default(50.00) @db.Decimal(12, 2)
   alertGreenMultiplier   Decimal @default(0.6) @db.Decimal(4, 2)
 
-  // Vínculo self-service do Telegram (docs/30-TELEGRAM.md, "Segurança";
-  // docs/12-SETTINGS.md, "3. Telegram"). `telegramChatId` é a allowlist
-  // DB-backed (fallback legado: env `TELEGRAM_ALLOWED_CHAT_IDS`).
-  // `telegramLinkCode`/`telegramLinkCodeExpiresAt` guardam o código
-  // temporário de 15min gerado em Configurações até o usuário confirmar
-  // o vínculo pelo bot (`/vincular <CODE>` ou `/start <CODE>`).
+  // Telegram "traga seu próprio bot" (docs/30-TELEGRAM.md, "Segurança";
+  // docs/12-SETTINGS.md, "3. Telegram"): cada usuário cria seu bot no
+  // @BotFather e cola o token aqui — sem bot único global via env.
+  // `telegramBotToken`/`telegramWebhookSecret` (gerado por usuário,
+  // `crypto.randomBytes`) identificam de quem é o bot que recebeu o update
+  // no webhook (`modules/telegram/webhook-auth.ts`). `telegramBotUsername`
+  // e `telegramWebhookRegistered` são só pra exibição/status na UI — nunca
+  // reconsultados ao vivo no Telegram a cada render (evita fetch redundante,
+  // docs/01-STACK.md "Performance"); ficam desatualizados só se o webhook
+  // cair fora de uma reinstalação, aceitável pra 2 usuários.
+  // `telegramChatId` é o chat vinculado (self-service, `telegramLinkCode`/
+  // `telegramLinkCodeExpiresAt` guardam o código temporário de 15min até a
+  // confirmação via `/vincular <CODE>` ou `/start <CODE>`).
+  telegramBotToken          String?
+  telegramWebhookSecret     String?   @unique
+  telegramBotUsername       String?
+  telegramWebhookRegistered Boolean   @default(false)
   telegramChatId            String?   @unique
   telegramLinkCode          String?   @unique
   telegramLinkCodeExpiresAt DateTime?

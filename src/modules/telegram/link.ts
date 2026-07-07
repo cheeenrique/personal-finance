@@ -17,8 +17,9 @@ export type TelegramLinkResult =
 
 /**
  * Checagem barata pra decidir, no webhook, se vale tentar o vínculo ANTES da
- * allowlist — um `chat_id` novo (ainda não autorizado) só entra na allowlist
- * self-service passando por aqui primeiro (ver route.ts).
+ * checagem de chat vinculado (`isLinkedChat`, allowlist.ts) — um `chat_id`
+ * novo (ainda não vinculado a esse bot) só entra no sistema passando por
+ * aqui primeiro (ver route.ts).
  */
 export function looksLikeLinkCommand(text: string): boolean {
   const firstWord = text.trim().split(/\s+/)[0]?.toLowerCase();
@@ -27,18 +28,27 @@ export function looksLikeLinkCommand(text: string): boolean {
 
 /**
  * Vincula um `chat_id` ao usuário dono do código de vínculo
- * (docs/12-SETTINGS.md, "3. Telegram"). Roda antes da checagem de allowlist
- * no webhook (docs/30-TELEGRAM.md, "Segurança") — é assim que um chat_id
- * novo passa a existir em `UserSettings.telegramChatId`.
+ * (docs/12-SETTINGS.md, "3. Telegram"). Roda antes da checagem de chat
+ * vinculado no webhook (docs/30-TELEGRAM.md, "Segurança") — é assim que um
+ * chat_id novo passa a existir em `UserSettings.telegramChatId`.
+ *
+ * `userId` é o dono do bot que recebeu o update (já resolvido pelo secret
+ * per-user do webhook, ver `webhook-auth.ts`) — o código é validado CONTRA
+ * ESSE usuário, nunca buscado globalmente: no modelo "traga seu próprio bot"
+ * cada usuário só pode confirmar o próprio código mandando pro próprio bot.
  */
-export async function tryLinkFromMessage(chatId: string | number, text: string): Promise<TelegramLinkResult> {
+export async function tryLinkFromMessage(
+  userId: string,
+  chatId: string | number,
+  text: string,
+): Promise<TelegramLinkResult> {
   const match = LINK_COMMAND_PATTERN.exec(text.trim());
   if (!match) return { ok: false, reason: "invalid_command" };
 
   const code = match[2].toUpperCase();
 
   const settings = await prisma.userSettings.findFirst({
-    where: { telegramLinkCode: code, telegramLinkCodeExpiresAt: { gt: new Date() } },
+    where: { userId, telegramLinkCode: code, telegramLinkCodeExpiresAt: { gt: new Date() } },
   });
   if (!settings) return { ok: false, reason: "invalid_or_expired_code" };
 

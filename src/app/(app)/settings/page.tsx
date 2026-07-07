@@ -19,12 +19,12 @@ import { SessionCard } from "@/components/settings/session-card";
  * antes de cruzar a fronteira Server → Client (ver `modules/settings/service.ts`
  * `toClientUserSettings`) — evita repetir `.toString()` aqui.
  *
- * Telegram: vínculo é 100% DB-backed agora (`UserSettings.telegramChatId`,
- * self-service via código — ver `telegram-card.tsx`). O fallback env
- * (`TELEGRAM_ALLOWED_CHAT_IDS`, legado) só é resolvido no webhook
- * (`modules/telegram/allowlist.ts`), nunca lido aqui — setups legados via
- * env aparecem como "não vinculado" nesta tela até o usuário gerar um código
- * e confirmar pelo bot.
+ * Telegram: modelo "traga seu próprio bot" (docs/30-TELEGRAM.md) — cada
+ * usuário instala o próprio bot (token colado na UI, `hasBot`) e depois
+ * vincula o chat (`telegramChatId`, self-service via código). Nenhum secret
+ * (`telegramBotToken`/`telegramWebhookSecret`) chega aqui — `getSettingsForClient`
+ * já devolve só os campos seguros de exibição (ver `modules/settings/service.ts`
+ * `toClientUserSettings`).
  *
  * `memberSince` (card de Perfil): a sessão do NextAuth só expõe id/name/email
  * (`10-AUTH.md`), então `User.createdAt` é buscado à parte via
@@ -61,7 +61,13 @@ export default async function SettingsPage() {
           alertGreenMultiplier={settings.alertGreenMultiplier}
         />
 
-        <TelegramCard chatId={settings.telegramChatId} pendingCode={pendingCode} />
+        <TelegramCard
+          hasBot={settings.hasBot}
+          botUsername={settings.telegramBotUsername}
+          webhookRegistered={settings.telegramWebhookRegistered}
+          chatId={settings.telegramChatId}
+          pendingCode={pendingCode}
+        />
       </div>
 
       <DataCard />

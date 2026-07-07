@@ -70,10 +70,53 @@ async function clearTelegramChatId(userId: string): Promise<UserSettings> {
   });
 }
 
+export type InstallTelegramBotData = {
+  botToken: string;
+  webhookSecret: string;
+  botUsername: string;
+  webhookRegistered: boolean;
+};
+
+/** Grava o bot recém-instalado (docs/30-TELEGRAM.md, "traga seu próprio bot") — `installTelegramBot` já validou o token via `getMe` antes de chegar aqui. */
+async function setTelegramBot(userId: string, data: InstallTelegramBotData): Promise<UserSettings> {
+  return prisma.userSettings.update({
+    where: { userId },
+    data: {
+      telegramBotToken: data.botToken,
+      telegramWebhookSecret: data.webhookSecret,
+      telegramBotUsername: data.botUsername,
+      telegramWebhookRegistered: data.webhookRegistered,
+    },
+  });
+}
+
+/**
+ * Desinstala o bot por completo: token, secret, username, status do webhook,
+ * chat vinculado e código de vínculo pendente — tudo limpo junto, porque sem
+ * bot não existe mais nada pra vincular (`uninstallTelegramBot`,
+ * modules/settings/service.ts).
+ */
+async function clearTelegramBot(userId: string): Promise<UserSettings> {
+  return prisma.userSettings.update({
+    where: { userId },
+    data: {
+      telegramBotToken: null,
+      telegramWebhookSecret: null,
+      telegramBotUsername: null,
+      telegramWebhookRegistered: false,
+      telegramChatId: null,
+      telegramLinkCode: null,
+      telegramLinkCodeExpiresAt: null,
+    },
+  });
+}
+
 export const settingsRepository = {
   findByUserId,
   findOrCreate,
   update,
   setTelegramLinkCode,
   clearTelegramChatId,
+  setTelegramBot,
+  clearTelegramBot,
 };

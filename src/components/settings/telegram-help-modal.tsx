@@ -11,23 +11,24 @@ type TelegramHelpModalProps = {
 };
 
 const STEPS = [
-  'Clique em "Vincular Telegram" abaixo — um código de 6 caracteres aparece, válido por 15 minutos.',
-  "Abra o Telegram e procure o bot configurado no app (pergunte ao administrador o nome/@usuário do bot, se não souber).",
-  "Envie a mensagem /vincular SEUCÓDIGO (troque pelo código exibido) diretamente pro bot.",
+  "Abra o Telegram, procure @BotFather e mande /newbot — escolha um nome e um @usuário pro seu bot.",
+  "O BotFather te devolve um token (ex.: 123456789:ABCdef...). Copie ele.",
+  'Cole o token aqui em Configurações e clique em "Instalar bot" — o sistema valida o token e registra o webhook automaticamente.',
+  'Clique em "Vincular chat" — um código de 6 caracteres aparece, válido por 15 minutos.',
+  "Envie a mensagem /vincular SEUCÓDIGO (troque pelo código exibido) diretamente pro SEU bot.",
   'Em poucos segundos a página atualiza sozinha (checagem automática) e mostra "Vinculado".',
 ] as const;
 
 /**
- * Passo a passo do vínculo por código (docs/12-SETTINGS.md, item 3) +
- * pré-requisito de infra que o usuário não descobre só clicando em "Vincular"
- * (bot precisa existir e ter token/webhook configurados no backend, exige
- * HTTPS público). Reaproveita `FormModal` (par Dialog/Sheet genérico do
- * projeto) mesmo sem ser formulário — mesmo precedente de
- * `InstallmentDetailsModal`.
+ * Passo a passo do modelo "traga seu próprio bot" (docs/30-TELEGRAM.md):
+ * criar o bot no @BotFather, colar o token, instalar, e só depois vincular o
+ * chat por código (docs/12-SETTINGS.md, item 3). Reaproveita `FormModal`
+ * (par Dialog/Sheet genérico do projeto) mesmo sem ser formulário — mesmo
+ * precedente de `InstallmentDetailsModal`.
  */
 export function TelegramHelpModal({ open, onOpenChange }: TelegramHelpModalProps) {
   return (
-    <FormModal open={open} onOpenChange={onOpenChange} title="Como vincular seu Telegram">
+    <FormModal open={open} onOpenChange={onOpenChange} title="Como instalar e vincular seu Telegram">
       <div className="flex flex-col gap-4">
         <ol className="flex flex-col gap-3">
           {STEPS.map((step, index) => (
@@ -43,9 +44,10 @@ export function TelegramHelpModal({ open, onOpenChange }: TelegramHelpModalProps
         <div className="flex items-start gap-2.5 rounded-[10px] border border-warning/30 bg-warning/10 px-3 py-2.5">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-on-warning" aria-hidden="true" />
           <p className="text-[13px] font-medium text-foreground">
-            Isso só funciona se o bot do Telegram já estiver configurado neste servidor (token +
-            webhook). Se o vínculo não completar depois de enviar a mensagem, o bot provavelmente
-            ainda não foi configurado — fale com quem administra o deploy.
+            O registro automático do webhook só funciona com uma URL pública (HTTPS) — em
+            desenvolvimento local (localhost) o bot fica salvo, mas o webhook não é registrado até
+            o deploy. Nesse caso a tela mostra um aviso e volta a funcionar sozinha depois que a
+            aplicação estiver publicada.
           </p>
         </div>
 

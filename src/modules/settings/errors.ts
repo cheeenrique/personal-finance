@@ -2,10 +2,11 @@
  * Erros de domínio do módulo settings.
  *
  * `getSettings` é lazy-create (sempre resolve, nunca "not found") e
- * `updateSettings` valida ranges via Zod no boundary — hoje não há caso de
- * negócio real que precise de um erro tipado específico. Classe base mantida
- * por simetria com os demais módulos e para cobrir erro inesperado do Prisma
- * (ver ~/.claude/rules/06-composition-errors.md — "erros são dado").
+ * `updateSettings` valida ranges via Zod no boundary — por muito tempo não
+ * houve caso de negócio real que precisasse de um erro tipado específico.
+ * Classe base mantida por simetria com os demais módulos e para cobrir erro
+ * inesperado do Prisma (ver ~/.claude/rules/06-composition-errors.md —
+ * "erros são dado").
  */
 export class SettingsDomainError extends Error {
   constructor(
@@ -16,5 +17,19 @@ export class SettingsDomainError extends Error {
   ) {
     super(message);
     this.name = "SettingsDomainError";
+  }
+}
+
+/**
+ * Token de bot do Telegram inválido/revogado — `installTelegramBot`
+ * (docs/30-TELEGRAM.md, modelo "traga seu próprio bot") valida via `getMe`
+ * antes de gravar qualquer coisa no banco.
+ */
+export class TelegramInvalidTokenError extends SettingsDomainError {
+  constructor() {
+    super(
+      "Token do bot inválido — confira se copiou certinho do @BotFather.",
+      "TELEGRAM_INVALID_TOKEN",
+    );
   }
 }

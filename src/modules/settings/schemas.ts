@@ -35,3 +35,14 @@ export const updateSettingsSchema = z.object({
 });
 
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
+
+/**
+ * Token de bot do Telegram (docs/30-TELEGRAM.md, "traga seu próprio bot"):
+ * formato `<bot_id numérico>:<35 chars alfanuméricos/_-/>`, gerado pelo
+ * @BotFather. Validação de formato aqui é só sanity check — a validação
+ * real (token existe/não foi revogado) é o `getMe` em `installTelegramBot`.
+ */
+export const telegramBotTokenSchema = z
+  .string()
+  .trim()
+  .regex(/^\d+:[A-Za-z0-9_-]{30,}$/, "Token do bot inválido — copie certinho do @BotFather.");
