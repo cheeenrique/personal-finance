@@ -24,7 +24,7 @@ export function CategoryReportSection({ categories, totalAll }: CategoryReportSe
       title="Categorias"
       empty={isEmpty}
       emptyMessage="Nenhum gasto por categoria neste período."
-      height={Math.max(220, categories.length * 44)}
+      height={280}
     >
       <ul className="flex h-full flex-col justify-center gap-3 overflow-y-auto">
         {categories.map((category) => {

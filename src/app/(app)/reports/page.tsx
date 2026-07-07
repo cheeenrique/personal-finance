@@ -12,6 +12,8 @@ import { ReportsFiltersBar } from "@/components/reports/reports-filters-bar";
 import { ExportCsvButton } from "@/components/reports/export-csv-button";
 import { CategoryReportSection } from "@/components/reports/category-report-section";
 import { CashflowSection } from "@/components/reports/cashflow-section";
+import { KpiSummaryCard } from "@/components/reports/kpi-summary-card";
+import { ReportSection } from "@/components/reports/report-section";
 import { AccountReportTable, type AccountReportRow } from "@/components/reports/account-report-table";
 import { CardReportTable, type CardReportRow } from "@/components/reports/card-report-table";
 import { BudgetReportTable, type BudgetReportRow } from "@/components/reports/budget-report-table";
@@ -133,27 +135,29 @@ async function ReportsContent({ filters }: { filters: ReturnType<typeof parseRep
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CategoryReportSection categories={categoryTotals} totalAll={totalAll} />
-        <CashflowSection summary={cashflowSummary} monthlyPoints={monthlyPoints} />
+        <CashflowSection monthlyPoints={monthlyPoints} />
+        <KpiSummaryCard
+          income={cashflowSummary.income.toNumber()}
+          expense={cashflowSummary.expense.toNumber()}
+          net={cashflowSummary.net.toNumber()}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-extrabold text-foreground">Por conta</h3>
+        <ReportSection title="Por conta">
           <AccountReportTable rows={accountReportRows} />
-        </section>
+        </ReportSection>
 
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-extrabold text-foreground">Por cartão</h3>
+        <ReportSection title="Por cartão">
           <CardReportTable rows={cardReportRows} />
-        </section>
+        </ReportSection>
       </div>
 
-      <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-extrabold text-foreground">Orçamento vs. realizado</h3>
+      <ReportSection title="Orçamento vs. realizado">
         <BudgetReportTable rows={budgetReportRows} />
-      </section>
+      </ReportSection>
 
       <PatrimonyReportSection points={toEvolutionChartPoints(patrimonyPoints)} />
     </div>
@@ -168,7 +172,8 @@ function ReportsSkeleton() {
         <Skeleton className="h-8 w-32" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Skeleton className="h-72 w-full rounded-xl" />
         <Skeleton className="h-72 w-full rounded-xl" />
         <Skeleton className="h-72 w-full rounded-xl" />
       </div>
