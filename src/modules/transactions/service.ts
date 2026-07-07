@@ -254,13 +254,15 @@ async function listRecentForDashboard(userId: string, limit: number): Promise<Re
  * de `InstallmentPurchase`/`Transaction` (docs/23-INSTALLMENTS.md, "Valores
  * Derivados"). Uma parcela é "paga" quando sua data de vencimento já passou
  * (`date <= agora`) — mesma regra de compra confirmada no cartão, não existe
- * pagamento manual de parcela individual.
+ * pagamento manual de parcela individual. `cardId` opcional filtra pelo
+ * cartão (filtro `?cardId=` da tela `/installments`).
  */
 async function listInstallmentPurchasesWithProgress(
   userId: string,
   refDate: Date = new Date(),
+  cardId?: string,
 ): Promise<InstallmentPurchaseWithProgress[]> {
-  const purchases = await transactionRepository.listInstallmentPurchasesWithTransactions(userId);
+  const purchases = await transactionRepository.listInstallmentPurchasesWithTransactions(userId, cardId);
 
   return purchases.map((purchase) => {
     const paid = purchase.transactions.filter((transaction) => transaction.date.getTime() <= refDate.getTime());

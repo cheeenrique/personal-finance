@@ -352,11 +352,15 @@ async function listRecentForDashboard(userId: string, limit: number): Promise<Re
  * derivado (ver service.ts `listInstallmentPurchasesWithProgress`,
  * docs/23-INSTALLMENTS.md "Valores Derivados"). Sem agregação aqui: a
  * derivação (paga/restante) depende de "hoje", que é regra do service, não
- * do acesso a dados.
+ * do acesso a dados. `cardId` opcional filtra pelo cartão (filtro da tela
+ * `/installments`).
  */
-async function listInstallmentPurchasesWithTransactions(userId: string): Promise<InstallmentPurchaseRow[]> {
+async function listInstallmentPurchasesWithTransactions(
+  userId: string,
+  cardId?: string,
+): Promise<InstallmentPurchaseRow[]> {
   const purchases = await prisma.installmentPurchase.findMany({
-    where: { userId },
+    where: { userId, ...(cardId ? { cardId } : {}) },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,

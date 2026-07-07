@@ -1,13 +1,17 @@
 import { auth } from "@/lib/auth";
 import { transactionService } from "@/modules/transactions/service";
+import { listCardOptionsAction } from "@/components/shared/entity-options-actions";
 import { InstallmentsBoard } from "@/components/installments/installments-board";
 import type { InstallmentPurchaseView } from "@/components/installments/types";
 
 type InstallmentsPageProps = {
-  /** `?open=<id>` — usado pelo widget "Parcelamentos ativos" do Dashboard
+  /**
+   * `?open=<id>` — usado pelo widget "Parcelamentos ativos" do Dashboard
    * pra abrir o modal de detalhes direto no item clicado, sem passar pela
-   * listagem completa. */
-  searchParams: Promise<{ open?: string }>;
+   * listagem completa. `?cardId=<id>` — filtro por cartão (docs/23-INSTALLMENTS.md,
+   * "Filtros"), persistido na URL (mesmo padrão de `/transactions`).
+   */
+  searchParams: Promise<{ open?: string; cardId?: string }>;
 };
 
 /**
@@ -23,9 +27,14 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
   const userId = session?.user?.id;
   if (!userId) return null;
 
-  const { open: openId } = await searchParams;
+  const { open: openId, cardId } = await searchParams;
 
-  const purchases = await transactionService.listInstallmentPurchasesWithProgress(userId);
+  const [purchases, cardOptionsResult] = await Promise.all([
+    transactionService.listInstallmentPurchasesWithProgress(userId, undefined, cardId),
+    listCardOptionsAction(),
+  ]);
+
+  const cardOptions = cardOptionsResult.success ? cardOptionsResult.data : [];
 
   const purchasesView: InstallmentPurchaseView[] = purchases.map((purchase) => ({
     id: purchase.id,
@@ -44,5 +53,12 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
     })),
   }));
 
-  return <InstallmentsBoard purchases={purchasesView} initialOpenId={openId} />;
+  return (
+    <InstallmentsBoard
+      purchases={purchasesView}
+      initialOpenId={openId}
+      cardOptions={cardOptions}
+      selectedCardId={cardId}
+    />
+  );
 }
