@@ -10,8 +10,12 @@ import { cardService } from "@/modules/cards/service";
 import { loanService } from "@/modules/loans/service";
 import { reportService } from "@/modules/reports/service";
 import { nowInSaoPaulo } from "@/lib/date/timezone";
+import { parseFlexibleDate } from "@/lib/date/schema";
+import { PERIOD_OPTIONS, type PeriodPreset } from "@/components/transactions/period-presets";
+import { resolveDateRange, deriveYearMonth } from "@/components/reports/report-filters";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuickActions } from "@/components/dashboard/quick-actions";
+import { DashboardPeriodSelect } from "@/components/dashboard/period-select";
 import { WeeklySummaryBox } from "@/components/dashboard/weekly-summary-box";
 import { AlertsSection } from "@/components/dashboard/alerts-section";
 import { InsufficientBalanceAlert } from "@/components/dashboard/insufficient-balance-alert";
@@ -24,23 +28,39 @@ import { MonthlyEvolutionChart } from "@/components/dashboard/monthly-evolution-
 import { RecentTransactionsTable } from "@/components/dashboard/recent-transactions-table";
 
 const RECENT_TRANSACTIONS_LIMIT = 5;
+const DEFAULT_PERIOD: PeriodPreset = "this_month";
+const VALID_PERIODS = new Set<string>(PERIOD_OPTIONS.map((option) => option.value));
+
+/** Valida `?period=` contra os presets conhecidos (`PERIOD_OPTIONS`) — qualquer valor fora disso (adulterado ou stale) cai no default, nunca propaga string arbitrária pro `resolveDateRange`. */
+function parsePeriod(raw: string | string[] | undefined): PeriodPreset {
+  return typeof raw === "string" && VALID_PERIODS.has(raw) ? (raw as PeriodPreset) : DEFAULT_PERIOD;
+}
+
+type DashboardPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
 /**
  * `/dashboard` — tela principal (docs/11-DASHBOARD.md): responde "como está
  * minha vida financeira agora" sem navegação adicional. Página é só
  * composição — toda regra de negócio vive nos services de cada módulo
- * (docs/99-CLAUDE.md, "Regra de Ouro"). `Suspense` cobre o fetch (várias
- * queries em paralelo) com um skeleton de tela inteira.
+ * (docs/99-CLAUDE.md, "Regra de Ouro"). Filtro de período na URL (`?period=`,
+ * default "this_month" — mesma convenção de `/reports`, ver
+ * `components/reports/report-filters.ts`): parseado FORA do `Suspense` (rápido,
+ * síncrono), repassado pro conteúdo async que faz o fetch pesado.
  */
-export default function DashboardPage() {
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const rawParams = await searchParams;
+  const period = parsePeriod(rawParams.period);
+
   return (
     <Suspense fallback={<DashboardSkeleton />}>
-      <DashboardContent />
+      <DashboardContent period={period} />
     </Suspense>
   );
 }
 
-async function DashboardContent() {
+async function DashboardContent({ period }: { period: PeriodPreset }) {
   const session = await auth();
   const userId = session?.user?.id;
 
@@ -48,15 +68,19 @@ async function DashboardContent() {
     return <p className="text-sm text-muted-foreground">Sessão inválida.</p>;
   }
 
-  const now = nowInSaoPaulo();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  // Range do período selecionado (docs/11-DASHBOARD.md + task do filtro de
+  // período) — reusa o mesmo resolver de `/reports`, sem duplicar a lógica de
+  // presets (rule 02-dry-kiss-yagni). `year` do gráfico de evolução mensal
+  // segue o ANO do período (fim do range), não necessariamente o ano corrente.
+  const { dateFrom, dateTo } = resolveDateRange(period);
+  const parsedDateFrom = parseFlexibleDate(dateFrom);
+  const parsedDateTo = parseFlexibleDate(dateTo);
+  const { year } = deriveYearMonth(dateTo);
 
   const [
     insufficientBalanceReport,
     totalBalance,
-    monthlyIncome,
-    monthlyExpense,
+    cashflowSummary,
     unpaidExpense,
     totalPatrimony,
     weeklySummary,
@@ -70,26 +94,43 @@ async function DashboardContent() {
   ] = await Promise.all([
     accountService.getInsufficientBalanceReport(userId),
     accountService.totalBalance(userId),
-    transactionService.monthlyIncomeTotal(userId, year, month),
-    transactionService.monthlyExpenseTotal(userId, year, month),
-    transactionService.monthlyUnpaidExpenseTotal(userId, year, month),
+    // Fluxo de caixa CORRETO do período selecionado (conta-only + COALESCE(paidAt,
+    // date)) — MESMA semântica de `monthlyIncomeTotal`/`monthlyExpenseTotal` que o
+    // Dashboard usava antes (ver `modules/reports/repository.ts` `buildCashflowConditions`
+    // vs `modules/transactions/repository.ts` `sumAmountByTypeInRange`: mesmas
+    // condições de exclusão), só que sobre um range arbitrário em vez de só o mês.
+    reportService.cashflow(userId, parsedDateFrom, parsedDateTo),
+    // "Previsto / A pagar" no range do período (isPaid=false) — generalização de
+    // `monthlyUnpaidExpenseTotal` pro filtro (ver `modules/transactions/service.ts`).
+    transactionService.unpaidExpenseTotalInRange(userId, parsedDateFrom, parsedDateTo),
     assetService.totalPatrimony(userId),
     alertService.getWeeklySummaryForDashboard(userId),
     alertService.listActiveForDashboard(userId),
     cardService.listWithSummary(userId),
     transactionService.listActiveInstallmentPurchases(userId),
     loanService.listActiveLoans(userId),
-    reportService.expenseByCategory(userId, year, month),
+    // "Gastos por categoria" no range do período — `reportService.categoryTotals`
+    // já implementa exatamente esta agregação pra um range arbitrário (mesma regra
+    // de exclusão de `transactionService.expensesByCategory`, que fica intocada:
+    // ainda alimenta o Telegram, ver docs/30-TELEGRAM.md). Sem filtro de tipo ⇒
+    // default EXPENSE (mesma leitura de sempre). `dateTo` estendido até o fim do
+    // dia (`endOfDayInclusive`, ver `modules/reports/service.ts`): `categoryTotals`
+    // filtra por `date` com `lte` cru, e `date` NEM SEMPRE é meia-noite (lançamento
+    // rápido/Telegram usa `new Date()` como default, `transactions/schemas.ts`) —
+    // sem a extensão, despesa do ÚLTIMO dia do período lançada fora da meia-noite
+    // ficaria de fora, regredindo vs. o `monthWindowUtc` (limite exclusivo) que o
+    // Dashboard usava antes.
+    reportService.categoryTotals(userId, parsedDateFrom, reportService.endOfDayInclusive(parsedDateTo)),
     reportService.incomeVsExpenseByMonth(userId, year),
     transactionService.listRecentForDashboard(userId, RECENT_TRANSACTIONS_LIMIT),
   ]);
 
   const kpiData: KPIGridData = {
     totalBalance: totalBalance.toNumber(),
-    monthlyIncome: monthlyIncome.toNumber(),
-    monthlyExpense: monthlyExpense.toNumber(),
+    monthlyIncome: cashflowSummary.income.toNumber(),
+    monthlyExpense: cashflowSummary.expense.toNumber(),
     unpaidExpense: unpaidExpense.toNumber(),
-    monthlyResult: monthlyIncome.minus(monthlyExpense).toNumber(),
+    monthlyResult: cashflowSummary.net.toNumber(),
     totalPatrimony: totalBalance.plus(totalPatrimony).toNumber(),
   };
 
@@ -97,13 +138,22 @@ async function DashboardContent() {
   // alertas ativos (docs/29-ALERTS.md, "Interface no Dashboard": só anomalia/verde).
   const activeAlerts = activeAlertsRaw.filter((alert) => alert.type !== AlertType.WEEKLY_SUMMARY);
 
-  // Só os meses já decorridos do ano corrente — série zero-preenchida evita
-  // meses futuros "achatados" em zero na linha do tempo.
-  const monthlyEvolutionPoints = incomeVsExpenseByMonth.slice(0, month);
+  // Só os meses já decorridos do ANO CORRENTE — série zero-preenchida evita
+  // meses futuros "achatados" em zero na linha do tempo. Anos passados (ex.:
+  // período "Este ano" olhando pra trás não existe hoje, mas `incomeVsExpenseByMonth`
+  // é sempre o ano do período, que pode divergir do ano corrente em casos de borda
+  // como "Mês passado" em janeiro) mostram os 12 meses cheios — mesmo tratamento
+  // de `/reports` (`cashflowPoints`).
+  const nowMonth = nowInSaoPaulo();
+  const monthlyEvolutionPoints =
+    year === nowMonth.getFullYear() ? incomeVsExpenseByMonth.slice(0, nowMonth.getMonth() + 1) : incomeVsExpenseByMonth;
 
   return (
     <div className="flex flex-col gap-5">
-      <QuickActions />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <QuickActions />
+        <DashboardPeriodSelect period={period} />
+      </div>
 
       {weeklySummary && <WeeklySummaryBox summary={weeklySummary} />}
 
@@ -114,7 +164,7 @@ async function DashboardContent() {
 
       <AlertsSection alerts={activeAlerts} />
 
-      <KPIGrid data={kpiData} />
+      <KPIGrid data={kpiData} period={period} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CardsSummary cards={cards} />

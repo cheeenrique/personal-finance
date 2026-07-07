@@ -338,6 +338,25 @@ async function monthlyUnpaidExpenseTotal(userId: string, year: number, month: nu
   return transactionRepository.sumAmountByTypeInRange(userId, TransactionType.EXPENSE, range, false);
 }
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * "Previsto / A pagar" num período ARBITRÁRIO — generalização de
+ * `monthlyUnpaidExpenseTotal` pro filtro de período do Dashboard (docs/11-DASHBOARD.md,
+ * ver `components/reports/report-filters.ts` `resolveDateRange`). `dateFrom`/`dateTo`
+ * chegam como meia-noite SP do dia (`parseFlexibleDate`) — soma 24h em `dateTo` pra
+ * virar o limite EXCLUSIVO do dia seguinte (sem risco de DST, Brasil não observa
+ * desde 2019), igual `monthWindowUtc` acima. `date` NÃO é garantidamente meia-noite
+ * (`dateInputSchema.default(() => new Date())` grava a hora real quando o caller não
+ * informa uma data explícita, ex.: lançamento rápido/Telegram) — mas um limite
+ * EXCLUSIVO (`lt`, não `lte`) cobre o dia inteiro de qualquer forma, sem precisar do
+ * ajuste "-1ms" que `modules/reports/service.ts` `endOfDayInclusive` faz pra `lte`.
+ */
+async function unpaidExpenseTotalInRange(userId: string, dateFrom: Date, dateTo: Date): Promise<Money> {
+  const range = { gte: dateFrom, lt: new Date(dateTo.getTime() + ONE_DAY_MS) };
+  return transactionRepository.sumAmountByTypeInRange(userId, TransactionType.EXPENSE, range, false);
+}
+
 async function expensesByCategory(
   userId: string,
   year: number,
@@ -474,6 +493,7 @@ export const transactionService = {
   monthlyExpenseTotal,
   monthlyIncomeTotal,
   monthlyUnpaidExpenseTotal,
+  unpaidExpenseTotalInRange,
   expensesByCategory,
   listRecentForDashboard,
   listActiveInstallmentPurchases,

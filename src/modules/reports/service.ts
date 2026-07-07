@@ -258,4 +258,14 @@ export const reportService = {
   cashflow,
   accountReport,
   patrimonyEvolution,
+  // Exportado só pro caller poder estender manualmente um `dateTo` ANTES de
+  // passar pra `categoryTotals`/`accountReport` (nenhuma das duas estende
+  // internamente, ao contrário de `cashflow` — ver comentário da função).
+  // Consumido hoje pelo Dashboard (`app/(app)/dashboard/page.tsx`, filtro de
+  // período): sem isso, uma despesa do ÚLTIMO dia do range com `date` fora da
+  // meia-noite (ex.: lançamento rápido/Telegram, que usa `new Date()` como
+  // default — `transactions/schemas.ts`) cairia fora do `lte` cru e o
+  // "Gastos por categoria" regrediria vs. o cálculo antigo (`monthWindowUtc`,
+  // limite exclusivo do mês seguinte, sem essa lacuna).
+  endOfDayInclusive,
 };
