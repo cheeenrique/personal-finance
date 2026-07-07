@@ -1,6 +1,5 @@
 "use client";
 
-import { TriangleAlert } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
 import { Button } from "@/components/ui/button";
@@ -40,16 +39,6 @@ export function TelegramHelpModal({ open, onOpenChange }: TelegramHelpModalProps
             </li>
           ))}
         </ol>
-
-        <div className="flex items-start gap-2.5 rounded-[10px] border border-warning/30 bg-warning/10 px-3 py-2.5">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-on-warning" aria-hidden="true" />
-          <p className="text-[13px] font-medium text-foreground">
-            O registro automático do webhook só funciona com uma URL pública (HTTPS) — em
-            desenvolvimento local (localhost) o bot fica salvo, mas o webhook não é registrado até
-            o deploy. Nesse caso a tela mostra um aviso e volta a funcionar sozinha depois que a
-            aplicação estiver publicada.
-          </p>
-        </div>
 
         <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
           <Button type="button" onClick={() => onOpenChange(false)}>
