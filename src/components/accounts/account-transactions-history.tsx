@@ -1,68 +1,196 @@
 "use client";
 
-import { Receipt } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil, Receipt, Trash2 } from "lucide-react";
 
-import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
-import { TransactionTypeBadge } from "@/components/shared/badges/transaction-type-badge";
-import { TransactionType } from "@/generated/prisma/enums";
-import { formatBRL } from "@/lib/money/format";
-import { formatDateSaoPaulo } from "@/lib/date/format";
-import { cn } from "@/lib/utils";
-import type { AccountTransactionRow } from "./types";
+import { DataTable, type SortState } from "@/components/tables/data-table";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { IconActionButton } from "@/components/shared/icon-action-button";
+import { buildTransactionColumns } from "@/components/transactions/transaction-columns";
+import { EditTransactionModal } from "@/components/transactions/edit-transaction-modal";
+import { useTransactionsReferenceData } from "@/components/transactions/use-transactions-reference-data";
+import { isTransferLeg, useTransactionMutations } from "@/components/transactions/use-transaction-mutations";
+import type { ClientTransaction, TransactionSort } from "@/modules/transactions/types";
+
+import { AccountPeriodFilterBar } from "./account-period-filter";
+import { useAccountPeriodFilter } from "./use-account-period-filter";
+import { useAccountTransactionsList } from "./use-account-transactions-list";
+
+const SORTABLE_KEYS: TransactionSort[] = ["date_desc", "date_asc", "amount_desc", "amount_asc"];
+
+function sortStateToTransactionSort(sort: SortState): TransactionSort {
+  if (!sort) return "date_desc";
+  const key = `${sort.column}_${sort.direction}` as TransactionSort;
+  return SORTABLE_KEYS.includes(key) ? key : "date_desc";
+}
+
+type AccountTransactionsHistoryProps = { accountId: string };
 
 /**
- * Histórico de transações da conta (docs/21-ACCOUNTS.md, "Detalhe da Conta").
- * Recebe os dados já buscados pelo Server Component (`page.tsx`) — evita
- * refazer a query no client e evita passar `Prisma.Decimal` cru por uma
- * Server Action (RSC não serializa a instância; a conversão pra string já
- * acontece na borda antes de chegar aqui). Somente leitura: editar/excluir
- * uma transação continua em `/transactions` (ver "Improvement Suggestions").
+ * Histórico de transações da conta (docs/06-SCREENS.md, "Contas": "reaproveita
+ * `DataTable` filtrada por `accountId`") — mesmas colunas/visual/ações de
+ * linha da tela `/transactions` (`buildTransactionColumns`, `DataTable`,
+ * `EditTransactionModal`, `useTransactionMutations`), com filtro próprio
+ * restrito a período (Mês atual/Mês passado/Personalizado) em vez do filtro
+ * bar completo — os demais filtros de `docs/21-ACCOUNTS.md` ("categoria/tipo/
+ * tag/valor") e o gráfico de entradas/saídas ficam para uma iteração futura
+ * (ver "Improvement Suggestions" no resumo).
  */
-export function AccountTransactionsHistory({ transactions }: { transactions: AccountTransactionRow[] }) {
-  const columns: DataTableColumn<AccountTransactionRow>[] = [
-    {
-      key: "date",
-      header: "Data",
-      render: (row) => <span className="font-mono">{formatDateSaoPaulo(row.date)}</span>,
-    },
-    {
-      key: "description",
-      header: "Descrição",
-      render: (row) => row.description,
-    },
-    {
-      key: "type",
-      header: "Tipo",
-      render: (row) => <TransactionTypeBadge type={row.type} />,
-    },
-    {
-      key: "amount",
-      header: "Valor",
-      align: "right",
-      render: (row) => (
-        <span
-          className={cn(
-            "font-mono font-semibold",
-            row.type === TransactionType.INCOME ? "text-success" : "text-destructive",
-          )}
-        >
-          {row.type === TransactionType.INCOME ? "+" : "-"}
-          {formatBRL(row.amount)}
-        </span>
-      ),
-    },
-  ];
+export function AccountTransactionsHistory({ accountId }: AccountTransactionsHistoryProps) {
+  const router = useRouter();
+  const periodFilter = useAccountPeriodFilter();
+  const referenceData = useTransactionsReferenceData();
+
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortState>({ column: "date", direction: "desc" });
+
+  const { page, installmentTotals, loading, error, reload } = useAccountTransactionsList({
+    accountId,
+    search: search || undefined,
+    dateFrom: periodFilter.range.dateFrom,
+    dateTo: periodFilter.range.dateTo,
+    sort: sortStateToTransactionSort(sort),
+  });
+
+  /** Além de invalidar a listagem client-side, força o Server Component da página a refazer `accountService.listWithBalances` — o saldo (KPICard) é derivado das transactions, então editar/excluir aqui precisa refletir lá também. */
+  function reloadAll() {
+    reload();
+    router.refresh();
+  }
+
+  const mutations = useTransactionMutations(reloadAll);
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [editing, setEditing] = useState<ClientTransaction | null>(null);
+  const [deleting, setDeleting] = useState<ClientTransaction | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+  const columns = useMemo(
+    () =>
+      buildTransactionColumns({
+        categoryById: referenceData.categoryById,
+        accountNameById: referenceData.accountNameById,
+        cardNameById: referenceData.cardNameById,
+        installmentTotals,
+      }),
+    [referenceData.categoryById, referenceData.accountNameById, referenceData.cardNameById, installmentTotals],
+  );
+
+  const selectedRows = page.items.filter((item) => selectedIds.includes(item.id));
+
+  function handleSortChange(column: string) {
+    setSort((current) =>
+      current?.column === column && current.direction === "desc" ? { column, direction: "asc" } : { column, direction: "desc" },
+    );
+  }
 
   return (
-    <DataTable
-      data={transactions}
-      columns={columns}
-      getRowId={(row) => row.id}
-      emptyState={{
-        icon: Receipt,
-        title: "Nenhuma transação nesta conta",
-        description: "Transações lançadas nesta conta aparecem aqui.",
-      }}
-    />
+    <div className="flex flex-col gap-3">
+      <DataTable
+        data={page.items}
+        columns={columns}
+        getRowId={(row) => row.id}
+        loading={loading}
+        error={error}
+        onRetry={reload}
+        emptyState={{
+          icon: Receipt,
+          title: "Nenhuma transação nesta conta",
+          description: "Ajuste o período ou registre um novo lançamento em Transações.",
+        }}
+        search={{ value: search, onChange: setSearch, placeholder: "Buscar por descrição…" }}
+        filters={<AccountPeriodFilterBar {...periodFilter} />}
+        sort={sort}
+        onSortChange={handleSortChange}
+        selection={{ selectedIds, onChange: setSelectedIds }}
+        rowActions={(row) => <RowActions row={row} onEdit={() => setEditing(row)} onDelete={() => setDeleting(row)} />}
+        bulkActions={() => (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void mutations.bulkMarkPaid(selectedRows).then(() => setSelectedIds([]))}
+            >
+              Marcar como pagas
+            </Button>
+            <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+              Excluir selecionadas
+            </Button>
+          </>
+        )}
+      />
+
+      {page.total > page.items.length && (
+        <p className="text-center text-[12.5px] font-medium text-muted-foreground">
+          Mostrando {page.items.length} de {page.total} lançamentos deste período — refine o período pra ver os demais.
+        </p>
+      )}
+
+      <EditTransactionModal
+        transaction={editing}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+        referenceData={referenceData}
+        onSaved={() => {
+          setEditing(null);
+          reloadAll();
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+        title={`Excluir "${deleting?.description ?? ""}"?`}
+        description="A transação vai para a lixeira — o toast de confirmação traz um botão de desfazer."
+        onConfirm={async () => {
+          if (deleting) await mutations.deleteOne(deleting);
+          setDeleting(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title={`Excluir ${selectedRows.length} transação(ões) selecionada(s)?`}
+        description="Essa ação em massa não tem desfazer — confirme com atenção."
+        onConfirm={async () => {
+          await mutations.bulkDelete(selectedRows);
+          setSelectedIds([]);
+        }}
+      />
+    </div>
+  );
+}
+
+type RowActionsProps = { row: ClientTransaction; onEdit: () => void; onDelete: () => void };
+
+/** Mesmos botões cinza 28x28 (icon-only) da tabela de Transações (`transactions-view.tsx`) — desabilitados pra pernas de TRANSFER. */
+function RowActions({ row, onEdit, onDelete }: RowActionsProps) {
+  const disabled = isTransferLeg(row);
+
+  return (
+    <>
+      <IconActionButton
+        icon={Pencil}
+        label="Editar"
+        onClick={onEdit}
+        disabled={disabled}
+        disabledReason="Transferências não são editáveis aqui"
+      />
+      <IconActionButton
+        icon={Trash2}
+        tone="danger"
+        label="Excluir"
+        onClick={onDelete}
+        disabled={disabled}
+        disabledReason="Transferências não são excluídas aqui"
+      />
+    </>
   );
 }

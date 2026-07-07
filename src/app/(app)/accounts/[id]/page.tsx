@@ -4,22 +4,20 @@ import { ArrowLeft, Wallet } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { accountService } from "@/modules/accounts/service";
-import { transactionService } from "@/modules/transactions/service";
 import { formatBRL } from "@/lib/money/format";
 import { KPICard } from "@/components/shared/kpi-card";
 import { AccountTransactionsHistory } from "@/components/accounts/account-transactions-history";
 import { ACCOUNT_TYPE_LABELS, DEFAULT_ACCOUNT_COLOR } from "@/components/accounts/account-config";
 import { AccountIcon } from "@/components/accounts/account-icon";
-import type { AccountTransactionRow } from "@/components/accounts/types";
-
-const HISTORY_PAGE_SIZE = 25;
 
 /**
  * Detalhe da conta (docs/21-ACCOUNTS.md, "Detalhe da Conta"): saldo atual,
- * saldo inicial, histórico de transações. Filtros por categoria/tipo/tag e
- * gráfico de entradas/saídas do mês ficam de fora desta primeira versão —
- * sinalizado em "Improvement Suggestions" no resumo final, não é stub vazio
- * (a tela já entrega saldo + histórico real).
+ * saldo inicial, histórico de transações (mesma `DataTable`/colunas/ações de
+ * `/transactions`, ver `AccountTransactionsHistory`) com filtro de período
+ * (mês atual/passado/personalizado). Filtros por categoria/tipo/tag/valor e
+ * gráfico de entradas/saídas do mês ficam de fora desta versão — sinalizado
+ * em "Improvement Suggestions" no resumo final, não é stub vazio (a tela já
+ * entrega saldo + histórico real e interativo).
  */
 export default async function AccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,21 +28,6 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const accounts = await accountService.listWithBalances(userId);
   const account = accounts.find((item) => item.id === id);
   if (!account) notFound();
-
-  const { items } = await transactionService.list(userId, {
-    accountId: id,
-    page: 1,
-    pageSize: HISTORY_PAGE_SIZE,
-    sort: "date_desc",
-  });
-
-  const transactions: AccountTransactionRow[] = items.map((transaction) => ({
-    id: transaction.id,
-    date: transaction.date,
-    description: transaction.description,
-    type: transaction.type,
-    amount: transaction.amount.toString(),
-  }));
 
   const color = account.color ?? DEFAULT_ACCOUNT_COLOR;
   const isNegative = account.balance.isNegative();
@@ -91,7 +74,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
 
       <div className="flex flex-col gap-3">
         <h3 className="text-sm font-extrabold text-foreground">Histórico de transações</h3>
-        <AccountTransactionsHistory transactions={transactions} />
+        <AccountTransactionsHistory accountId={account.id} />
       </div>
     </div>
   );

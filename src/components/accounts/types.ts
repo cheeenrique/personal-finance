@@ -1,5 +1,4 @@
 import type { AccountType } from "@/generated/prisma/enums";
-import type { TransactionType } from "@/generated/prisma/enums";
 
 /**
  * Forma serializável de `AccountWithBalance` (@/modules/accounts/types) para
@@ -18,17 +17,4 @@ export type AccountCardData = {
   color: string | null;
   icon: string | null;
   isActive: boolean;
-};
-
-/**
- * Linha do histórico de transações da conta (detalhe), já com `amount`
- * convertido pra string na borda pelo mesmo motivo de `AccountCardData`.
- * `date` permanece `Date` — tipo nativamente serializável por RSC.
- */
-export type AccountTransactionRow = {
-  id: string;
-  date: Date;
-  description: string;
-  type: TransactionType;
-  amount: string;
 };
