@@ -113,7 +113,7 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
 
       <div className="flex flex-col gap-2">
         <h3 className="text-base font-extrabold text-foreground">Compras da fatura atual</h3>
-        <InvoiceItemsTable items={invoice.items} />
+        <InvoiceItemsTable cardId={card.id} periodStart={invoice.periodStart} periodEnd={invoice.periodEnd} />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">

@@ -1,120 +1,102 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Receipt, Trash2 } from "lucide-react";
 
-import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
+import { DataTable } from "@/components/tables/data-table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { IconActionButton } from "@/components/shared/icon-action-button";
+import { buildTransactionColumns } from "@/components/transactions/transaction-columns";
 import { EditTransactionModal } from "@/components/transactions/edit-transaction-modal";
 import { useTransactionsReferenceData } from "@/components/transactions/use-transactions-reference-data";
 import { useTransactionMutations } from "@/components/transactions/use-transaction-mutations";
-import { getTransactionAction } from "@/modules/transactions/actions";
 import type { ClientTransaction } from "@/modules/transactions/types";
-import { formatBRL } from "@/lib/money/format";
-import { formatDateSaoPaulo } from "@/lib/date/format";
-import { notifyError } from "@/lib/toast";
-import type { InvoiceItemView } from "./types";
+import { useInvoiceItemsList } from "./use-invoice-items-list";
 
-const COLUMNS: DataTableColumn<InvoiceItemView>[] = [
-  {
-    key: "description",
-    header: "Descrição",
-    render: (item) => (
-      <span className="flex items-center gap-2">
-        <span className="truncate">{item.description}</span>
-        {item.installmentNumber && (
-          // Mesmo tom dessaturado de InstallmentBadge (transaction-type-badge.tsx) — não usa
-          // --accent pra não colidir com o CTA "Pagar fatura" (accent) na mesma tela.
-          <span className="inline-flex shrink-0 items-center rounded-full bg-orange-800/85 px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap text-orange-50">
-            Parcela {item.installmentNumber}
-          </span>
-        )}
-      </span>
-    ),
-  },
-  { key: "date", header: "Data", render: (item) => formatDateSaoPaulo(item.date) },
-  {
-    key: "amount",
-    header: "Valor",
-    align: "right",
-    render: (item) => <span className="font-mono text-destructive">{formatBRL(item.amount)}</span>,
-  },
-];
+type InvoiceItemsTableProps = {
+  cardId: string;
+  /** Range do ciclo aberto (`InvoiceView.periodStart`/`periodEnd`, ISO) — `periodEnd` é EXCLUSIVO, ver `modules/cards/cycle.ts`. */
+  periodStart: string;
+  periodEnd: string;
+};
 
 /**
- * Compras da fatura atual — sem paginação (docs/22, "Detalhe do Cartão":
- * "compras da fatura atual (DataTable, sem paginação)").
+ * Compras da fatura atual (docs/22-CREDIT_CARDS.md, "Detalhe do Cartão") —
+ * MESMA `DataTable` + colunas (`buildTransactionColumns`) + paginação
+ * server-side + editar/excluir de `AccountTransactionsHistory`
+ * (`/accounts/[id]`), filtrando por `cardId` + range do ciclo atual em vez de
+ * `accountId` + período livre (ver `use-invoice-items-list.ts`). Cada item da
+ * fatura É uma `Transaction` real (`type=EXPENSE`) — `cardService.buildInvoice`
+ * só DERIVA esta lista a partir dela (`modules/cards/repository.ts`
+ * `findExpensesInRange`), não cria uma entidade própria.
  *
- * Editar/excluir reaproveita o MESMO par `EditTransactionModal` +
- * `useTransactionMutations` de `/transactions` e `/accounts/[id]`
- * (`account-transactions-history.tsx`): cada item da fatura É uma
- * `Transaction` real — `cardService.buildInvoice` só DERIVA esta lista a
- * partir dela (ver `modules/cards/repository.ts` `findExpensesInRange`), não
- * cria uma entidade própria. `InvoiceItemView` (shape de leitura da fatura)
- * não carrega categoria/notas/isPaid/tags — por isso "Editar" busca a
- * `Transaction` completa sob demanda via `getTransactionAction` antes de
- * abrir o modal, em vez de inflar `Invoice`/`InvoiceItem` (módulo cards) com
- * campos que só a edição usa (a leitura da fatura não devia carregar payload
- * de edição que nunca lê).
+ * A listagem já traz o shape completo (`ClientTransaction`, mesma Server
+ * Action de `/transactions`), então "Editar" abre o modal direto — sem o
+ * fetch-sob-demanda via `getTransactionAction` que a versão anterior (baseada
+ * em `InvoiceItemView`, um shape reduzido) precisava.
  *
- * Parcelas de `InstallmentPurchase` são editáveis/excluíveis igual a
- * qualquer outra compra — mesmo comportamento que já existe em
- * `/transactions` (`transactions-view.tsx`: só pernas de TRANSFER são
- * desabilitadas lá, e itens de fatura nunca são TRANSFER, sempre EXPENSE).
- * `updateTransactionAction` não toca `installmentPurchaseId`/
- * `installmentNumber`, então editar uma parcela não quebra o parcelamento;
- * excluir uma parcela é soft-delete com undo, igual a qualquer transação.
- *
- * Sem cache client-side pra invalidar aqui — a fatura chega como prop de
- * Server Component (`app/(app)/cards/[id]/page.tsx`), então `router.refresh()`
- * já refaz `getInvoiceAction`/`listCardsAction` e traz fatura + resumo do
- * cartão (usado/disponível) atualizados na mesma leitura.
+ * Sem cache client-side pra invalidar sozinho aqui — `reload()` (TanStack
+ * Query) atualiza a tabela, e `router.refresh()` refaz o Server Component da
+ * página (fatura + KPIs usado/disponível do cartão), igual
+ * `AccountTransactionsHistory.reloadAll`.
  */
-export function InvoiceItemsTable({ items }: { items: InvoiceItemView[] }) {
+export function InvoiceItemsTable({ cardId, periodStart, periodEnd }: InvoiceItemsTableProps) {
   const router = useRouter();
   const referenceData = useTransactionsReferenceData();
-  const mutations = useTransactionMutations(() => router.refresh());
+
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const { page, installmentTotals, loading, error, reload } = useInvoiceItemsList({
+    cardId,
+    periodStart,
+    periodEnd,
+    page: currentPage,
+  });
+
+  /** Além de invalidar a listagem client-side, força o Server Component da página a refazer `getInvoiceAction`/`listCardsAction` — fatura + KPIs (usado/disponível) são derivados das transactions, então editar/excluir aqui precisa refletir lá também. */
+  function reloadAll() {
+    reload();
+    router.refresh();
+  }
+
+  const mutations = useTransactionMutations(reloadAll);
 
   const [editing, setEditing] = useState<ClientTransaction | null>(null);
-  const [deleting, setDeleting] = useState<InvoiceItemView | null>(null);
-  const [pendingEditId, setPendingEditId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ClientTransaction | null>(null);
 
-  async function handleEdit(item: InvoiceItemView) {
-    setPendingEditId(item.id);
-    const result = await getTransactionAction(item.id);
-    setPendingEditId(null);
-
-    if (!result.success) {
-      notifyError(result.error.message);
-      return;
-    }
-    setEditing(result.data);
-  }
+  const columns = useMemo(
+    () =>
+      buildTransactionColumns({
+        categoryById: referenceData.categoryById,
+        accountNameById: referenceData.accountNameById,
+        cardNameById: referenceData.cardNameById,
+        installmentTotals,
+      }),
+    [referenceData.categoryById, referenceData.accountNameById, referenceData.cardNameById, installmentTotals],
+  );
 
   return (
     <>
       <DataTable
-        data={items}
-        columns={COLUMNS}
-        getRowId={(item) => item.id}
+        data={page.items}
+        columns={columns}
+        getRowId={(row) => row.id}
+        loading={loading}
+        error={error}
+        onRetry={reload}
         emptyState={{
           icon: Receipt,
           title: "Nenhuma compra nesta fatura",
           description: "As compras lançadas neste cartão dentro do ciclo atual aparecem aqui.",
         }}
-        rowActions={(item) => (
+        rowActions={(row) => (
           <>
-            <IconActionButton
-              icon={Pencil}
-              label="Editar"
-              onClick={() => void handleEdit(item)}
-              disabled={pendingEditId === item.id}
-            />
-            <IconActionButton icon={Trash2} tone="danger" label="Excluir" onClick={() => setDeleting(item)} />
+            <IconActionButton icon={Pencil} label="Editar" onClick={() => setEditing(row)} />
+            <IconActionButton icon={Trash2} tone="danger" label="Excluir" onClick={() => setDeleting(row)} />
           </>
         )}
+        pagination={{ page: page.page, pageSize: page.pageSize, total: page.total, onPageChange: setCurrentPage }}
       />
 
       <EditTransactionModal
@@ -125,7 +107,7 @@ export function InvoiceItemsTable({ items }: { items: InvoiceItemView[] }) {
         referenceData={referenceData}
         onSaved={() => {
           setEditing(null);
-          router.refresh();
+          reloadAll();
         }}
       />
 

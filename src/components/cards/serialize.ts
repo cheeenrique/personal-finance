@@ -22,20 +22,20 @@ export function serializeCardSummary(card: CardWithSummary): CardSummaryView {
   };
 }
 
+/**
+ * `invoice.items` (módulo, insumo do cálculo de `total` em
+ * `cardService.buildInvoice`) não entra na `InvoiceView` — o detalhe do
+ * cartão busca as compras da fatura direto via `listTransactionsAction`
+ * (`InvoiceItemsTable`/`use-invoice-items-list.ts`), com paginação
+ * server-side, em vez de receber a lista inteira como prop do Server
+ * Component.
+ */
 export function serializeInvoice(invoice: Invoice): InvoiceView {
   return {
     periodStart: invoice.periodStart.toISOString(),
     periodEnd: invoice.periodEnd.toISOString(),
     dueDate: invoice.dueDate.toISOString(),
     total: invoice.total.toString(),
-    items: invoice.items.map((item) => ({
-      id: item.id,
-      description: item.description,
-      amount: item.amount.toString(),
-      date: item.date.toISOString(),
-      installmentNumber: item.installmentNumber,
-      installmentPurchaseId: item.installmentPurchaseId,
-    })),
   };
 }
 

@@ -13,7 +13,7 @@ export type TransactionWithTags = Transaction & {
 
 export type TransactionSort = "date_desc" | "date_asc" | "amount_desc" | "amount_asc";
 
-/** Transactions é a única lista paginada do app (ver docs/01-STACK.md, "Performance"). */
+/** Paginação server-side — reaproveitado por Transações, histórico da conta (`/accounts/[id]`) e compras da fatura atual (`/cards/[id]`), ver docs/04-DESIGN_SYSTEM.md "Tabelas". */
 export type PaginatedResult<T> = {
   items: T[];
   total: number;

@@ -25,21 +25,11 @@ export type CardSummaryView = {
   invoiceDueDate: string;
 };
 
-export type InvoiceItemView = {
-  id: string;
-  description: string;
-  amount: string;
-  date: string;
-  installmentNumber: number | null;
-  installmentPurchaseId: string | null;
-};
-
 export type InvoiceView = {
   periodStart: string;
   periodEnd: string;
   dueDate: string;
   total: string;
-  items: InvoiceItemView[];
 };
 
 /** Fatura de um ciclo passado — só o resumo (mês/total), sem os itens (docs/22, "Faturas Futuras"/histórico). */

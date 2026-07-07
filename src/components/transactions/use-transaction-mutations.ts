@@ -22,8 +22,7 @@ export function isTransferLeg(row: { transferId: string | null }): boolean {
  *
  * `deleteOne`/`isTransferLeg` aceitam só o subconjunto de campos que usam
  * (`id`/`transferId`, não `ClientTransaction` inteiro) — permite reaproveitar
- * este hook em listas derivadas que não carregam o shape completo, ex.
- * `InvoiceItemView` (`components/cards/invoice-items-table.tsx`), sem
+ * este hook em listas derivadas que não carreguem o shape completo, sem
  * duplicar a lógica de excluir+undo.
  */
 export function useTransactionMutations(onMutated: () => void) {

@@ -322,7 +322,7 @@ Seleção
 
 Ações
 
-Paginação em Transactions e no histórico de transações do detalhe de Conta (`/accounts/[id]`) — únicas listas que crescem sem limite. Cartões, categorias, tags, assets: listar tudo, sem paginação server-side.
+Paginação em Transactions, no histórico de transações do detalhe de Conta (`/accounts/[id]`) e nas compras da fatura atual do detalhe de Cartão (`/cards/[id]`) — listas de Transaction que crescem sem limite. Categorias, tags, assets: listar tudo, sem paginação server-side.
 
 ---
 
