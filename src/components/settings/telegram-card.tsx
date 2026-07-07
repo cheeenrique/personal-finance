@@ -240,7 +240,7 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
                     </p>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="neutral"
                       size="sm"
                       onClick={handleRetryWebhook}
                       disabled={isPending}
@@ -262,7 +262,7 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
 
             <div className="flex flex-wrap gap-2">
               {isLinked && (
-                <Button type="button" variant="outline" onClick={() => setUnlinkOpen(true)}>
+                <Button type="button" variant="neutral" onClick={() => setUnlinkOpen(true)}>
                   <Unlink className="size-4" aria-hidden="true" />
                   Desvincular chat
                 </Button>
@@ -276,7 +276,7 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
                 </Button>
               )}
 
-              <Button type="button" variant="outline" onClick={() => setUninstallOpen(true)}>
+              <Button type="button" variant="neutral" onClick={() => setUninstallOpen(true)}>
                 <Trash2 className="size-4" aria-hidden="true" />
                 Desinstalar bot
               </Button>
@@ -298,7 +298,7 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
 
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="neutral"
                   className="w-fit"
                   onClick={handleGenerateCode}
                   disabled={isPending}

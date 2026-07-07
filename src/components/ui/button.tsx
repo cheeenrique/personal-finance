@@ -15,6 +15,12 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+        // "Neutral" — botão cinza secundário sem preenchimento (ex.: "Revalidar webhook",
+        // "Transferir", "Nova compra parcelada"). Mesmo estilo hand-rolled já usado em
+        // dashboard/quick-actions.tsx, transactions/transactions-view.tsx e
+        // accounts/account-grid.tsx — radius/transição vêm da base do button (rounded-lg
+        // = --radius = 10px, transition-all já cobre a cor), só a cor muda aqui.
+        neutral: "border-border bg-transparent text-muted-foreground hover:border-muted-foreground",
         // "Accent" — ações que movem dinheiro (nova transação, CTAs), nunca navegação
         // (design/PERSONAL_FINANCE_DS_HANDOFF.md, "Button" > "Accent"). Texto branco
         // extrabold, não `accent-foreground` (navy) — é o que o demo (.dc.html) e o
