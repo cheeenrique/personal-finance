@@ -1,11 +1,14 @@
+"use client";
+
+import { useState } from "react";
 import { Pencil } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatYearSaoPaulo } from "@/lib/date/format";
+import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
+import { ProfileEditModal } from "./profile-edit-modal";
 
 type ProfileCardProps = {
   name: string;
@@ -23,13 +26,19 @@ function getInitials(name: string): string {
 }
 
 /**
- * Perfil — só exibição (docs/12-SETTINGS.md, item 1): sem action de update de
- * usuário ainda, nome/email vêm direto da sessão (`auth()`). `memberSince`
- * vem de `User.createdAt` (buscado em `page.tsx` via `modules/auth/repository`,
- * já que a sessão do NextAuth só expõe id/name/email — `10-AUTH.md`).
- * "Ativo" é estático: o produto não tem feature de desativar usuário.
+ * Perfil (docs/12-SETTINGS.md, item 1). Nome/email vêm da sessão (`auth()`,
+ * page.tsx); `memberSince` vem de `User.createdAt` (a sessão do NextAuth só
+ * expõe id/name/email — `10-AUTH.md`). "Ativo" é estático: o produto não tem
+ * feature de desativar usuário.
+ *
+ * "Editar" abre `ProfileEditModal` (update de nome/email + troca de senha,
+ * `modules/auth/actions.ts`). Client Component (não Server Component como
+ * antes) pra guardar o estado local do modal — mesmo padrão de
+ * `AccountGrid`/`TransferModal` (components/accounts/account-grid.tsx).
  */
 export function ProfileCard({ name, email, memberSince }: ProfileCardProps) {
+  const [isEditOpen, setEditOpen] = useState(false);
+
   return (
     <Card>
       <CardHeader>
@@ -69,18 +78,21 @@ export function ProfileCard({ name, email, memberSince }: ProfileCardProps) {
             </div>
           </div>
 
-          {/* Sem Server Action de update de perfil ainda — botão fica desabilitado
-              com Tooltip "Em breve" (mesmo padrão de stub das checkboxes de
-              preferência em telegram-card.tsx: disabled + rótulo explicando o motivo). */}
-          <Tooltip>
-            <TooltipTrigger
-              render={<Button type="button" variant="outline" size="sm" disabled className="shrink-0" />}
-            >
-              <Pencil className="size-3.5" aria-hidden="true" />
-              Editar
-            </TooltipTrigger>
-            <TooltipContent>Em breve</TooltipContent>
-          </Tooltip>
+          {/* Mesmo estilo dos botões neutros do dashboard ("Nova compra
+              parcelada"/"Transferir" — transactions-view.tsx,
+              account-grid.tsx): borda neutra, sem preenchimento, hover
+              destaca a borda. */}
+          <button
+            type="button"
+            onClick={() => setEditOpen(true)}
+            className={cn(
+              "inline-flex h-9 shrink-0 items-center gap-2 rounded-[10px] border border-border bg-transparent px-3.5 text-[13px] font-bold text-muted-foreground transition-colors duration-100 ease-pf-out hover:border-muted-foreground",
+              FOCUS_RING_CLASS,
+            )}
+          >
+            <Pencil className="size-4" aria-hidden="true" />
+            Editar
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
@@ -97,6 +109,13 @@ export function ProfileCard({ name, email, memberSince }: ProfileCardProps) {
           </div>
         </div>
       </CardContent>
+
+      <ProfileEditModal
+        open={isEditOpen}
+        onOpenChange={setEditOpen}
+        currentName={name}
+        currentEmail={email}
+      />
     </Card>
   );
 }

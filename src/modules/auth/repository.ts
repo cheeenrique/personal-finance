@@ -14,3 +14,21 @@ export function findUserByEmail(email: string) {
 export function findUserById(id: string) {
   return prisma.user.findUnique({ where: { id }, select: { createdAt: true } });
 }
+
+/** `passwordHash` incluso — usado só por `authService.changePassword` pra comparar a senha atual antes de trocar. Nunca cruza a fronteira Server Action → Client. */
+export function findUserCredentials(id: string) {
+  return prisma.user.findUnique({
+    where: { id },
+    select: { id: true, name: true, email: true, passwordHash: true },
+  });
+}
+
+/** Atualiza nome/email. Colisão de email (unique constraint) é tratada no service.ts via `Prisma.PrismaClientKnownRequestError` (P2002), não aqui. */
+export function updateUserProfile(userId: string, data: { name: string; email: string }) {
+  return prisma.user.update({ where: { id: userId }, data: { name: data.name, email: data.email } });
+}
+
+/** `passwordHash` já vem pronto (bcrypt.hash aplicado no service.ts) — repository nunca faz hashing. */
+export function updateUserPassword(userId: string, passwordHash: string) {
+  return prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+}
