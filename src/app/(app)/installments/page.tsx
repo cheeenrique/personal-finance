@@ -9,9 +9,10 @@ type InstallmentsPageProps = {
    * `?open=<id>` — usado pelo widget "Parcelamentos ativos" do Dashboard
    * pra abrir o modal de detalhes direto no item clicado, sem passar pela
    * listagem completa. `?cardId=<id>` — filtro por cartão (docs/23-INSTALLMENTS.md,
-   * "Filtros"), persistido na URL (mesmo padrão de `/transactions`).
+   * "Filtros"), persistido na URL (mesmo padrão de `/transactions`). `?page=<n>`
+   * — página atual da paginação client-side do board, mesmo padrão de `?cardId=`.
    */
-  searchParams: Promise<{ open?: string; cardId?: string }>;
+  searchParams: Promise<{ open?: string; cardId?: string; page?: string }>;
 };
 
 /**
@@ -20,14 +21,19 @@ type InstallmentsPageProps = {
  * direto (sem passar por Server Action — mesmo padrão de `/accounts`, ver
  * docs/99-CLAUDE.md "Regra de Ouro"). `Prisma.Decimal`/`Date` são convertidos
  * pra string na borda antes de descer pro Client Component (RSC não
- * serializa instância de classe).
+ * serializa instância de classe). A lista completa (já filtrada por cartão no
+ * server) desce pro Client Component, que pagina no client (grid pequeno,
+ * sem "crescimento sem limite" — ver comentário de paginação em
+ * `installments-board.tsx`); `page` só é lido aqui pra repassar como prop
+ * inicial, espelhando o padrão de `cardId`.
  */
 export default async function InstallmentsPage({ searchParams }: InstallmentsPageProps) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return null;
 
-  const { open: openId, cardId } = await searchParams;
+  const { open: openId, cardId, page: pageParam } = await searchParams;
+  const page = Number(pageParam) > 0 ? Number(pageParam) : 1;
 
   const [purchases, cardOptionsResult] = await Promise.all([
     transactionService.listInstallmentPurchasesWithProgress(userId, undefined, cardId),
@@ -59,6 +65,7 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
       initialOpenId={openId}
       cardOptions={cardOptions}
       selectedCardId={cardId}
+      page={page}
     />
   );
 }
