@@ -35,8 +35,8 @@ type AccountTransactionsHistoryProps = { accountId: string };
  * `EditTransactionModal`, `useTransactionMutations`), incluindo a MESMA
  * paginação server-side (page/pageSize via `listTransactionsAction`,
  * `DataTablePagination`) — com filtro próprio restrito a período (Mês atual/
- * Mês passado/Personalizado) em vez do filtro bar completo. Os demais filtros
- * de `docs/21-ACCOUNTS.md` ("categoria/tipo/tag/valor") e o gráfico de
+ * Mês passado/Personalizado) + categoria em vez do filtro bar completo. Os
+ * demais filtros de `docs/21-ACCOUNTS.md` ("tipo/tag/valor") e o gráfico de
  * entradas/saídas ficam para uma iteração futura (ver "Improvement
  * Suggestions" no resumo).
  */
@@ -46,15 +46,17 @@ export function AccountTransactionsHistory({ accountId }: AccountTransactionsHis
   const referenceData = useTransactionsReferenceData();
 
   const [search, setSearch] = useState("");
+  const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [sort, setSort] = useState<SortState>({ column: "date", direction: "desc" });
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Qualquer mudança de filtro (busca/período/ordenação) invalida a página
-  // atual — mesmo comportamento de `useTransactionFilters.replace` (`/transactions`),
-  // só que em estado local em vez de query string. Ajuste durante o render
-  // (padrão React "adjusting state when a prop changes"), não em `useEffect`
-  // — evita o cascading render que a lint `react-hooks/set-state-in-effect` acusa.
-  const filtersKey = `${search}|${periodFilter.range.dateFrom ?? ""}|${periodFilter.range.dateTo ?? ""}|${sort?.column ?? ""}|${sort?.direction ?? ""}`;
+  // Qualquer mudança de filtro (busca/categoria/período/ordenação) invalida a
+  // página atual — mesmo comportamento de `useTransactionFilters.replace`
+  // (`/transactions`), só que em estado local em vez de query string. Ajuste
+  // durante o render (padrão React "adjusting state when a prop changes"),
+  // não em `useEffect` — evita o cascading render que a lint
+  // `react-hooks/set-state-in-effect` acusa.
+  const filtersKey = `${search}|${categoryId ?? ""}|${periodFilter.range.dateFrom ?? ""}|${periodFilter.range.dateTo ?? ""}|${sort?.column ?? ""}|${sort?.direction ?? ""}`;
   const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
   if (filtersKey !== prevFiltersKey) {
     setPrevFiltersKey(filtersKey);
@@ -64,6 +66,7 @@ export function AccountTransactionsHistory({ accountId }: AccountTransactionsHis
   const { page, installmentTotals, loading, error, reload } = useAccountTransactionsList({
     accountId,
     search: search || undefined,
+    categoryId,
     dateFrom: periodFilter.range.dateFrom,
     dateTo: periodFilter.range.dateTo,
     sort: sortStateToTransactionSort(sort),
@@ -117,7 +120,15 @@ export function AccountTransactionsHistory({ accountId }: AccountTransactionsHis
           description: "Ajuste o período ou registre um novo lançamento em Transações.",
         }}
         search={{ value: search, onChange: setSearch, placeholder: "Buscar por descrição…" }}
-        filters={<AccountPeriodFilterBar {...periodFilter} />}
+        filters={
+          <AccountPeriodFilterBar
+            {...periodFilter}
+            categoryId={categoryId}
+            onCategoryIdChange={setCategoryId}
+            categoryOptions={referenceData.categoryOptions}
+            categoryOptionsLoading={referenceData.loading}
+          />
+        }
         sort={sort}
         onSortChange={handleSortChange}
         selection={{ selectedIds, onChange: setSelectedIds }}

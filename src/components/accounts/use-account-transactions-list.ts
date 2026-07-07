@@ -14,6 +14,7 @@ const EMPTY_PAGE: PaginatedResult<ClientTransaction> = { items: [], total: 0, pa
 export type AccountTransactionsFilter = {
   accountId: string;
   search?: string;
+  categoryId?: string;
   dateFrom?: string;
   dateTo?: string;
   sort: TransactionSort;
@@ -30,6 +31,7 @@ async function fetchAccountTransactionsList(filter: AccountTransactionsFilter): 
   const result = await listTransactionsAction({
     accountId: filter.accountId,
     search: filter.search,
+    categoryId: filter.categoryId,
     dateFrom: filter.dateFrom,
     dateTo: filter.dateTo,
     sort: filter.sort,

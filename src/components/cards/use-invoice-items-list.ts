@@ -14,6 +14,7 @@ const EMPTY_PAGE: PaginatedResult<ClientTransaction> = { items: [], total: 0, pa
 
 export type InvoiceItemsFilter = {
   cardId: string;
+  categoryId?: string;
   /** Ciclo da fatura atual — mesmo shape ISO de `InvoiceView`. `periodEnd` é EXCLUSIVO (ver `modules/cards/cycle.ts` `cycleContaining`). */
   periodStart: string;
   periodEnd: string;
@@ -42,6 +43,7 @@ function toInclusiveDateTo(periodEndIso: string): string {
 async function fetchInvoiceItemsList(filter: InvoiceItemsFilter): Promise<InvoiceItemsListData> {
   const result = await listTransactionsAction({
     cardId: filter.cardId,
+    categoryId: filter.categoryId,
     // `findExpensesInRange` só considera compras (`EXPENSE`) — sem este filtro,
     // um `CARD_PAYMENT` do mesmo cartão dentro do ciclo (também tem `cardId`
     // preenchido, ver `modules/cards/pay-invoice.ts`) vazaria pra esta lista.

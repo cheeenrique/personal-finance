@@ -7,12 +7,15 @@ import { Pencil, Receipt, Trash2 } from "lucide-react";
 import { DataTable } from "@/components/tables/data-table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { IconActionButton } from "@/components/shared/icon-action-button";
+import { EntitySelect } from "@/components/forms/entity-select";
 import { buildTransactionColumns } from "@/components/transactions/transaction-columns";
 import { EditTransactionModal } from "@/components/transactions/edit-transaction-modal";
 import { useTransactionsReferenceData } from "@/components/transactions/use-transactions-reference-data";
 import { useTransactionMutations } from "@/components/transactions/use-transaction-mutations";
 import type { ClientTransaction } from "@/modules/transactions/types";
 import { useInvoiceItemsList } from "./use-invoice-items-list";
+
+const ALL_CATEGORIES_VALUE = "__ALL__";
 
 type InvoiceItemsTableProps = {
   cardId: string;
@@ -40,15 +43,30 @@ type InvoiceItemsTableProps = {
  * Query) atualiza a tabela, e `router.refresh()` refaz o Server Component da
  * página (fatura + KPIs usado/disponível do cartão), igual
  * `AccountTransactionsHistory.reloadAll`.
+ *
+ * Filtro por categoria acima da tabela (`filters` slot do `DataTable`,
+ * mesmo `EntitySelect` bare de `installments-board.tsx` — sem barra
+ * multi-filtro, essa tela só tem esse dropdown) — trocar de categoria reseta
+ * a página pro mesmo padrão de `AccountTransactionsHistory`.
  */
 export function InvoiceItemsTable({ cardId, periodStart, periodEnd }: InvoiceItemsTableProps) {
   const router = useRouter();
   const referenceData = useTransactionsReferenceData();
 
+  const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Trocar de categoria invalida a página atual — mesmo ajuste durante o
+  // render (não `useEffect`) de `AccountTransactionsHistory`.
+  const [prevCategoryId, setPrevCategoryId] = useState(categoryId);
+  if (categoryId !== prevCategoryId) {
+    setPrevCategoryId(categoryId);
+    setCurrentPage(1);
+  }
 
   const { page, installmentTotals, loading, error, reload } = useInvoiceItemsList({
     cardId,
+    categoryId,
     periodStart,
     periodEnd,
     page: currentPage,
@@ -90,6 +108,16 @@ export function InvoiceItemsTable({ cardId, periodStart, periodEnd }: InvoiceIte
           title: "Nenhuma compra nesta fatura",
           description: "As compras lançadas neste cartão dentro do ciclo atual aparecem aqui.",
         }}
+        filters={
+          <EntitySelect
+            aria-label="Filtrar por categoria"
+            options={[{ value: ALL_CATEGORIES_VALUE, label: "Todas as categorias" }, ...referenceData.categoryOptions]}
+            value={categoryId ?? ALL_CATEGORIES_VALUE}
+            onValueChange={(value) => setCategoryId(value === ALL_CATEGORIES_VALUE ? undefined : value)}
+            className="h-[38px] w-auto min-w-[200px]"
+            disabled={referenceData.loading}
+          />
+        }
         rowActions={(row) => (
           <>
             <IconActionButton icon={Pencil} label="Editar" onClick={() => setEditing(row)} />

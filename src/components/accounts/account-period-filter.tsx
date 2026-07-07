@@ -1,9 +1,12 @@
 "use client";
 
 import { DateField } from "@/components/forms/date-field";
+import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { ACCOUNT_PERIOD_MODE_OPTIONS, type AccountPeriodMode } from "./use-account-period-filter";
+
+const ALL_CATEGORIES_VALUE = "__ALL__";
 
 type AccountPeriodFilterBarProps = {
   mode: AccountPeriodMode;
@@ -12,15 +15,21 @@ type AccountPeriodFilterBarProps = {
   setCustomFrom: (value: string) => void;
   customTo: string;
   setCustomTo: (value: string) => void;
+  /** Categorias de despesa/receita agrupadas (`EntitySelect` group), mesma fonte de `transaction-filters-bar.tsx` (`useTransactionsReferenceData`). */
+  categoryId: string | undefined;
+  onCategoryIdChange: (value: string | undefined) => void;
+  categoryOptions: EntitySelectOption[];
+  categoryOptionsLoading?: boolean;
 };
 
 /**
- * Filtro de período do detalhe da conta — 3 opções (Mês atual/Mês
- * passado/Personalizado) em toggle segmentado, mesmo estilo do filtro
- * "Pago/Pendente" de `transaction-filters-bar.tsx`. "Personalizado" revela 2
- * `DateField` (De/Até) inline, sem os demais filtros de `/transactions`
- * (escopo reduzido desta tela, docs/21-ACCOUNTS.md "Filtros" traz o conjunto
- * completo pra uma iteração futura).
+ * Filtros do histórico de transações da conta — período (3 opções, toggle
+ * segmentado no mesmo estilo do filtro "Pago/Pendente" de
+ * `transaction-filters-bar.tsx`) + categoria (`EntitySelect` reaproveitado de
+ * `/transactions`), na MESMA barra. "Personalizado" revela 2 `DateField`
+ * (De/Até) inline, sem os demais filtros de `/transactions` (escopo reduzido
+ * desta tela, docs/21-ACCOUNTS.md "Filtros" traz o conjunto completo pra uma
+ * iteração futura).
  */
 export function AccountPeriodFilterBar({
   mode,
@@ -29,6 +38,10 @@ export function AccountPeriodFilterBar({
   setCustomFrom,
   customTo,
   setCustomTo,
+  categoryId,
+  onCategoryIdChange,
+  categoryOptions,
+  categoryOptionsLoading,
 }: AccountPeriodFilterBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-border bg-secondary/30 p-2">
@@ -47,6 +60,15 @@ export function AccountPeriodFilterBar({
           </button>
         ))}
       </div>
+
+      <EntitySelect
+        aria-label="Filtrar por categoria"
+        options={[{ value: ALL_CATEGORIES_VALUE, label: "Todas as categorias" }, ...categoryOptions]}
+        value={categoryId ?? ALL_CATEGORIES_VALUE}
+        onValueChange={(value) => onCategoryIdChange(value === ALL_CATEGORIES_VALUE ? undefined : value)}
+        className="h-[38px] w-auto min-w-[170px]"
+        disabled={categoryOptionsLoading}
+      />
 
       {mode === "custom" && (
         <div className="flex flex-wrap items-center gap-3">
