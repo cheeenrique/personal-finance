@@ -5,7 +5,7 @@ import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { CardDetailView } from "@/components/cards/card-detail-view";
 import { serializeCardSummary, serializeInvoice, serializePastInvoice } from "@/components/cards/serialize";
 
-const HISTORY_MONTHS = 3;
+const HISTORY_MONTHS = 12;
 
 /** Mês/ano do fechamento `monthsBack` ciclos antes de `year`/`month` (1-12), com rollover de ano. */
 function shiftClosingMonth(year: number, month: number, monthsBack: number): { year: number; month: number } {
@@ -49,8 +49,11 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
 
   const pastInvoices = pastInvoiceResults
     .flatMap((result) => (result.success ? [result.data] : []))
-    // Ignora ciclos fechados antes do cartão existir (docs/22 não define isso — evita fatura "fantasma").
-    .filter((pastInvoice) => pastInvoice.periodEnd > card.createdAt)
+    // Só faturas com movimento — ciclos vazios (sem compras) não viram card.
+    // Antes filtrava por `periodEnd > card.createdAt`, mas isso escondia todo o
+    // histórico de cartões com lançamentos importados (o cartão nasce "hoje" no
+    // app, então toda fatura fechada é anterior ao createdAt).
+    .filter((pastInvoice) => Number(pastInvoice.total) > 0)
     .map(serializePastInvoice);
 
   return (
