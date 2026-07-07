@@ -246,6 +246,11 @@ async function sumAmountByTypeInRange(
       isPaid,
       type,
       transferId: null,
+      // KPIs mensais são FLUXO DE CAIXA (conta): compra no cartão de crédito é
+      // dívida (accrual), não saída de dinheiro — ela entra no caixa quando a
+      // fatura é paga (um EXPENSE da conta, "Pagamento de fatura"). Contar as
+      // compras do cartão AQUI dobraria com o pagamento da fatura.
+      cardId: null,
       date: { gte: range.gte, lt: range.lt },
     },
     _sum: { amount: true },
