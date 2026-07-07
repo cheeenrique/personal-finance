@@ -78,6 +78,8 @@ type TransactionInlineBadgesRow = {
   isPaid: boolean;
   installmentNumber: number | null;
   installmentsCount: number | null;
+  /** Não-nulo ⇒ transação linkada a um empréstimo (parcela OU desembolso, ver `modules/loans`) — opcional pra não quebrar consumidores que ainda não carregam esse campo (ex.: preview do Dashboard). */
+  loanId?: string | null;
 };
 
 /**
@@ -104,6 +106,11 @@ export function TransactionInlineBadges({ row }: { row: TransactionInlineBadgesR
       {!row.transferId && row.type === TransactionType.CARD_PAYMENT && (
         <span className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-secondary px-1.5 text-[10px] font-extrabold whitespace-nowrap text-secondary-foreground">
           Fatura
+        </span>
+      )}
+      {row.loanId && (
+        <span className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-primary/16 px-1.5 text-[10px] font-extrabold whitespace-nowrap text-on-primary">
+          Empréstimo
         </span>
       )}
       {!row.isPaid && (

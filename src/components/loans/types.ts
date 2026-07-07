@@ -28,10 +28,14 @@ export type LoanInstallmentView = {
   isPaid: boolean;
 };
 
+/** Desembolso serializado (ver `modules/loans/types.ts` `LoanDisbursement`) — `null` quando ainda não linkado. */
+export type LoanDisbursementView = { amount: string; date: string } | null;
+
 /** `LoanCardView` + principal/juros/parcelas em detalhe — insumo de `/loans/[id]` (ver `modules/loans/service.ts` `getLoanDetail`). */
 export type LoanDetailData = LoanCardView & {
   principal: string;
   interest: string;
   installmentAmount: string;
   installments: LoanInstallmentView[];
+  disbursement: LoanDisbursementView;
 };

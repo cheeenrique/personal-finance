@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/db/client";
 import { Prisma } from "@/generated/prisma/client";
+import { TransactionType } from "@/generated/prisma/enums";
 import { loanRepository } from "./repository";
 import { loanOwnership } from "./ownership";
 import { LoanNotFoundError, LoanAccountNotFoundError, LoanCategoryNotFoundError } from "./errors";
-import type { LoanWithProgress, LoanWithTransactions, LoanWithInstallments } from "./types";
+import type { LoanWithProgress, LoanWithTransactions, LoanWithInstallments, LoanDisbursement } from "./types";
 
 /** Exportado para reuso por `installments.ts` (mesma regra de ownership, sem duplicar query) — mesmo padrão de `modules/transactions/service.ts`. */
 export async function assertAccountOwnership(userId: string, accountId: string): Promise<void> {
@@ -23,11 +24,17 @@ export async function assertCategoryOwnership(userId: string, categoryId: string
  * `nextInstallment` é a parcela não paga de menor `date` — as parcelas já
  * vêm ordenadas por `date asc` do repository, então o primeiro item não pago
  * já é o próximo vencimento.
+ *
+ * CRÍTICO: filtra `type=EXPENSE` antes de qualquer cálculo — `loan.transactions`
+ * pode conter também o desembolso (`type=INCOME`, ver `findDisbursement`
+ * abaixo). Sem esse filtro, um desembolso linkado contaria como "parcela
+ * paga" e explodiria `paidAmount`/`remainingAmount`.
  */
 function deriveLoanProgress(loan: LoanWithTransactions): LoanWithProgress {
   const { transactions, ...loanFields } = loan;
-  const paid = transactions.filter((transaction) => transaction.isPaid);
-  const nextUnpaid = transactions.find((transaction) => !transaction.isPaid);
+  const installments = transactions.filter((transaction) => transaction.type === TransactionType.EXPENSE);
+  const paid = installments.filter((transaction) => transaction.isPaid);
+  const nextUnpaid = installments.find((transaction) => !transaction.isPaid);
   const paidAmount = paid.reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
 
   return {
@@ -38,6 +45,16 @@ function deriveLoanProgress(loan: LoanWithTransactions): LoanWithProgress {
     paidCount: paid.length,
     nextInstallment: nextUnpaid ? { date: nextUnpaid.date, amount: nextUnpaid.amount } : null,
   };
+}
+
+/**
+ * Desembolso (`type=INCOME` com esse `loanId`) — no máximo 1 por empréstimo
+ * (docs/03-DATABASE.md). `null` quando ainda não foi linkado manualmente.
+ * Nunca entra em `deriveLoanProgress` — ver JSDoc acima.
+ */
+function findDisbursement(loan: LoanWithTransactions): LoanDisbursement {
+  const disbursement = loan.transactions.find((transaction) => transaction.type === TransactionType.INCOME);
+  return disbursement ? { amount: disbursement.amount, date: disbursement.date } : null;
 }
 
 /** Empréstimos ativos do usuário + progresso derivado (insumo da listagem `/loans`). */
@@ -54,19 +71,22 @@ async function getLoan(userId: string, id: string): Promise<LoanWithProgress> {
 }
 
 /**
- * Mesma busca de `getLoan`, mas mantém as parcelas cruas (`transactions`) no
+ * Mesma busca de `getLoan`, mas mantém as parcelas cruas (`transactions`,
+ * filtradas por `type=EXPENSE`) + o desembolso separado (`type=INCOME`) no
  * retorno — insumo exclusivo da tela `/loans/[id]` (lista de parcelas +
- * "marcar paga"). Função própria em vez de alterar `getLoan`: preserva o
- * contrato existente de `getLoanAction` (que serializa `LoanWithProgress`
- * pra Client Component — um `Prisma.Decimal` esquecido dentro de
- * `installments` quebraria essa serialização) sem duplicar a query;
- * duplica só a composição do retorno (rule 02-dry-kiss-yagni: 2ª ocorrência,
- * aceitável).
+ * "marcar paga" + bloco "Entrada"). Função própria em vez de alterar
+ * `getLoan`: preserva o contrato existente de `getLoanAction` (que serializa
+ * `LoanWithProgress` pra Client Component — um `Prisma.Decimal` esquecido
+ * dentro de `installments` quebraria essa serialização) sem duplicar a
+ * query; duplica só a composição do retorno (rule 02-dry-kiss-yagni: 2ª
+ * ocorrência, aceitável).
  */
 async function getLoanDetail(userId: string, id: string): Promise<LoanWithInstallments> {
   const loan = await loanRepository.findByIdWithTransactions(userId, id);
   if (!loan) throw new LoanNotFoundError(id);
-  return { ...deriveLoanProgress(loan), installments: loan.transactions };
+
+  const installments = loan.transactions.filter((transaction) => transaction.type === TransactionType.EXPENSE);
+  return { ...deriveLoanProgress(loan), installments, disbursement: findDisbursement(loan) };
 }
 
 /**

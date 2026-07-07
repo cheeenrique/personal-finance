@@ -66,6 +66,7 @@ export function buildTransactionColumns({
               installmentsCount: row.installmentPurchaseId
                 ? (installmentTotals.get(row.installmentPurchaseId) ?? row.installmentNumber)
                 : null,
+              loanId: row.loanId,
             }}
           />
         </div>

@@ -56,6 +56,9 @@ export default async function LoanDetailPage({ params }: LoanDetailPageProps) {
       date: installment.date.toISOString(),
       isPaid: installment.isPaid,
     })),
+    disbursement: loan.disbursement
+      ? { amount: loan.disbursement.amount.toString(), date: loan.disbursement.date.toISOString() }
+      : null,
   };
 
   return (

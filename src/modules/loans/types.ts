@@ -1,15 +1,24 @@
 import type { Loan, Prisma } from "@/generated/prisma/client";
+import type { TransactionType } from "@/generated/prisma/enums";
 
 export type { Loan };
 
 /** Dinheiro nunca é float no domínio — sempre Decimal (decimal.js via Prisma). */
 export type Money = Prisma.Decimal;
 
-/** Parcela crua (pré-derivação) — insumo do progresso derivado (ver service.ts `deriveLoanProgress`). */
+/**
+ * Transação crua vinda do banco pra um `loanId` — pode ser `type=EXPENSE`
+ * (parcela) OU `type=INCOME` (desembolso, no máximo 1 por empréstimo). O
+ * `type` só existe pra permitir a separação em `service.ts`
+ * (`deriveLoanProgress`/`findDisbursement`) — nunca some as duas juntas.
+ */
+export type LoanTransactionRow = { id: string; amount: Money; date: Date; isPaid: boolean; type: TransactionType };
+
+/** Parcela já filtrada (`type=EXPENSE`) — pós-derivação (ver service.ts `deriveLoanProgress`). */
 export type LoanInstallmentRow = { id: string; amount: Money; date: Date; isPaid: boolean };
 
-/** Empréstimo + as parcelas cruas — insumo de `listLoans`/`getLoan` (ver repository.ts). */
-export type LoanWithTransactions = Loan & { transactions: LoanInstallmentRow[] };
+/** Empréstimo + TODAS as transações cruas linkadas (parcelas + desembolso, ainda não separadas) — insumo de `listLoans`/`getLoan` (ver repository.ts). */
+export type LoanWithTransactions = Loan & { transactions: LoanTransactionRow[] };
 
 /** Próxima parcela ainda não paga, por data — `null` quando o empréstimo já está quitado. */
 export type NextLoanInstallment = { date: Date; amount: Money } | null;
@@ -35,13 +44,26 @@ export type LoanWithProgress = Loan & {
 };
 
 /**
- * `LoanWithProgress` + as parcelas cruas, ordenadas por `date asc` (mesma
- * ordem de `LoanWithTransactions`) — insumo exclusivo da tela de detalhe
- * (`/loans/[id]`, ver service.ts `getLoanDetail`). `listLoans`/`getLoan`
- * continuam sem esse array: o card/listagem de `/loans` só precisa dos
- * agregados, não da lista completa de parcelas.
+ * Desembolso (o crédito recebido ao contrair o empréstimo, `Transaction`
+ * `type=INCOME` com esse `loanId`) — no máximo 1 por empréstimo (docs/
+ * 03-DATABASE.md). `null` quando ainda não foi linkado manualmente (ver
+ * service.ts `findDisbursement`). NUNCA entra em `paidAmount`/`paidCount`/
+ * `remainingAmount` — só as parcelas (`type=EXPENSE`) contam pra progresso.
  */
-export type LoanWithInstallments = LoanWithProgress & { installments: LoanInstallmentRow[] };
+export type LoanDisbursement = { amount: Money; date: Date } | null;
+
+/**
+ * `LoanWithProgress` + as parcelas cruas (só `type=EXPENSE`), ordenadas por
+ * `date asc` (mesma ordem de `LoanWithTransactions`) + o desembolso separado
+ * — insumo exclusivo da tela de detalhe (`/loans/[id]`, ver service.ts
+ * `getLoanDetail`). `listLoans`/`getLoan` continuam sem esses campos: o
+ * card/listagem de `/loans` só precisa dos agregados, não da lista completa
+ * de parcelas nem do desembolso.
+ */
+export type LoanWithInstallments = LoanWithProgress & {
+  installments: LoanInstallmentRow[];
+  disbursement: LoanDisbursement;
+};
 
 /** Uma parcela recém-criada (ver `installments.ts` `createLoan`). */
 export type LoanTransaction = { id: string; description: string; amount: Money; date: Date; isPaid: boolean };

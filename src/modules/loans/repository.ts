@@ -5,10 +5,17 @@ import type { LoanWithTransactions } from "./types";
 /** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `installments.ts`, `service.ts` `deleteLoan`). */
 type Db = Prisma.TransactionClient;
 
+/**
+ * Traz TODAS as transações linkadas por `loanId` — parcelas (`type=EXPENSE`)
+ * E o desembolso (`type=INCOME`), sem filtrar por tipo aqui: a separação é
+ * regra de negócio (`service.ts` `deriveLoanProgress`/`findDisbursement`),
+ * não de acesso a dados. `select.type` existe só pra viabilizar essa
+ * separação no service.
+ */
 const TRANSACTIONS_INCLUDE = {
   transactions: {
     where: { deletedAt: null },
-    select: { id: true, amount: true, date: true, isPaid: true },
+    select: { id: true, amount: true, date: true, isPaid: true, type: true },
     orderBy: { date: "asc" },
   },
 } as const;

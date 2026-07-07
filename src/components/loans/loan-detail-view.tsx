@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, HandCoins, PiggyBank, Trash2, TrendingDown, Wallet } from "lucide-react";
+import { ArrowDownToLine, Check, HandCoins, PiggyBank, Trash2, TrendingDown, Wallet } from "lucide-react";
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { ProgressBar } from "@/components/dashboard/progress-bar";
@@ -138,6 +138,25 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
           label={`${loan.paidCount}/${loan.installmentsCount} parcelas pagas · ${formatBRL(loan.paidAmount)} de ${formatBRL(loan.totalToPay)}`}
         />
       </div>
+
+      {loan.disbursement && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-success/16 text-on-success">
+              <ArrowDownToLine className="size-5" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-[13px] font-semibold text-muted-foreground">Entrada recebida</p>
+              <p className="font-mono text-lg font-extrabold text-foreground">
+                {formatBRL(loan.disbursement.amount)}
+              </p>
+            </div>
+          </div>
+          <span className="text-sm font-semibold text-muted-foreground">
+            {formatDateSaoPaulo(loan.disbursement.date)}
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         <h3 className="text-sm font-extrabold text-foreground">Parcelas</h3>
