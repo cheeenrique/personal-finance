@@ -17,18 +17,20 @@ import {
   resolveCategoryId,
   resolveOrigin,
 } from "./resolve";
+import { executeTelegramQuery } from "./query";
 import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildBalanceReply,
   buildErrorReply,
   buildImageUnreadableReply,
   buildMonthExpensesReply,
+  buildQueryReply,
   buildTodaySummaryReply,
   buildTransactionConfirmationReply,
   buildUnknownReply,
 } from "./reply";
 import { TelegramDomainError } from "./errors";
-import type { CommandResult, ParsedCommand } from "./types";
+import type { CommandResult, ParsedCommand, TelegramIntent } from "./types";
 
 function isKnownDomainError(error: unknown): error is Error {
   return (
@@ -123,6 +125,13 @@ async function buildAiContext(userId: string) {
  * Se já existe um pending em aberto pro usuário (docs/30-TELEGRAM.md, "Fluxo
  * conversacional"), a mensagem é tratada como RESPOSTA a ele — nunca como um
  * lançamento novo, mesmo que pareça um (`handlePendingReply`, draft.ts).
+ *
+ * `intent="query"` (docs/30-TELEGRAM.md, "Consulta por IA") desvia pro
+ * executor de consulta (`query.ts`) ANTES de qualquer coisa do fluxo de
+ * lançamento — nunca abre pending, nunca vira `create_transaction`. `intent`
+ * ausente (resposta antiga/sem classificação) cai no default de sempre
+ * (`isTransaction` decide register vs. unknown), zero regressão pro
+ * comportamento pré-existente.
  */
 async function handleFreeformEntry(
   userId: string,
@@ -139,6 +148,14 @@ async function handleFreeformEntry(
     return fallbackCommand.kind === "create_transaction"
       ? handleCreateTransaction(userId, fallbackCommand)
       : { text: buildUnknownReply(), resultCode: "unknown_message" };
+  }
+
+  const intent: TelegramIntent = ai.intent ?? (ai.isTransaction ? "register" : "unknown");
+
+  if (intent === "query") {
+    if (!ai.query) return { text: buildUnknownReply(), resultCode: "unknown_message" };
+    const result = await executeTelegramQuery(userId, ai.query);
+    return { text: buildQueryReply(result), resultCode: `query_${result.kind}` };
   }
 
   if (!ai.isTransaction) {

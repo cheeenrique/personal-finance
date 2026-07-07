@@ -1,6 +1,6 @@
 import { formatBRL } from "@/lib/money/format";
-import { formatDateSaoPaulo } from "@/lib/date/format";
-import type { TelegramTransactionType } from "./types";
+import { formatDateSaoPaulo, formatDateShortSaoPaulo } from "@/lib/date/format";
+import type { TelegramQueryPeriod, TelegramQueryResult, TelegramTransactionType } from "./types";
 
 /**
  * Ícones padronizados de toda resposta do bot (docs/30-TELEGRAM.md, "Ícones
@@ -137,6 +137,75 @@ export function buildImageUnreadableReply(): string {
     `${ICON_WARNING} Não consegui identificar um lançamento nessa foto.`,
     "Manda de novo com mais luz/foco, ou digite o lançamento em texto (ex.: mercado 120).",
   ].join("\n");
+}
+
+/** Rótulo pt-BR de um período de consulta (docs/30-TELEGRAM.md, "Consulta por IA") — usado nos títulos de `buildQueryReply`. */
+function periodLabel(period: TelegramQueryPeriod): string {
+  switch (period) {
+    case "this_month":
+      return "esse mês";
+    case "last_month":
+      return "mês passado";
+    case "this_year":
+      return "esse ano";
+  }
+}
+
+/**
+ * Formata o resultado tipado de uma consulta em linguagem natural
+ * (docs/30-TELEGRAM.md, "Consulta por IA", `query.ts` `executeTelegramQuery`).
+ * Reusa `buildBalanceReply`/`buildAskOriginAmbiguousReply` já existentes pros
+ * casos que coincidem (saldo / origem ambígua) em vez de duplicar o texto.
+ */
+export function buildQueryReply(result: TelegramQueryResult): string {
+  switch (result.kind) {
+    case "spent":
+      return [`${ICON_SUCCESS} Gastos ${periodLabel(result.period)}`, "", formatBRL(result.total)].join("\n");
+
+    case "received":
+      return [`${ICON_SUCCESS} Receitas ${periodLabel(result.period)}`, "", formatBRL(result.total)].join("\n");
+
+    case "unpaid":
+      return [`${ICON_SUCCESS} A pagar ${periodLabel(result.period)}`, "", formatBRL(result.total)].join("\n");
+
+    case "balance":
+      return buildBalanceReply(result.total);
+
+    case "category_total":
+      return [
+        `${ICON_SUCCESS} ${result.categoryName} ${periodLabel(result.period)}`,
+        "",
+        formatBRL(result.total),
+      ].join("\n");
+
+    case "category_not_found":
+      return `${ICON_WARNING} Não encontrei a categoria "${result.categoryName}".`;
+
+    case "top_categories": {
+      if (result.categories.length === 0) {
+        return [
+          `${ICON_SUCCESS} Maiores gastos ${periodLabel(result.period)}`,
+          "",
+          "Nenhum gasto registrado no período.",
+        ].join("\n");
+      }
+
+      const lines = result.categories.map((category, index) => `${index + 1}. ${category.name}: ${formatBRL(category.total)}`);
+      return [`${ICON_SUCCESS} Maiores gastos ${periodLabel(result.period)}`, "", ...lines].join("\n");
+    }
+
+    case "card_invoice":
+      return `${ICON_SUCCESS} Fatura ${result.cardName}: ${formatBRL(result.total)} (vence ${formatDateShortSaoPaulo(result.dueDate)}).`;
+
+    case "card_not_found":
+      return `${ICON_WARNING} Não encontrei o cartão "${result.cardName}".`;
+
+    case "card_no_invoice":
+      return `${ICON_WARNING} O cartão "${result.cardName}" não tem fatura (não é cartão de crédito).`;
+
+    case "card_ambiguous":
+      return buildAskOriginAmbiguousReply(result.candidates);
+  }
 }
 
 /** Vínculo confirmado via `/vincular <CODE>` ou `/start <CODE>` (docs/12-SETTINGS.md, "3. Telegram"). */

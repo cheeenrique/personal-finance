@@ -143,6 +143,29 @@ export async function resolveCategoryByName(
   return resolveCategoryId(userId, type, fallbackKeywordCandidates, description);
 }
 
+/**
+ * Resolve um nome de categoria citado numa CONSULTA (docs/30-TELEGRAM.md,
+ * "Consulta por IA") contra as categorias EXPENSE reais do usuário: mesmo
+ * match EXATO (case/acento-insensível) de `resolveCategoryByName`, mas SEM
+ * fallback pro "Outros" — `null` quando não bate com nenhuma categoria (a
+ * consulta responde "categoria não encontrada" em vez de assumir uma
+ * default, diferente do fluxo de lançamento). Usado só por `query.ts`
+ * (`category_total`/`top_categories`), restrito a EXPENSE porque as
+ * agregações de categoria do bot reusam `reportService.expenseByCategory`
+ * (só cobre despesas).
+ */
+export async function matchExpenseCategoryByName(
+  userId: string,
+  categoryName: string,
+): Promise<{ id: string; name: string } | null> {
+  const tree = await categoryService.listTree(userId);
+  const categories = flattenTree(tree).filter((category) => category.type === CategoryType.EXPENSE);
+  const normalizedTarget = normalizeWord(categoryName);
+
+  const match = categories.find((category) => normalizeWord(category.name) === normalizedTarget);
+  return match ? { id: match.id, name: match.name } : null;
+}
+
 /** Conta ATIVA mais antiga (1ª criada) do usuário — origem default quando nada mais resolve. */
 async function findDefaultActiveAccount(userId: string) {
   const accounts = await accountService.listWithBalances(userId);

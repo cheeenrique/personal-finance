@@ -18,6 +18,19 @@ const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const REQUEST_TIMEOUT_MS = 8000;
 
+/** `queryType`s reconhecidos (docs/30-TELEGRAM.md, "Consulta por IA") — mesmos valores de `TelegramQueryType` (types.ts). */
+const QUERY_TYPE_VALUES = [
+  "spent",
+  "received",
+  "balance",
+  "category_total",
+  "top_categories",
+  "card_invoice",
+  "unpaid",
+] as const;
+
+const QUERY_PERIOD_VALUES = ["this_month", "last_month", "this_year"] as const;
+
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
@@ -30,9 +43,33 @@ const RESPONSE_SCHEMA = {
     paymentMethod: { type: "STRING", enum: ["credit", "debit", "pix", "transfer", "cash"], nullable: true },
     originKind: { type: "STRING", enum: ["account", "card"], nullable: true },
     originName: { type: "STRING", nullable: true },
+    // Classificação de intenção + pergunta estruturada (docs/30-TELEGRAM.md,
+    // "Consulta por IA") — só usadas pela extração de TEXTO (`buildPrompt`);
+    // a extração de imagem (`buildImagePrompt`) nunca as menciona, então o
+    // modelo tende a omiti-las nesse caminho (nenhuma delas é `required`
+    // abaixo, de propósito — zero regressão no caminho de foto/register).
+    intent: { type: "STRING", enum: ["register", "query", "unknown"], nullable: true },
+    query: {
+      type: "OBJECT",
+      nullable: true,
+      properties: {
+        queryType: { type: "STRING", enum: QUERY_TYPE_VALUES },
+        period: { type: "STRING", enum: QUERY_PERIOD_VALUES },
+        categoryName: { type: "STRING", nullable: true },
+        cardName: { type: "STRING", nullable: true },
+      },
+      required: ["queryType", "period"],
+    },
   },
   required: ["isTransaction", "type", "description"],
 } as const;
+
+const queryResponseSchema = z.object({
+  queryType: z.enum(QUERY_TYPE_VALUES),
+  period: z.enum(QUERY_PERIOD_VALUES).default("this_month"),
+  categoryName: z.string().nullable().optional(),
+  cardName: z.string().nullable().optional(),
+});
 
 /** Valida a saída do modelo — nunca confiamos no JSON de um LLM sem checar shape (mesmo com `responseSchema`). */
 const aiResponseSchema = z.object({
@@ -47,6 +84,8 @@ const aiResponseSchema = z.object({
   paymentMethod: z.enum(["credit", "debit", "pix", "transfer", "cash"]).nullable().optional(),
   originKind: z.enum(["account", "card"]).nullable().optional(),
   originName: z.string().nullable().optional(),
+  intent: z.enum(["register", "query", "unknown"]).nullable().optional(),
+  query: queryResponseSchema.nullable().optional(),
 });
 
 export type AiParserContext = {
@@ -95,10 +134,19 @@ function buildPrompt(rawText: string, ctx: AiParserContext): string {
   const merchantsLabel = knownMerchantsLabel(ctx.knownMerchants);
 
   return [
-    "Você extrai dados de uma mensagem de lançamento financeiro pessoal (pt-BR) enviada por um usuário a um bot do Telegram.",
+    "Você processa uma mensagem (pt-BR) enviada por um usuário a um bot do Telegram de finanças pessoais.",
     `Data de referência ("hoje"): ${ctx.todaySaoPaulo} (America/Sao_Paulo).`,
     "",
-    "Regras:",
+    "PRIMEIRO classifique a mensagem em um `intent`:",
+    '- "register": o usuário quer REGISTRAR um lançamento novo (gasto ou receita) — ex.: "mercado 120", "recebi 500 de freela".',
+    '- "query": o usuário está PERGUNTANDO sobre as finanças dele, sem querer registrar nada novo — ex.: "quanto gastei esse mês", "qual meu saldo", "fatura do Nubank", "quanto falta pagar".',
+    '- "unknown": nem lançamento nem pergunta reconhecível (saudação, mensagem aleatória, pergunta fora de escopo financeiro).',
+    "",
+    'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null.',
+    'Se intent="query": preencha isTransaction=false, description com qualquer texto curto (não é usado), e preencha o objeto `query` seguindo as "Regras de pergunta" abaixo.',
+    'Se intent="unknown": preencha isTransaction=false e deixe query=null.',
+    "",
+    'Regras de lançamento (só valem quando intent="register"):',
     "- isTransaction=false se a mensagem NÃO for um lançamento (saudação, pergunta, texto aleatório sem qualquer menção a gasto/recebimento de dinheiro).",
     '- type: INCOME quando o dinheiro ENTRA pro usuário (ex.: "recebi", "recebido de", "pix recebido", "caiu", salário, freela); EXPENSE quando o dinheiro SAI (ex.: "paguei", "comprei", "pix para", "transferência para", gasto do dia a dia). Assuma EXPENSE quando ambíguo.',
     '- amount: valor decimal em string (ex.: "30" ou "30.50"), sem símbolo de moeda. Se a mensagem NÃO mencionar nenhum valor numérico, retorne null — NUNCA invente um valor.',
@@ -107,6 +155,13 @@ function buildPrompt(rawText: string, ctx: AiParserContext): string {
     `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Se o pagador/beneficiário bater com um item da lista "Pagadores/recebedores conhecidos" abaixo (mesmo critério da regra de description), use a categoria DESSE item. Senão, se nenhuma categoria for uma boa correspondência, retorne null.`,
     '- paymentMethod: identifique COMO o dinheiro saiu/entrou — "credit" (cartão de crédito), "debit" (cartão de débito), "pix", "transfer" (transferência/TED/DOC), "cash" (dinheiro/espécie). Se a mensagem não mencionar nenhum canal, retorne null.',
     '- originKind/originName: só preencha se o nome citado bater com um item REAL das listas abaixo. Se citar um CARTÃO da lista (geralmente junto de "crédito"/"débito"), originKind="card" e originName = nome EXATO da lista de cartões. Se citar uma CONTA da lista (geralmente junto de "pix"/"transferência"/banco), originKind="account" e originName = nome EXATO da lista de contas. IMPORTANTE: nome de pessoa/empresa EXTERNA (que foi pra description) NUNCA é origem, mesmo aparecendo perto de "pix" ou "transferência". Sem menção de conta/cartão real do usuário, ambos null.',
+    "",
+    'Regras de pergunta (só valem quando intent="query"):',
+    '- queryType: "spent" (quanto gastou), "received" (quanto recebeu), "balance" (saldo das contas), "category_total" (quanto gastou numa categoria específica — preencha categoryName), "top_categories" (quais categorias tiveram maior gasto), "card_invoice" (fatura de um cartão específico — preencha cardName) ou "unpaid" (quanto falta pagar / previsto).',
+    `- categoryName (só relevante para queryType="category_total"): nome MAIS PRÓXIMO dentre a lista de categorias do usuário: [${categoriesLabel}]. null se a mensagem não citar uma categoria ou o queryType for outro.`,
+    `- cardName (só relevante para queryType="card_invoice"): nome MAIS PRÓXIMO dentre a lista de cartões do usuário: [${cardsLabel}]. null se a mensagem não citar um cartão ou o queryType for outro.`,
+    '- period: "this_month" (padrão — quando a mensagem não menciona período, ou fala do mês atual), "last_month" (mês passado), "this_year" (esse ano/ano todo).',
+    "",
     `Contas do usuário: [${accountsLabel}]`,
     `Cartões do usuário: [${cardsLabel}]`,
     `Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${merchantsLabel}]`,
@@ -224,6 +279,15 @@ async function callGemini(
       paymentMethod: parsed.data.paymentMethod ?? null,
       originKind: parsed.data.originKind ?? null,
       originName: parsed.data.originName ?? null,
+      intent: parsed.data.intent ?? undefined,
+      query: parsed.data.query
+        ? {
+            queryType: parsed.data.query.queryType,
+            period: parsed.data.query.period,
+            categoryName: parsed.data.query.categoryName ?? null,
+            cardName: parsed.data.query.cardName ?? null,
+          }
+        : null,
     };
   } catch (error) {
     console.error(`[modules/telegram] gemini ${source} parse failed`, {

@@ -49,6 +49,64 @@ export type TelegramOrigin =
 export type TelegramPaymentMethod = "credit" | "debit" | "pix" | "transfer" | "cash";
 
 /**
+ * Intenção classificada pela IA pra mensagem de texto livre (docs/30-TELEGRAM.md,
+ * "Consulta por IA"): "register" (lançamento, fluxo já existente), "query"
+ * (pergunta sobre as finanças do usuário — ver `TelegramQueryParsed`) ou
+ * "unknown" (nem um nem outro). A extração por IMAGEM nunca classifica intent
+ * (foto continua só register) — `AiParsedTransaction.intent` vem `undefined`
+ * nesse caminho; `handlers.ts` cai no default `isTransaction ? "register" :
+ * "unknown"` quando ausente.
+ */
+export type TelegramIntent = "register" | "query" | "unknown";
+
+/** Tipo de pergunta reconhecido pela IA (docs/30-TELEGRAM.md, "Consulta por IA") — mapeado 1:1 pro executor (`query.ts`, `executeTelegramQuery`). */
+export type TelegramQueryType =
+  | "spent"
+  | "received"
+  | "balance"
+  | "category_total"
+  | "top_categories"
+  | "card_invoice"
+  | "unpaid";
+
+/** Período do range da consulta — "this_month" é o default quando a mensagem não menciona período (ver `ai-parser.ts`). */
+export type TelegramQueryPeriod = "this_month" | "last_month" | "this_year";
+
+/**
+ * Saída estruturada da IA pra uma mensagem classificada como `intent="query"`
+ * (docs/30-TELEGRAM.md, "Consulta por IA"). `categoryName`/`cardName` só são
+ * relevantes pros `queryType`s que os usam (`category_total`/`card_invoice`,
+ * respectivamente) — `null` nos demais casos.
+ */
+export type TelegramQueryParsed = {
+  queryType: TelegramQueryType;
+  period: TelegramQueryPeriod;
+  categoryName: string | null;
+  cardName: string | null;
+};
+
+/**
+ * Resultado tipado de executar uma consulta (`query.ts`,
+ * `executeTelegramQuery`) — formatado em texto por `reply.ts`
+ * (`buildQueryReply`). Estados de "não encontrado"/"ambíguo" são resultados
+ * válidos (categoria/cartão citado pela IA não bate com nada real do
+ * usuário), nunca exceptions — erros são dados
+ * (~/.claude/rules/06-composition-errors.md).
+ */
+export type TelegramQueryResult =
+  | { kind: "spent"; total: string; period: TelegramQueryPeriod }
+  | { kind: "received"; total: string; period: TelegramQueryPeriod }
+  | { kind: "unpaid"; total: string; period: TelegramQueryPeriod }
+  | { kind: "balance"; total: string }
+  | { kind: "category_total"; categoryName: string; total: string; period: TelegramQueryPeriod }
+  | { kind: "category_not_found"; categoryName: string }
+  | { kind: "top_categories"; categories: Array<{ name: string; total: string }>; period: TelegramQueryPeriod }
+  | { kind: "card_invoice"; cardName: string; total: string; dueDate: Date }
+  | { kind: "card_not_found"; cardName: string }
+  | { kind: "card_ambiguous"; candidates: string[] }
+  | { kind: "card_no_invoice"; cardName: string };
+
+/**
  * Saída estruturada do parsing por IA (docs/30-TELEGRAM.md, "Parsing por
  * IA") — já validada contra `aiResponseSchema` (zod) em `ai-parser.ts`.
  * `isTransaction=false` quando a mensagem não é um lançamento (saudação,
@@ -57,7 +115,9 @@ export type TelegramPaymentMethod = "credit" | "debit" | "pix" | "transfer" | "c
  * um valor inventado). `date`/`categoryName`/`paymentMethod`/`originKind`/
  * `originName` vêm `null` quando a mensagem não menciona o respectivo dado —
  * resolução determinística (data default = hoje, categoria = fallback) fica
- * por conta do chamador (`draft.ts`), nunca da IA.
+ * por conta do chamador (`draft.ts`), nunca da IA. `intent`/`query`: ver
+ * `TelegramIntent`/`TelegramQueryParsed` acima — só preenchidos na extração
+ * por TEXTO (`parseTransactionWithAI`), nunca na de imagem.
  */
 export type AiParsedTransaction = {
   isTransaction: boolean;
@@ -69,6 +129,8 @@ export type AiParsedTransaction = {
   paymentMethod: TelegramPaymentMethod | null;
   originKind: TelegramOriginKind | null;
   originName: string | null;
+  intent?: TelegramIntent;
+  query?: TelegramQueryParsed | null;
 };
 
 /** Campo obrigatório ainda faltando num lançamento em progresso (docs/30-TELEGRAM.md, "Fluxo conversacional"). Categoria nunca entra aqui — sempre tem fallback ("Outros"/"Outros (Receita)"), nunca bloqueia. */
