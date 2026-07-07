@@ -1,6 +1,7 @@
 import { CategoryType, TransactionType } from "@/generated/prisma/enums";
 import type { ClientTransaction } from "@/modules/transactions/types";
 import type { DataTableColumn } from "@/components/tables/data-table";
+import { TruncatedText } from "@/components/tables/truncated-text";
 import { TransactionInlineBadges } from "@/components/shared/badges/transaction-type-badge";
 import { resolveCategoryDotColor } from "@/components/categories/category-config";
 import type { CategoryRef } from "./use-transactions-reference-data";
@@ -52,7 +53,10 @@ export function buildTransactionColumns({
       // inline aqui, junto da descrição.
       render: (row) => (
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate font-semibold text-foreground">{row.description}</span>
+          <TruncatedText
+            text={row.description}
+            className="max-w-[220px] flex-1 font-semibold text-foreground sm:max-w-[320px] md:max-w-[420px]"
+          />
           <TransactionInlineBadges
             row={{
               type: row.type,

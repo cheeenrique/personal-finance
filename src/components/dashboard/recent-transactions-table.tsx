@@ -6,6 +6,7 @@ import { Receipt } from "lucide-react";
 import type { RecentTransactionRowClient } from "@/modules/transactions/types";
 import { CategoryType, TransactionType } from "@/generated/prisma/enums";
 import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
+import { TruncatedText } from "@/components/tables/truncated-text";
 import { TransactionInlineBadges } from "@/components/shared/badges/transaction-type-badge";
 import { useShell } from "@/components/providers/shell-provider";
 import { resolveCategoryDotColor } from "@/components/categories/category-config";
@@ -28,7 +29,10 @@ function DescriptionCell({ row }: { row: RecentTransactionRowClient }) {
   return (
     <div className="flex flex-col gap-0.5">
       <div className="flex items-center gap-1.5">
-        <span className="truncate text-[13.5px] font-extrabold text-foreground">{row.description}</span>
+        <TruncatedText
+          text={row.description}
+          className="max-w-[180px] flex-1 text-[13.5px] font-extrabold text-foreground sm:max-w-[240px]"
+        />
         <TransactionInlineBadges row={row} />
       </div>
       <span className="font-mono text-[11px] text-muted-foreground">{formatDateShortSaoPaulo(row.date)}</span>
