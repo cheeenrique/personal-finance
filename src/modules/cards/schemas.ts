@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { CardType } from "@/generated/prisma/enums";
 import { positiveDecimalSchema } from "@/lib/money/schema";
 import { dateInputSchema } from "@/lib/date/schema";
+
+const CARD_TYPE_VALUES = Object.values(CardType) as [CardType, ...CardType[]];
 
 const dayOfMonthSchema = z.coerce
   .number()
@@ -8,15 +11,48 @@ const dayOfMonthSchema = z.coerce
   .min(1, "Dia deve ser entre 1 e 31")
   .max(31, "Dia deve ser entre 1 e 31");
 
-export const createCardSchema = z.object({
-  name: z.string().trim().min(1, "Nome é obrigatório").max(120),
-  brand: z.string().trim().min(1, "Bandeira é obrigatória").max(60),
-  limit: positiveDecimalSchema,
-  closingDay: dayOfMonthSchema,
-  dueDay: dayOfMonthSchema,
-  color: z.string().trim().max(30).optional(),
-  icon: z.string().trim().max(60).optional(),
-});
+/** Placeholders ignorados pelo domínio para cartão MEAL (docs/22-CREDIT_CARDS.md não se aplica) — ver `prisma/schema.prisma` `Card.type`. */
+const MEAL_PLACEHOLDER_LIMIT = "0";
+const MEAL_PLACEHOLDER_DAY = 1;
+
+/**
+ * `type` decide se `limit`/`closingDay`/`dueDay` são exigidos:
+ * - CREDIT (default): os 3 campos são obrigatórios (comportamento atual, zero regressão).
+ * - MEAL: os 3 campos são opcionais — cartão pré-pago não tem fatura/ciclo/limite de
+ *   crédito (docs/22-CREDIT_CARDS.md). Preenchidos com placeholder ignorado pelo
+ *   domínio (`service.ts` guarda todo cálculo de fatura/limite atrás de
+ *   `card.type === CardType.CREDIT`) — menos disruptivo que tornar as colunas
+ *   do banco nullable só para um dos dois tipos de cartão.
+ */
+export const createCardSchema = z
+  .object({
+    name: z.string().trim().min(1, "Nome é obrigatório").max(120),
+    brand: z.string().trim().min(1, "Bandeira é obrigatória").max(60),
+    type: z.enum(CARD_TYPE_VALUES).default(CardType.CREDIT),
+    limit: positiveDecimalSchema.optional(),
+    closingDay: dayOfMonthSchema.optional(),
+    dueDay: dayOfMonthSchema.optional(),
+    color: z.string().trim().max(30).optional(),
+    icon: z.string().trim().max(60).optional(),
+  })
+  .refine((data) => data.type !== CardType.CREDIT || data.limit !== undefined, {
+    message: "Limite é obrigatório para cartão de crédito",
+    path: ["limit"],
+  })
+  .refine((data) => data.type !== CardType.CREDIT || data.closingDay !== undefined, {
+    message: "Dia de fechamento é obrigatório para cartão de crédito",
+    path: ["closingDay"],
+  })
+  .refine((data) => data.type !== CardType.CREDIT || data.dueDay !== undefined, {
+    message: "Dia de vencimento é obrigatório para cartão de crédito",
+    path: ["dueDay"],
+  })
+  .transform((data) => ({
+    ...data,
+    limit: data.limit ?? MEAL_PLACEHOLDER_LIMIT,
+    closingDay: data.closingDay ?? MEAL_PLACEHOLDER_DAY,
+    dueDay: data.dueDay ?? MEAL_PLACEHOLDER_DAY,
+  }));
 
 export const updateCardSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),

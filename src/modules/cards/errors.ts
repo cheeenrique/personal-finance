@@ -48,3 +48,21 @@ export class PaymentExceedsBalanceError extends CardDomainError {
     );
   }
 }
+
+/**
+ * Operação de fatura/limite (CREDIT) chamada num cartão MEAL, ou `mealBalance`
+ * chamado num cartão CREDIT — os dois tipos têm modelos de valor mutuamente
+ * exclusivos (docs/22-CREDIT_CARDS.md não se aplica a MEAL: sem fatura, sem
+ * ciclo, sem limite de crédito). Ver `service.ts` — cada função guarda seu
+ * `card.type` esperado logo após `getCard`.
+ */
+export class CardTypeNotSupportedError extends CardDomainError {
+  constructor(cardId: string, operation: string, requiredType: string) {
+    super(
+      `Operação "${operation}" não é suportada para este tipo de cartão (requer ${requiredType})`,
+      "CARD_TYPE_NOT_SUPPORTED",
+      undefined,
+      { cardId, operation, requiredType },
+    );
+  }
+}

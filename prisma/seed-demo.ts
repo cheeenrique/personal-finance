@@ -20,7 +20,7 @@ import bcrypt from "bcryptjs";
 import { addMonths } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/db/client";
-import { TransactionType, CategoryType, AccountType, AssetType } from "@/generated/prisma/enums";
+import { TransactionType, CategoryType, AccountType, AssetType, CardType } from "@/generated/prisma/enums";
 import type { User } from "@/generated/prisma/client";
 import { TIMEZONE, parseInSaoPaulo } from "@/lib/date/timezone";
 import { calendarPartsSP, daysInMonthSP } from "@/lib/date/calendar-sp";
@@ -277,6 +277,7 @@ async function seedCards(userId: string): Promise<IdMap> {
     const card = await cardService.createCard(userId, {
       name: definition.name,
       brand: definition.brand,
+      type: CardType.CREDIT,
       limit: money(definition.limit),
       closingDay: definition.closingDay,
       dueDay: definition.dueDay,

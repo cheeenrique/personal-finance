@@ -23,6 +23,17 @@ enum TransactionType {
   CARD_PAYMENT
 }
 
+// CREDIT = cartão de crédito tradicional (limite, fatura, ciclo — ver
+// docs/22-CREDIT_CARDS.md). MEAL = cartão pré-pago tipo vale-alimentação/
+// benefício (ex.: EVA Benefícios): SEM fatura/ciclo/limite de crédito, saldo
+// derivado de recargas (Transaction INCOME no cartão) menos gastos
+// (Transaction EXPENSE no cartão) — ver src/modules/cards/service.ts
+// `mealBalance`.
+enum CardType {
+  CREDIT
+  MEAL
+}
+
 enum CategoryType {
   INCOME
   EXPENSE
@@ -123,10 +134,21 @@ model Account {
 // ---------------------------------------------------------------------------
 
 model Card {
-  id         String    @id @default(cuid())
-  userId     String
-  name       String
-  brand      String
+  id     String   @id @default(cuid())
+  userId String
+  name   String
+  brand  String
+  // Imutável após a criação (docs/22-CREDIT_CARDS.md) — trocar o tipo de um
+  // cartão já com Transactions mudaria a semântica dos dados existentes
+  // (fatura calculada vs. saldo pré-pago). `src/modules/cards/schemas.ts` não
+  // expõe `type` no update.
+  type CardType @default(CREDIT)
+  // `limit`/`closingDay`/`dueDay` só têm significado para CREDIT (docs/22).
+  // Para MEAL, mantidos como placeholders ignorados pelo domínio (menos
+  // disruptivo que tornar as colunas nullable — ver
+  // src/modules/cards/schemas.ts `createCardSchema`); todo cálculo de
+  // fatura/limite é guardado atrás de `card.type === CardType.CREDIT` em
+  // `service.ts`.
   limit      Decimal   @db.Decimal(12, 2)
   closingDay Int
   dueDay     Int

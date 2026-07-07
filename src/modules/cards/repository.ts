@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { Prisma, type Card, type CardCycle, type CardInvoice } from "@/generated/prisma/client";
-import { TransactionType } from "@/generated/prisma/enums";
+import { TransactionType, type CardType } from "@/generated/prisma/enums";
 
 /** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `pay-invoice.ts`). */
 type Db = Prisma.TransactionClient;
@@ -11,6 +11,8 @@ export type CardWithCycles = Card & { cycles: CardCycle[] };
 export type CreateCardData = {
   name: string;
   brand: string;
+  /** Imutável após a criação (docs/22-CREDIT_CARDS.md) — `UpdateCardData` (abaixo) nunca a inclui. */
+  type: CardType;
   limit: string;
   closingDay: number;
   dueDay: number;
@@ -62,6 +64,7 @@ async function create(userId: string, data: CreateCardData): Promise<Card> {
       userId,
       name: data.name,
       brand: data.brand,
+      type: data.type,
       limit: data.limit,
       closingDay: data.closingDay,
       dueDay: data.dueDay,
@@ -167,11 +170,17 @@ async function listExpensesForCards(userId: string, cardIds: string[]): Promise<
 }
 
 /**
- * Soma de EXPENSE/CARD_PAYMENT por cartão, agrupada por tipo — insumo de
- * `outstandingBalance`/`availableLimit` (docs/22, "Limite disponível = limite
- * total - fatura atual" / Regra 2). Não filtra data — o devedor do cartão
- * considera TODAS as compras já lançadas (inclusive parcelas futuras, que já
- * reservam limite desde a criação, docs/23-INSTALLMENTS.md).
+ * Soma de EXPENSE/CARD_PAYMENT/INCOME por cartão, agrupada por tipo — insumo
+ * de `outstandingBalance`/`availableLimit` (CREDIT, docs/22, "Limite
+ * disponível = limite total - fatura atual" / Regra 2) e de `mealBalance`
+ * (MEAL: recarga = INCOME no cartão − gasto = EXPENSE no cartão, ver
+ * service.ts). Não filtra data — o devedor do cartão CREDIT considera TODAS
+ * as compras já lançadas (inclusive parcelas futuras, que já reservam limite
+ * desde a criação, docs/23-INSTALLMENTS.md); o saldo MEAL também é histórico
+ * completo (sem noção de ciclo). INCOME é irrelevante para CREDIT
+ * (`computeOutstanding` ignora o tipo) e CARD_PAYMENT é irrelevante para MEAL
+ * (cartão MEAL não tem fatura pra pagar) — cada service consome só os tipos
+ * que fazem sentido pro seu cálculo.
  *
  * Aceita `db` opcional (client padrão ou de uma `$transaction` interativa) —
  * usado por `pay-invoice.ts` pra ler o devedor dentro da MESMA transação que
@@ -185,7 +194,7 @@ async function sumByCardAndType(userId: string, cardIds: string[], db: Db = pris
     where: {
       userId,
       cardId: { in: cardIds },
-      type: { in: [TransactionType.EXPENSE, TransactionType.CARD_PAYMENT] },
+      type: { in: [TransactionType.EXPENSE, TransactionType.CARD_PAYMENT, TransactionType.INCOME] },
       isPaid: true,
       deletedAt: null,
     },
