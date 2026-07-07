@@ -44,7 +44,7 @@ export function DataCard() {
       }
 
       downloadCsv(result.data);
-      notifySuccess("Exportação concluída.");
+      notifySuccess("Exportação concluída");
     });
   }
 

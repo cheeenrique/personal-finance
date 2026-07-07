@@ -68,7 +68,7 @@ export function AlertsCard({
         return;
       }
 
-      notifySuccess("Configurações atualizadas.");
+      notifySuccess("Configurações atualizadas");
     });
   }
 

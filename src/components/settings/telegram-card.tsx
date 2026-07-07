@@ -81,7 +81,7 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
       if (result.data.warning) {
         notifyError(result.data.warning);
       } else {
-        notifySuccess(`Bot @${result.data.botUsername} instalado.`);
+        notifySuccess(`Bot @${result.data.botUsername} instalado`);
       }
     });
   }
@@ -95,7 +95,7 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
     setWebhookOk(false);
     setLinkedChatId(null);
     setCode(null);
-    notifySuccess("Bot desinstalado.");
+    notifySuccess("Bot desinstalado");
   }
 
   /** Re-registra o webhook do bot já instalado, sem exigir recolar o token (docs/30-TELEGRAM.md). */
@@ -112,7 +112,7 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
       if (result.data.warning) {
         notifyError(result.data.warning);
       } else {
-        notifySuccess("Webhook revalidado com sucesso.");
+        notifySuccess("Webhook revalidado");
       }
     });
   }
@@ -132,13 +132,13 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
     const result = await unlinkTelegramAction();
     if (!result.success) throw new Error(result.error.message);
     setLinkedChatId(null);
-    notifySuccess("Telegram desvinculado.");
+    notifySuccess("Telegram desvinculado");
   }
 
   function handleCopyCode() {
     if (!code) return;
     navigator.clipboard.writeText(code.code);
-    notifySuccess("Código copiado.");
+    notifySuccess("Código copiado");
   }
 
   // Polling curto: detecta automaticamente quando o vínculo é confirmado
@@ -155,7 +155,7 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
       if (result.data.telegramChatId) {
         setLinkedChatId(result.data.telegramChatId);
         setCode(null);
-        notifySuccess("Telegram vinculado com sucesso.");
+        notifySuccess("Telegram vinculado");
         return;
       }
 

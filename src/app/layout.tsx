@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
+import { CheckCircle2, XCircle } from "lucide-react";
 
 const nunito = Nunito({
   variable: "--font-sans",
@@ -40,14 +41,25 @@ export default function RootLayout({
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
             <TooltipProvider>
               {children}
+              {/*
+                Cor por tipo via tokens do DS (docs/04-DESIGN_SYSTEM.md), não
+                `richColors` do sonner (paleta própria, sem relação com os
+                tokens do app). `!` é necessário: `[data-sonner-toast][data-
+                styled='true']` do sonner tem mais especificidade que uma
+                classe Tailwind isolada.
+              */}
               <Toaster
                 position="bottom-right"
-                richColors
+                icons={{
+                  success: <CheckCircle2 className="size-4" aria-hidden="true" />,
+                  error: <XCircle className="size-4" aria-hidden="true" />,
+                }}
                 toastOptions={{
                   classNames: {
-                    toast:
-                      "rounded-[10px]! border! border-border! bg-popover! text-popover-foreground! shadow-lg!",
+                    toast: "rounded-[10px]! border! shadow-lg!",
                     title: "font-sans! font-semibold!",
+                    success: "border-success/30! bg-success/10! text-on-success!",
+                    error: "border-destructive/30! bg-destructive/10! text-on-danger!",
                   },
                 }}
               />
