@@ -8,6 +8,7 @@ import { IconActionButton } from "@/components/shared/icon-action-button";
 import { formatBRL } from "@/lib/money/format";
 import { formatDateSaoPaulo } from "@/lib/date/format";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
+import { CardType } from "@/generated/prisma/enums";
 import { CardLimitProgress, computeUsagePercent, usageToneTextClass } from "./card-limit-progress";
 import { cardTintClass } from "./card-color";
 import { CARD_ICON_MAP, DEFAULT_CARD_ICON } from "./card-icon";
@@ -31,6 +32,7 @@ type CardTileProps = {
  */
 export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
   const router = useRouter();
+  const isMeal = card.type === CardType.MEAL;
   const percent = computeUsagePercent(card.outstandingBalance, card.limit);
   const Icon = (card.icon && CARD_ICON_MAP[card.icon]) || DEFAULT_CARD_ICON;
 
@@ -92,35 +94,49 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
         </div>
       </div>
 
-      <div className="relative z-10 space-y-1.5">
-        <CardLimitProgress percent={percent} />
-        <div className="flex items-baseline justify-between">
-          <p className="font-mono text-sm font-bold text-foreground">
-            {formatBRL(card.outstandingBalance)}{" "}
-            <span className="font-sans text-xs font-medium text-muted-foreground">
-              / {formatBRL(card.limit)}
-            </span>
-          </p>
-          <p className={cn("font-mono text-xs font-bold", usageToneTextClass(percent))}>
-            {Math.round(percent)}%
-          </p>
+      {isMeal ? (
+        <div className="relative z-10 flex items-center justify-between gap-2 border-t border-border pt-3">
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground">Saldo</p>
+            <p className="font-mono text-lg font-bold text-on-success">{formatBRL(card.mealBalance ?? "0")}</p>
+          </div>
+          <span className="shrink-0 rounded-full bg-success/16 px-2 py-0.5 text-[11px] font-bold text-on-success">
+            Alimentação
+          </span>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="relative z-10 space-y-1.5">
+            <CardLimitProgress percent={percent} />
+            <div className="flex items-baseline justify-between">
+              <p className="font-mono text-sm font-bold text-foreground">
+                {formatBRL(card.outstandingBalance)}{" "}
+                <span className="font-sans text-xs font-medium text-muted-foreground">
+                  / {formatBRL(card.limit)}
+                </span>
+              </p>
+              <p className={cn("font-mono text-xs font-bold", usageToneTextClass(percent))}>
+                {Math.round(percent)}%
+              </p>
+            </div>
+          </div>
 
-      <div className="relative z-10 flex items-center justify-between border-t border-border pt-3 text-xs">
-        <div>
-          <p className="font-semibold text-muted-foreground">Fatura atual</p>
-          <p className="font-mono font-bold text-foreground">{formatBRL(card.currentInvoiceTotal)}</p>
-        </div>
-        <div className="text-right">
-          <p className="font-semibold text-muted-foreground">Disponível</p>
-          <p className="font-mono font-bold text-success">{formatBRL(card.availableLimit)}</p>
-        </div>
-      </div>
+          <div className="relative z-10 flex items-center justify-between border-t border-border pt-3 text-xs">
+            <div>
+              <p className="font-semibold text-muted-foreground">Fatura atual</p>
+              <p className="font-mono font-bold text-foreground">{formatBRL(card.currentInvoiceTotal)}</p>
+            </div>
+            <div className="text-right">
+              <p className="font-semibold text-muted-foreground">Disponível</p>
+              <p className="font-mono font-bold text-success">{formatBRL(card.availableLimit)}</p>
+            </div>
+          </div>
 
-      <p className="relative z-10 text-[11px] font-medium text-muted-foreground">
-        Vencimento: {formatDateSaoPaulo(card.invoiceDueDate)}
-      </p>
+          <p className="relative z-10 text-[11px] font-medium text-muted-foreground">
+            Vencimento: {formatDateSaoPaulo(card.invoiceDueDate)}
+          </p>
+        </>
+      )}
     </div>
   );
 }

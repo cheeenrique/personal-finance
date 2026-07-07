@@ -1,0 +1,107 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil, Receipt, Trash2 } from "lucide-react";
+
+import { DataTable } from "@/components/tables/data-table";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { IconActionButton } from "@/components/shared/icon-action-button";
+import { buildTransactionColumns } from "@/components/transactions/transaction-columns";
+import { EditTransactionModal } from "@/components/transactions/edit-transaction-modal";
+import { useTransactionsReferenceData } from "@/components/transactions/use-transactions-reference-data";
+import { useTransactionMutations } from "@/components/transactions/use-transaction-mutations";
+import type { ClientTransaction } from "@/modules/transactions/types";
+import { useCardTransactionsList } from "./use-card-transactions-list";
+
+type CardTransactionsTableProps = { cardId: string };
+
+/**
+ * Recargas (INCOME) + gastos (EXPENSE) de um cartão MEAL — MESMA `DataTable` +
+ * colunas (`buildTransactionColumns`) + paginação server-side + editar/excluir
+ * de `InvoiceItemsTable` (fatura CREDIT), sem o filtro de categoria/ciclo:
+ * aqui o filtro é só `cardId` (`use-card-transactions-list.ts`), sem noção de
+ * fatura/ciclo (MEAL não tem, ver `modules/cards/service.ts` `assertCreditCard`).
+ */
+export function CardTransactionsTable({ cardId }: CardTransactionsTableProps) {
+  const router = useRouter();
+  const referenceData = useTransactionsReferenceData();
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const { page, installmentTotals, loading, error, reload } = useCardTransactionsList({
+    cardId,
+    page: currentPage,
+  });
+
+  /** Além da listagem client-side, refaz o Server Component da página — o saldo (KPICard) é derivado das transactions (ver `card-detail-view-meal.tsx`). */
+  function reloadAll() {
+    reload();
+    router.refresh();
+  }
+
+  const mutations = useTransactionMutations(reloadAll);
+
+  const [editing, setEditing] = useState<ClientTransaction | null>(null);
+  const [deleting, setDeleting] = useState<ClientTransaction | null>(null);
+
+  const columns = useMemo(
+    () =>
+      buildTransactionColumns({
+        categoryById: referenceData.categoryById,
+        accountNameById: referenceData.accountNameById,
+        cardNameById: referenceData.cardNameById,
+        installmentTotals,
+      }),
+    [referenceData.categoryById, referenceData.accountNameById, referenceData.cardNameById, installmentTotals],
+  );
+
+  return (
+    <>
+      <DataTable
+        data={page.items}
+        columns={columns}
+        getRowId={(row) => row.id}
+        loading={loading}
+        error={error}
+        onRetry={reload}
+        emptyState={{
+          icon: Receipt,
+          title: "Nenhuma movimentação neste cartão",
+          description: "Recargas e gastos lançados neste cartão aparecem aqui.",
+        }}
+        rowActions={(row) => (
+          <>
+            <IconActionButton icon={Pencil} label="Editar" onClick={() => setEditing(row)} />
+            <IconActionButton icon={Trash2} tone="danger" label="Excluir" onClick={() => setDeleting(row)} />
+          </>
+        )}
+        pagination={{ page: page.page, pageSize: page.pageSize, total: page.total, onPageChange: setCurrentPage }}
+      />
+
+      <EditTransactionModal
+        transaction={editing}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+        referenceData={referenceData}
+        onSaved={() => {
+          setEditing(null);
+          reloadAll();
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+        title={`Excluir "${deleting?.description ?? ""}"?`}
+        description="A transação vai para a lixeira — o toast de confirmação traz um botão de desfazer."
+        onConfirm={async () => {
+          if (deleting) await mutations.deleteOne(deleting);
+          setDeleting(null);
+        }}
+      />
+    </>
+  );
+}

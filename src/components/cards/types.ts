@@ -1,3 +1,5 @@
+import type { CardType } from "@/modules/cards/types";
+
 /**
  * Tipos "view" do módulo Cartões — versões serializáveis (Decimal → string,
  * Date → ISO string) dos tipos de `modules/cards/types.ts`. Necessário
@@ -12,6 +14,8 @@ export type CardSummaryView = {
   id: string;
   name: string;
   brand: string;
+  /** Imutável após a criação (ver `modules/cards/schemas.ts` `updateCardSchema`) — decide o branch CREDIT/MEAL na UI (tile, detalhe, form). */
+  type: CardType;
   limit: string;
   closingDay: number;
   dueDay: number;
@@ -23,6 +27,8 @@ export type CardSummaryView = {
   outstandingBalance: string;
   availableLimit: string;
   invoiceDueDate: string;
+  /** `null` para CREDIT. Saldo (recargas − gastos) para MEAL — ver `modules/cards/service.ts` `computeMealBalance`. */
+  mealBalance: string | null;
 };
 
 export type InvoiceView = {

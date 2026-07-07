@@ -13,6 +13,7 @@ import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
 import { notifySuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { CardType } from "@/generated/prisma/enums";
 import { CARD_COLOR_OPTIONS, cardSwatchClass } from "./card-color";
 import { CARD_ICON_OPTIONS } from "./card-icon";
 import { createCardForClient, updateCardForClient } from "./ui-actions";
@@ -25,9 +26,16 @@ type CardFormModalProps = {
   card: CardSummaryView | null;
 };
 
+/** `type` é imutável após a criação (`modules/cards/schemas.ts` `updateCardSchema` não aceita o campo) — só aparece como seletor no fluxo de criação. */
+const CARD_TYPE_OPTIONS: { value: CardType; label: string }[] = [
+  { value: CardType.CREDIT, label: "Crédito" },
+  { value: CardType.MEAL, label: "Alimentação" },
+];
+
 type FormState = {
   name: string;
   brand: string;
+  type: CardType;
   limit: string;
   closingDay: string;
   dueDay: string;
@@ -36,13 +44,23 @@ type FormState = {
 };
 
 function emptyFormState(): FormState {
-  return { name: "", brand: "", limit: "", closingDay: "1", dueDay: "10", color: null, icon: null };
+  return {
+    name: "",
+    brand: "",
+    type: CardType.CREDIT,
+    limit: "",
+    closingDay: "1",
+    dueDay: "10",
+    color: null,
+    icon: null,
+  };
 }
 
 function formStateFromCard(card: CardSummaryView): FormState {
   return {
     name: card.name,
     brand: card.brand,
+    type: card.type,
     limit: card.limit,
     closingDay: String(card.closingDay),
     dueDay: String(card.dueDay),
@@ -78,6 +96,11 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
     }
   }
 
+  // MEAL não tem fatura/ciclo/limite (`modules/cards/schemas.ts`: os 3 campos
+  // viram placeholder ignorado pelo domínio para esse tipo) — os campos nem
+  // aparecem no form nem são validados/enviados.
+  const isMeal = form.type === CardType.MEAL;
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
@@ -85,25 +108,30 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
     const errors: Record<string, string> = {};
     if (isBlank(form.name)) errors.name = "Nome é obrigatório.";
     if (isBlank(form.brand)) errors.brand = "Bandeira é obrigatória.";
-    if (isBlank(form.limit)) errors.limit = "Informe um valor.";
-    if (isBlank(form.closingDay)) errors.closingDay = "Dia de fechamento é obrigatório.";
-    if (isBlank(form.dueDay)) errors.dueDay = "Dia de vencimento é obrigatório.";
+    if (!isMeal) {
+      if (isBlank(form.limit)) errors.limit = "Informe um valor.";
+      if (isBlank(form.closingDay)) errors.closingDay = "Dia de fechamento é obrigatório.";
+      if (isBlank(form.dueDay)) errors.dueDay = "Dia de vencimento é obrigatório.";
+    }
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
-    const input = {
+    // `type` é imutável (ver `updateCardSchema`) — só entra no input de criação.
+    const baseInput = {
       name: form.name,
       brand: form.brand,
-      limit: form.limit,
-      closingDay: Number(form.closingDay),
-      dueDay: Number(form.dueDay),
       color: form.color,
       icon: form.icon,
+      ...(isMeal
+        ? {}
+        : { limit: form.limit, closingDay: Number(form.closingDay), dueDay: Number(form.dueDay) }),
     };
 
     startTransition(async () => {
       const result =
-        isEditing && card ? await updateCardForClient(card.id, input) : await createCardForClient(input);
+        isEditing && card
+          ? await updateCardForClient(card.id, baseInput)
+          : await createCardForClient({ ...baseInput, type: form.type });
 
       if (!result.success) {
         setFormError(result.error.message);
@@ -120,9 +148,39 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
       open={open}
       onOpenChange={onOpenChange}
       title={isEditing ? "Editar cartão" : "Novo cartão"}
-      description="Nome, bandeira, limite e datas de fatura."
+      description={
+        isEditing
+          ? "Nome, bandeira e demais dados do cartão."
+          : "Tipo, nome, bandeira e demais dados do cartão."
+      }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {/* `type` é imutável após a criação (`updateCardSchema` não aceita o campo) — seletor só aparece criando um cartão novo. */}
+        {!isEditing && (
+          <div className="flex flex-col gap-1.5">
+            <Label>Tipo</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {CARD_TYPE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, type: option.value }))}
+                  aria-pressed={form.type === option.value}
+                  disabled={isPending}
+                  className={cn(
+                    "flex h-10 items-center justify-center gap-2 rounded-[10px] border text-sm font-bold transition-colors",
+                    form.type === option.value
+                      ? "border-primary bg-primary/16 text-primary"
+                      : "border-border text-muted-foreground",
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <FormField label="Nome" htmlFor="card-name" required error={fieldErrors.name}>
           <Input
             id="card-name"
@@ -152,56 +210,61 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
           />
         </FormField>
 
-        <FormField label="Limite" htmlFor="card-limit" required error={fieldErrors.limit}>
-          <CurrencyInput
-            id="card-limit"
-            value={form.limit}
-            onValueChange={(value) => {
-              setForm((prev) => ({ ...prev, limit: value }));
-              clearFieldError("limit");
-            }}
-            aria-invalid={Boolean(fieldErrors.limit)}
-            disabled={isPending}
-          />
-        </FormField>
+        {/* Limite/fechamento/vencimento não existem pra MEAL — saldo pré-pago, sem fatura/ciclo (`modules/cards/service.ts` `assertCreditCard`). */}
+        {!isMeal && (
+          <>
+            <FormField label="Limite" htmlFor="card-limit" required error={fieldErrors.limit}>
+              <CurrencyInput
+                id="card-limit"
+                value={form.limit}
+                onValueChange={(value) => {
+                  setForm((prev) => ({ ...prev, limit: value }));
+                  clearFieldError("limit");
+                }}
+                aria-invalid={Boolean(fieldErrors.limit)}
+                disabled={isPending}
+              />
+            </FormField>
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormField
-            label="Dia de fechamento"
-            htmlFor="card-closing-day"
-            required
-            error={fieldErrors.closingDay}
-          >
-            <Input
-              id="card-closing-day"
-              type="number"
-              min={1}
-              max={31}
-              value={form.closingDay}
-              onChange={(event) => {
-                setForm((prev) => ({ ...prev, closingDay: event.target.value }));
-                clearFieldError("closingDay");
-              }}
-              aria-invalid={Boolean(fieldErrors.closingDay)}
-              disabled={isPending}
-            />
-          </FormField>
-          <FormField label="Dia de vencimento" htmlFor="card-due-day" required error={fieldErrors.dueDay}>
-            <Input
-              id="card-due-day"
-              type="number"
-              min={1}
-              max={31}
-              value={form.dueDay}
-              onChange={(event) => {
-                setForm((prev) => ({ ...prev, dueDay: event.target.value }));
-                clearFieldError("dueDay");
-              }}
-              aria-invalid={Boolean(fieldErrors.dueDay)}
-              disabled={isPending}
-            />
-          </FormField>
-        </div>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                label="Dia de fechamento"
+                htmlFor="card-closing-day"
+                required
+                error={fieldErrors.closingDay}
+              >
+                <Input
+                  id="card-closing-day"
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={form.closingDay}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, closingDay: event.target.value }));
+                    clearFieldError("closingDay");
+                  }}
+                  aria-invalid={Boolean(fieldErrors.closingDay)}
+                  disabled={isPending}
+                />
+              </FormField>
+              <FormField label="Dia de vencimento" htmlFor="card-due-day" required error={fieldErrors.dueDay}>
+                <Input
+                  id="card-due-day"
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={form.dueDay}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, dueDay: event.target.value }));
+                    clearFieldError("dueDay");
+                  }}
+                  aria-invalid={Boolean(fieldErrors.dueDay)}
+                  disabled={isPending}
+                />
+              </FormField>
+            </div>
+          </>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <Label>Cor</Label>

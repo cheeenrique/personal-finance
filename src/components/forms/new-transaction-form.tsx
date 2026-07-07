@@ -61,8 +61,12 @@ function flattenCategories(nodes: CategoryTreeNode[], depth = 0): EntitySelectOp
  * telas dedicadas na fase de screens (`/accounts`, `/cards`).
  */
 export function NewTransactionForm() {
-  const { isTransactionModalOpen, transactionModalDefaultType, closeTransactionModal } =
-    useShell();
+  const {
+    isTransactionModalOpen,
+    transactionModalDefaultType,
+    transactionModalDefaultCardId,
+    closeTransactionModal,
+  } = useShell();
 
   const initialType =
     transactionModalDefaultType === TransactionType.INCOME
@@ -108,6 +112,11 @@ export function NewTransactionForm() {
           ? undefined
           : (window.localStorage.getItem(lastCategoryStorageKey(initialType)) ?? undefined),
       );
+      // "+ Recarga" do detalhe de cartão MEAL (`card-detail-view-meal.tsx`)
+      // abre este modal com a origem já preenchida — `EntitySelect` mostra o
+      // label assim que `originOptions` termina de carregar (efeito abaixo),
+      // mesmo com o value já setado antes disso.
+      setOrigin(transactionModalDefaultCardId ? `card:${transactionModalDefaultCardId}` : undefined);
       setIsPaidTouched(false);
       setIsPaid(!isFutureDate(date));
     }

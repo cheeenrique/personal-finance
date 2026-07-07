@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CreditCard } from "lucide-react";
 
+import { CardType } from "@/generated/prisma/enums";
 import type { CardWithSummary } from "@/modules/cards/types";
 import { SectionCard } from "./section-card";
 import { ProgressBar } from "./progress-bar";
@@ -56,6 +57,27 @@ export function CardsSummary({ cards }: CardsSummaryProps) {
     <SectionCard title="Cartões e dívidas" action={{ label: "Ver cartões", href: "/cards" }}>
       <div className="flex flex-col gap-4">
         {recentCards.map((card) => {
+          // MEAL não tem limite/fatura (docs/22-CREDIT_CARDS.md não cobre esse
+          // tipo, ver `modules/cards/service.ts` `assertCreditCard`) — mostra
+          // só o saldo (recargas − gastos), sem barra de uso de limite.
+          if (card.type === CardType.MEAL) {
+            const mealBalance = card.mealBalance?.toNumber() ?? 0;
+
+            return (
+              <Link key={card.id} href={`/cards/${card.id}`} className="block">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-[13px] font-extrabold text-foreground">{card.name}</span>
+                  <span className="shrink-0 rounded-full bg-success/16 px-2 py-0.5 text-[11px] font-bold text-on-success">
+                    Alimentação
+                  </span>
+                </div>
+                <p className="mt-[7px] font-mono text-xs font-bold text-on-success">
+                  Saldo: {formatBRL(mealBalance)}
+                </p>
+              </Link>
+            );
+          }
+
           const limit = card.limit.toNumber();
           const outstanding = card.outstandingBalance.toNumber();
           const percent = limit > 0 ? (outstanding / limit) * 100 : 0;

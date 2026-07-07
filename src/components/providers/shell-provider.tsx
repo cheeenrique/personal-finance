@@ -13,7 +13,9 @@ type ShellContextValue = {
 
   isTransactionModalOpen: boolean;
   transactionModalDefaultType: TransactionType | undefined;
-  openTransactionModal: (defaultType?: TransactionType) => void;
+  /** Pré-seleciona a origem (cartão) do form — usado pelo "+ Recarga" do detalhe de cartão MEAL (`card-detail-view-meal.tsx`). */
+  transactionModalDefaultCardId: string | undefined;
+  openTransactionModal: (defaultType?: TransactionType, defaultCardId?: string) => void;
   closeTransactionModal: () => void;
 };
 
@@ -40,13 +42,17 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
   const [transactionModalDefaultType, setTransactionModalDefaultType] = useState<
     TransactionType | undefined
   >(undefined);
+  const [transactionModalDefaultCardId, setTransactionModalDefaultCardId] = useState<
+    string | undefined
+  >(undefined);
 
   const openCommandPalette = useCallback(() => setCommandPaletteOpen(true), []);
   const closeCommandPalette = useCallback(() => setCommandPaletteOpen(false), []);
   const toggleCommandPalette = useCallback(() => setCommandPaletteOpen((open) => !open), []);
 
-  const openTransactionModal = useCallback((defaultType?: TransactionType) => {
+  const openTransactionModal = useCallback((defaultType?: TransactionType, defaultCardId?: string) => {
     setTransactionModalDefaultType(defaultType);
+    setTransactionModalDefaultCardId(defaultCardId);
     setTransactionModalOpen(true);
   }, []);
   const closeTransactionModal = useCallback(() => setTransactionModalOpen(false), []);
@@ -68,6 +74,7 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
       if (isModifierCombo && event.key.toLowerCase() === "n") {
         event.preventDefault();
         setTransactionModalDefaultType(undefined);
+        setTransactionModalDefaultCardId(undefined);
         setTransactionModalOpen(true);
         return;
       }
@@ -104,6 +111,7 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
       toggleCommandPalette,
       isTransactionModalOpen,
       transactionModalDefaultType,
+      transactionModalDefaultCardId,
       openTransactionModal,
       closeTransactionModal,
     }),
@@ -114,6 +122,7 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
       toggleCommandPalette,
       isTransactionModalOpen,
       transactionModalDefaultType,
+      transactionModalDefaultCardId,
       openTransactionModal,
       closeTransactionModal,
     ],

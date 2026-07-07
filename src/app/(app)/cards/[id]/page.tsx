@@ -6,8 +6,10 @@ import {
   getInvoiceForAction,
   listStoredInvoicesAction,
 } from "@/modules/cards/actions";
+import { CardType } from "@/generated/prisma/enums";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { CardDetailView } from "@/components/cards/card-detail-view";
+import { CardDetailViewMeal } from "@/components/cards/card-detail-view-meal";
 import {
   serializeCardSummary,
   serializeInvoice,
@@ -42,6 +44,15 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
 
   const card = listResult.data.find((item) => item.id === id);
   if (!card) notFound();
+
+  // MEAL não tem fatura/ciclo (docs/22-CREDIT_CARDS.md não cobre esse tipo) —
+  // `getInvoiceAction`/`getInvoiceForAction`/`listStoredInvoicesAction`
+  // lançam `CardTypeNotSupportedError` pra esse tipo (ver `modules/cards/service.ts`
+  // `assertCreditCard`), então o branch acontece ANTES de qualquer chamada a
+  // elas, não depois.
+  if (card.type === CardType.MEAL) {
+    return <CardDetailViewMeal card={serializeCardSummary(card)} />;
+  }
 
   const invoiceResult = await getInvoiceAction({ cardId: card.id });
   if (!invoiceResult.success) {

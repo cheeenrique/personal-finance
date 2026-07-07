@@ -9,6 +9,7 @@ export function serializeCardSummary(card: CardWithSummary): CardSummaryView {
     id: card.id,
     name: card.name,
     brand: card.brand,
+    type: card.type,
     limit: card.limit.toString(),
     closingDay: card.closingDay,
     dueDay: card.dueDay,
@@ -20,6 +21,7 @@ export function serializeCardSummary(card: CardWithSummary): CardSummaryView {
     outstandingBalance: card.outstandingBalance.toString(),
     availableLimit: card.availableLimit.toString(),
     invoiceDueDate: card.invoiceDueDate.toISOString(),
+    mealBalance: card.mealBalance ? card.mealBalance.toString() : null,
   };
 }
 
