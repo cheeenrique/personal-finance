@@ -7,7 +7,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -136,14 +135,14 @@ export function AlertsCard({
               {error}
             </p>
           )}
-        </CardContent>
 
-        <CardFooter className="justify-end">
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </CardFooter>
+          <div className="flex justify-end border-t border-border pt-4">
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              Salvar
+            </Button>
+          </div>
+        </CardContent>
       </form>
     </Card>
   );
