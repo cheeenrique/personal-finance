@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getInstallmentTotalsAction, listTransactionsAction } from "@/modules/transactions/actions";
 import type { ClientTransaction, PaginatedResult, TransactionSort } from "@/modules/transactions/types";
+import type { TransactionType } from "@/generated/prisma/enums";
 
 /** Mesma paginação server-side (page/pageSize) da tela `/transactions` (`use-transactions-list.ts`) — ver `listFilterSchema`. */
 const DEFAULT_PAGE_SIZE = 20;
@@ -15,6 +16,8 @@ export type AccountTransactionsFilter = {
   accountId: string;
   search?: string;
   categoryId?: string;
+  /** Restrito a `INCOME`/`EXPENSE` na UI (ver `TYPE_OPTIONS` em `account-period-filter.tsx`) — o schema aceita o `TransactionType` completo. */
+  type?: TransactionType;
   dateFrom?: string;
   dateTo?: string;
   sort: TransactionSort;
@@ -32,6 +35,7 @@ async function fetchAccountTransactionsList(filter: AccountTransactionsFilter): 
     accountId: filter.accountId,
     search: filter.search,
     categoryId: filter.categoryId,
+    type: filter.type,
     dateFrom: filter.dateFrom,
     dateTo: filter.dateTo,
     sort: filter.sort,

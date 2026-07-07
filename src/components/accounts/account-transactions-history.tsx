@@ -14,6 +14,7 @@ import { TransactionRowActions } from "@/components/transactions/transaction-row
 import { useTransactionsReferenceData } from "@/components/transactions/use-transactions-reference-data";
 import { useTransactionMutations } from "@/components/transactions/use-transaction-mutations";
 import type { ClientTransaction, TransactionSort } from "@/modules/transactions/types";
+import type { TransactionType } from "@/generated/prisma/enums";
 
 import { AccountPeriodFilterBar } from "./account-period-filter";
 import { useAccountPeriodFilter } from "./use-account-period-filter";
@@ -36,10 +37,10 @@ type AccountTransactionsHistoryProps = { accountId: string };
  * `EditTransactionModal`, `useTransactionMutations`), incluindo a MESMA
  * paginação server-side (page/pageSize via `listTransactionsAction`,
  * `DataTablePagination`) — com filtro próprio restrito a período (Mês atual/
- * Mês passado/Personalizado) + categoria em vez do filtro bar completo. Os
- * demais filtros de `docs/21-ACCOUNTS.md` ("tipo/tag/valor") e o gráfico de
- * entradas/saídas ficam para uma iteração futura (ver "Improvement
- * Suggestions" no resumo).
+ * Mês passado/Personalizado) + categoria + tipo (Receita/Despesa) em vez do
+ * filtro bar completo. Os demais filtros de `docs/21-ACCOUNTS.md`
+ * ("tag/valor") e o gráfico de entradas/saídas ficam para uma iteração
+ * futura (ver "Improvement Suggestions" no resumo).
  */
 export function AccountTransactionsHistory({ accountId }: AccountTransactionsHistoryProps) {
   const router = useRouter();
@@ -48,16 +49,17 @@ export function AccountTransactionsHistory({ accountId }: AccountTransactionsHis
 
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
+  const [type, setType] = useState<TransactionType | undefined>(undefined);
   const [sort, setSort] = useState<SortState>({ column: "date", direction: "desc" });
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Qualquer mudança de filtro (busca/categoria/período/ordenação) invalida a
-  // página atual — mesmo comportamento de `useTransactionFilters.replace`
+  // Qualquer mudança de filtro (busca/categoria/tipo/período/ordenação) invalida
+  // a página atual — mesmo comportamento de `useTransactionFilters.replace`
   // (`/transactions`), só que em estado local em vez de query string. Ajuste
   // durante o render (padrão React "adjusting state when a prop changes"),
   // não em `useEffect` — evita o cascading render que a lint
   // `react-hooks/set-state-in-effect` acusa.
-  const filtersKey = `${search}|${categoryId ?? ""}|${periodFilter.range.dateFrom ?? ""}|${periodFilter.range.dateTo ?? ""}|${sort?.column ?? ""}|${sort?.direction ?? ""}`;
+  const filtersKey = `${search}|${categoryId ?? ""}|${type ?? ""}|${periodFilter.range.dateFrom ?? ""}|${periodFilter.range.dateTo ?? ""}|${sort?.column ?? ""}|${sort?.direction ?? ""}`;
   const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
   if (filtersKey !== prevFiltersKey) {
     setPrevFiltersKey(filtersKey);
@@ -68,6 +70,7 @@ export function AccountTransactionsHistory({ accountId }: AccountTransactionsHis
     accountId,
     search: search || undefined,
     categoryId,
+    type,
     dateFrom: periodFilter.range.dateFrom,
     dateTo: periodFilter.range.dateTo,
     sort: sortStateToTransactionSort(sort),
@@ -129,6 +132,8 @@ export function AccountTransactionsHistory({ accountId }: AccountTransactionsHis
             onCategoryIdChange={setCategoryId}
             categoryOptions={referenceData.categoryOptions}
             categoryOptionsLoading={referenceData.loading}
+            type={type}
+            onTypeChange={setType}
           />
         }
         sort={sort}
