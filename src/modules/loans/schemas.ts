@@ -178,3 +178,41 @@ export const createFinancingSchema = z
   });
 
 export type CreateFinancingInput = z.infer<typeof createFinancingSchema>;
+
+/**
+ * Antecipação de parcelas (modelo C6 "Antecipar parcelas", ver
+ * `modules/loans/simulate.ts`) — insumo comum de `simulateAmortizationAction`
+ * e `executeAmortizationAction`. `order`/`count` só fazem sentido no modo
+ * "advance" ("A partir da próxima parcela" / "A partir da última parcela",
+ * quantidade do dropdown); "full" antecipa TODAS as parcelas não pagas de
+ * uma vez (reusa `settleLoan` via `amortization.ts`) — por isso
+ * `z.discriminatedUnion` em vez de campos opcionais soltos (mesmo motivo de
+ * `createFinancingSchema`).
+ *
+ * `count` só valida "é inteiro positivo" aqui — o teto real (nº de parcelas
+ * não pagas restantes) depende do estado do empréstimo e é reavaliado em
+ * `simulate.ts` `simulateAmortization` (mesmo padrão de invariantes
+ * dinâmicas de `update.ts`, nunca confiar em limite calculado no client).
+ *
+ * `paymentDate <= vencimento da próxima parcela` (regra do C6) também é
+ * dinâmica (depende de qual é a "próxima parcela" no momento) — validada em
+ * `simulate.ts`, não aqui.
+ */
+const advanceAmortizationSchema = z.object({
+  type: z.literal("advance"),
+  order: z.enum(["next", "last"]),
+  count: z.coerce.number().int().min(1, "Mínimo de 1 parcela"),
+  paymentDate: dateInputSchema,
+});
+
+const fullAmortizationSchema = z.object({
+  type: z.literal("full"),
+  paymentDate: dateInputSchema,
+});
+
+export const amortizationParamsSchema = z.discriminatedUnion("type", [
+  advanceAmortizationSchema,
+  fullAmortizationSchema,
+]);
+
+export type SimulateAmortizationInput = z.infer<typeof amortizationParamsSchema>;

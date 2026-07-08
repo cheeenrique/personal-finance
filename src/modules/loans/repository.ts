@@ -160,6 +160,40 @@ async function softDeleteAllTransactionsByLoanId(userId: string, loanId: string,
   });
 }
 
+/**
+ * Soft-delete de parcelas ESPECÍFICAS (por id) ainda não pagas — usado pela
+ * antecipação (`amortization.ts` `executeAmortization`, modo "advance") pra
+ * remover as parcelas substituídas pela Transaction consolidada do
+ * pagamento (ver `simulate.ts` — o valor pago vira 1 Transaction só, as
+ * parcelas antecipadas somem do cronograma).
+ *
+ * `isPaid: false` no WHERE recheca a condição no MESMO instante da escrita
+ * — mesmo padrão de `markInstallmentPaid`, fecha o TOCTOU entre a leitura
+ * que gerou a simulação (início da `$transaction` do caller) e esta
+ * escrita. O `count` retornado é comparado pelo caller contra o nº
+ * esperado de ids pra detectar corrida (uma das parcelas foi paga/alterada
+ * individualmente nesse meio-tempo) — `LoanAdvanceConflictError`.
+ */
+async function softDeleteInstallmentsByIds(
+  userId: string,
+  loanId: string,
+  installmentIds: string[],
+  db: Db = prisma,
+): Promise<number> {
+  const result = await db.transaction.updateMany({
+    where: {
+      id: { in: installmentIds },
+      userId,
+      loanId,
+      type: TransactionType.EXPENSE,
+      isPaid: false,
+      deletedAt: null,
+    },
+    data: { deletedAt: new Date() },
+  });
+  return result.count;
+}
+
 export const loanRepository = {
   findById,
   findByIdWithTransactions,
@@ -167,6 +201,7 @@ export const loanRepository = {
   softDelete,
   softDeleteUnpaidInstallments,
   softDeleteAllTransactionsByLoanId,
+  softDeleteInstallmentsByIds,
   update,
   findInstallment,
   markInstallmentPaid,

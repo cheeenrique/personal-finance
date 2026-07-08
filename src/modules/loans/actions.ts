@@ -1,17 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth";
 import { loanService } from "./service";
 import { createLoan } from "./installments";
+import { createFinancing } from "./financing";
 import { updateLoan } from "./update";
-import {
-  createLoanSchema,
-  updateLoanSchema,
-  suggestEarlyPaymentSchema,
-  settleLoanSchema,
-} from "./schemas";
-import { LoanDomainError } from "./errors";
+import { createLoanSchema, updateLoanSchema, suggestEarlyPaymentSchema, settleLoanSchema, createFinancingSchema } from "./schemas";
+import { requireUserId, UNAUTHENTICATED_ERROR, toActionError, revalidateLoanRoutes } from "./action-helpers";
 import type { EarlyPaymentSuggestion } from "./interest";
 import type {
   ActionResult,
@@ -22,37 +16,13 @@ import type {
   LoanWithProgress,
 } from "./types";
 
-const LOANS_PATH = "/loans";
-const ACCOUNTS_PATH = "/accounts";
-const DASHBOARD_PATH = "/dashboard";
-
-/** Server Actions só delegam para o module (docs/99-CLAUDE.md, "Regra de Ouro"). */
-
-async function requireUserId(): Promise<string | null> {
-  const session = await auth();
-  return session?.user?.id ?? null;
-}
-
-const UNAUTHENTICATED_ERROR = { code: "UNAUTHENTICATED", message: "Sessão inválida." } as const;
-
-function toActionError(error: unknown): { success: false; error: { code: string; message: string } } {
-  if (error instanceof LoanDomainError) {
-    return { success: false, error: { code: error.code, message: error.message } };
-  }
-
-  console.error("[modules/loans] unexpected error", error);
-  return {
-    success: false,
-    error: { code: "UNKNOWN_ERROR", message: "Não foi possível concluir a operação." },
-  };
-}
-
-/** Empréstimo criado geralmente aparece no histórico da conta e no dashboard (parcelas previstas). */
-function revalidateLoanRoutes(): void {
-  revalidatePath(LOANS_PATH);
-  revalidatePath(ACCOUNTS_PATH);
-  revalidatePath(DASHBOARD_PATH);
-}
+/**
+ * Server Actions de empréstimo/financiamento (CRUD + antecipação de UMA
+ * parcela + quitação total) — só delegam para o module (docs/99-CLAUDE.md,
+ * "Regra de Ouro"). As Server Actions do simulador de antecipação em lote
+ * (modelo C6) vivem em `amortization-actions.ts` — arquivo próprio pra não
+ * estourar o limite de tamanho deste (rule 05-naming-size.md).
+ */
 
 /** `Prisma.Decimal` → `string` na borda (ver types.ts `ClientLoanWithProgress`). */
 function toClientLoan(loan: LoanWithProgress): ClientLoanWithProgress {
@@ -71,6 +41,7 @@ function toClientLoan(loan: LoanWithProgress): ClientLoanWithProgress {
   };
 }
 
+/** Reusado por `createLoanAction` (LOAN) e `createFinancingAction` (FINANCING) — os campos de financiamento ficam `null` em LOAN comum (ver docs/03-DATABASE.md, `Loan.kind`). */
 function toClientCreateLoanResult(result: CreateLoanResult): ClientCreateLoanResult {
   return {
     loan: {
@@ -79,6 +50,12 @@ function toClientCreateLoanResult(result: CreateLoanResult): ClientCreateLoanRes
       totalToPay: result.loan.totalToPay.toString(),
       installmentAmount: result.loan.installmentAmount.toString(),
       interestRate: result.loan.interestRate ? result.loan.interestRate.toString() : null,
+      downPayment: result.loan.downPayment ? result.loan.downPayment.toString() : null,
+      assetValue: result.loan.assetValue ? result.loan.assetValue.toString() : null,
+      cet: result.loan.cet ? result.loan.cet.toString() : null,
+      financedTaxes: result.loan.financedTaxes ? result.loan.financedTaxes.toString() : null,
+      financedInsurance: result.loan.financedInsurance ? result.loan.financedInsurance.toString() : null,
+      financedFees: result.loan.financedFees ? result.loan.financedFees.toString() : null,
     },
     transactions: result.transactions.map((transaction) => ({
       ...transaction,
@@ -110,6 +87,28 @@ export async function createLoanAction(input: unknown): Promise<ActionResult<Cli
 
   try {
     const result = await createLoan(userId, parsed.data);
+    revalidateLoanRoutes();
+    return { success: true, data: toClientCreateLoanResult(result) };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Cria um FINANCIAMENTO (`Loan.kind=FINANCING`, ver `financing.ts` `createFinancing`) — espelha `createLoanAction`, mesmo envelope de retorno (`ClientCreateLoanResult`). */
+export async function createFinancingAction(input: unknown): Promise<ActionResult<ClientCreateLoanResult>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  const parsed = createFinancingSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Dados inválidos." },
+    };
+  }
+
+  try {
+    const result = await createFinancing(userId, parsed.data);
     revalidateLoanRoutes();
     return { success: true, data: toClientCreateLoanResult(result) };
   } catch (error) {

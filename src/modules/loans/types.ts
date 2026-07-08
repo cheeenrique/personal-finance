@@ -108,15 +108,57 @@ export type ClientLoanWithProgress = Omit<
   interestRate: string | null;
 };
 
+/**
+ * Campos de financiamento (`Loan.kind=FINANCING`, docs/03-DATABASE.md) que
+ * também são `Prisma.Decimal | null` — `createFinancingAction` reusa o mesmo
+ * `ClientCreateLoanResult` de `createLoanAction`, então precisam do mesmo
+ * tratamento de `interestRate` (Decimal→string, `null` = não preenchido em
+ * LOAN comum ou não informado no financiamento).
+ */
+type ClientFinancingDecimalFields = "downPayment" | "assetValue" | "cet" | "financedTaxes" | "financedInsurance" | "financedFees";
+
 export type ClientCreateLoanResult = {
-  loan: Omit<Loan, "principal" | "totalToPay" | "installmentAmount" | "interestRate"> & {
+  loan: Omit<
+    Loan,
+    "principal" | "totalToPay" | "installmentAmount" | "interestRate" | ClientFinancingDecimalFields
+  > & {
     principal: string;
     totalToPay: string;
     installmentAmount: string;
     interestRate: string | null;
+    downPayment: string | null;
+    assetValue: string | null;
+    cet: string | null;
+    financedTaxes: string | null;
+    financedInsurance: string | null;
+    financedFees: string | null;
   };
   transactions: ClientLoanTransaction[];
 };
 
 /** `interest.ts` `EarlyPaymentSuggestion` cruzando a fronteira Server Action → Client Component (Decimal → string, mesma regra do resto do módulo). */
 export type ClientEarlyPaymentSuggestion = { suggested: string; fullAmount: string; discount: string };
+
+/**
+ * `simulate.ts` `LoanAmortizationBalance` cruzando a fronteira Server Action
+ * → Client Component — mesma regra de Decimal→string do resto do módulo,
+ * `endDate` continua `Date | null` (datas atravessam Server Action sem
+ * conversão, ver `ClientNextLoanInstallment`).
+ */
+export type ClientLoanAmortizationBalance = {
+  nominal: string;
+  presentValue: string;
+  installmentsCount: number;
+  endDate: Date | null;
+};
+
+/** `simulate.ts` `LoanAmortizationSimulation` cruzando a fronteira Server Action → Client Component. */
+export type ClientLoanAmortizationSimulation = {
+  nextDueDate: Date;
+  installments: { count: number; ids: string[]; numbers: number[]; dates: Date[] };
+  interestDiscount: string;
+  totalToPayToday: string;
+  period: { start: Date; end: Date };
+  before: ClientLoanAmortizationBalance;
+  after: ClientLoanAmortizationBalance;
+};

@@ -123,3 +123,59 @@ export class LoanInstallmentAlreadyPaidError extends LoanDomainError {
     super("Parcela já foi paga", "LOAN_INSTALLMENT_ALREADY_PAID", undefined, { installmentId });
   }
 }
+
+/**
+ * Simulador de antecipação (`simulate.ts`, modelo C6) — `paymentDate`
+ * informado é DEPOIS do vencimento da próxima parcela não paga. Regra do C6:
+ * "Escolha uma data até o vencimento da próxima parcela" — antecipação só
+ * faz sentido até esse limite; depois disso a parcela já venceu e o fluxo
+ * correto é marcar como paga normalmente (`updateTransactionAction`), não
+ * antecipar.
+ */
+export class LoanPaymentDateAfterNextDueDateError extends LoanDomainError {
+  constructor(context: Record<string, unknown>) {
+    super(
+      "A data de pagamento deve ser até o vencimento da próxima parcela",
+      "LOAN_PAYMENT_DATE_AFTER_NEXT_DUE_DATE",
+      undefined,
+      context,
+    );
+  }
+}
+
+/**
+ * `count` do modo "advance" (`simulate.ts`) fora do intervalo válido — o
+ * dropdown do front vai de 1 até o nº de parcelas não pagas restantes
+ * (`docs`, modelo C6); reavaliado aqui contra o estado REAL do empréstimo
+ * (nunca confiar no `count` vindo do client, mesmo padrão de
+ * `assertTotalToPayInvariant` em `update.ts`).
+ */
+export class LoanAdvanceCountOutOfRangeError extends LoanDomainError {
+  constructor(context: Record<string, unknown>) {
+    super(
+      "Quantidade de parcelas a antecipar é inválida",
+      "LOAN_ADVANCE_COUNT_OUT_OF_RANGE",
+      undefined,
+      context,
+    );
+  }
+}
+
+/**
+ * `executeAmortization` (modo "advance") perdeu a corrida: uma ou mais das
+ * parcelas selecionadas na simulação já não estão mais `isPaid=false` no
+ * instante do soft-delete (foram pagas/alteradas individualmente nesse
+ * meio-tempo). Mesmo espírito do recheck de `markInstallmentPaid` — nunca
+ * soft-deletar uma parcela que virou um fato financeiro real (paga) debaixo
+ * do usuário.
+ */
+export class LoanAdvanceConflictError extends LoanDomainError {
+  constructor(context: Record<string, unknown>) {
+    super(
+      "Uma ou mais parcelas selecionadas foram alteradas antes da confirmação — refaça a simulação",
+      "LOAN_ADVANCE_CONFLICT",
+      undefined,
+      context,
+    );
+  }
+}
