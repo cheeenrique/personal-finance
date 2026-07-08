@@ -134,6 +134,7 @@ model User {
   loans                 Loan[]
   recurringTransactions RecurringTransaction[]
   alerts                Alert[]
+  merchantCategoryRules MerchantCategoryRule[]
   settings              UserSettings?
   telegramPendingEntry  TelegramPendingEntry?
 }
@@ -281,8 +282,35 @@ model Category {
   budgets               Budget[]
   recurringTransactions RecurringTransaction[]
   loans                 Loan[]
+  merchantCategoryRules MerchantCategoryRule[]
 
   @@index([userId, parentId])
+}
+
+// ---------------------------------------------------------------------------
+// MerchantCategoryRule
+// ---------------------------------------------------------------------------
+
+// Override determinístico merchant→categoria (docs/superpowers/specs/
+// 2026-07-08-telegram-recibo-categoria-refino-design.md): quando a descrição de
+// um lançamento (recibo/Telegram ou import) casa o `pattern` (substring
+// normalizada — lowercase/sem acento), a categoria DESTA regra ganha da
+// dominante do histórico e da escolha da IA. Resolve merchant ambíguo (ex.:
+// Eldora, que no histórico é Mercado 14x vs Farmácia 4x) de forma estável.
+model MerchantCategoryRule {
+  id         String    @id @default(cuid())
+  userId     String
+  pattern    String
+  categoryId String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, pattern])
+  @@index([userId])
 }
 
 // ---------------------------------------------------------------------------
