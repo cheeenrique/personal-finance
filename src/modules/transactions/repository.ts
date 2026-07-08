@@ -189,11 +189,14 @@ function buildWhere(userId: string, filters: TransactionListFilter): Prisma.Tran
   };
 }
 
-const SORT_MAP: Record<TransactionSort, Prisma.TransactionOrderByWithRelationInput> = {
-  date_desc: { date: "desc" },
-  date_asc: { date: "asc" },
-  amount_desc: { amount: "desc" },
-  amount_asc: { amount: "asc" },
+// `date` é data de calendário (meia-noite) — lançamentos do MESMO dia empatam.
+// `createdAt` desempata pela ordem de cadastro (o da tarde vem antes do da
+// manhã no desc), senão a ordem de mesmo-dia fica arbitrária (ordem física).
+const SORT_MAP: Record<TransactionSort, Prisma.TransactionOrderByWithRelationInput[]> = {
+  date_desc: [{ date: "desc" }, { createdAt: "desc" }],
+  date_asc: [{ date: "asc" }, { createdAt: "asc" }],
+  amount_desc: [{ amount: "desc" }, { createdAt: "desc" }],
+  amount_asc: [{ amount: "asc" }, { createdAt: "desc" }],
 };
 
 /** Única listagem paginada do app (docs/01-STACK.md, "Performance") — findMany + count em paralelo, sem N+1. */
@@ -446,7 +449,7 @@ async function softDeleteFutureInstallments(
 async function listRecentForDashboard(userId: string, limit: number): Promise<RecentTransactionRow[]> {
   const rows = await prisma.transaction.findMany({
     where: { userId, deletedAt: null },
-    orderBy: { date: "desc" },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     take: limit,
     select: {
       id: true,
