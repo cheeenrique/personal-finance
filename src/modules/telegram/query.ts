@@ -4,81 +4,47 @@ import { accountService } from "@/modules/accounts/service";
 import { cardService } from "@/modules/cards/service";
 import { reportService } from "@/modules/reports/service";
 import { transactionService } from "@/modules/transactions/service";
-import { nowInSaoPaulo } from "@/lib/date/timezone";
+import { nowInSaoPaulo, parseInSaoPaulo } from "@/lib/date/timezone";
 import { matchExpenseCategoryByName, resolveOriginStrict } from "./resolve";
 import type { TelegramQueryParsed, TelegramQueryPeriod, TelegramQueryResult } from "./types";
 
 /** "Maiores gastos" (docs/30-TELEGRAM.md, "Consulta por IA") — top 5, mesmo tamanho de sempre pro resumo do bot. */
 const TOP_CATEGORIES_LIMIT = 5;
 
+/** `{ dateFrom, dateTo }` de um mês-calendário SP — dia 1 e último dia, ambos meia-noite SP (dia 0 do mês seguinte = último dia do mês). */
+function monthRange(year: number, monthIndex: number): { dateFrom: Date; dateTo: Date } {
+  return {
+    dateFrom: parseInSaoPaulo(new Date(year, monthIndex, 1, 0, 0, 0, 0)),
+    dateTo: parseInSaoPaulo(new Date(year, monthIndex + 1, 0, 0, 0, 0, 0)),
+  };
+}
+
 /**
- * `{ year, month }` do(s) mês(es) cobertos pelo período pedido, em
- * America/Sao_Paulo (docs/30-TELEGRAM.md, "Consulta por IA"): "this_month"/
- * "last_month" resolvem pra 1 mês; "this_year" resolve pros 12 meses do ano
- * corrente (zero-fill natural — meses futuros ainda sem lançamento somam 0,
- * mesmo raciocínio de `reportService.incomeVsExpenseByMonth`).
+ * Range de datas do período pedido, em America/Sao_Paulo (docs/30-TELEGRAM.md,
+ * "Consulta por IA"): `dateFrom`/`dateTo` são a meia-noite SP do primeiro/
+ * último dia — o MESMO contrato de `parseFlexibleDate` que o Dashboard e
+ * `/reports` passam pra `reportService.cashflow`/`categoryTotals` e
+ * `transactionService.unpaidExpenseTotalInRange` (cada uma estende o fim do
+ * dia internamente, ver `endOfDayInclusive`/`unpaidExpenseTotalInRange`).
+ * Exportada pros comandos determinísticos (`handlers.ts`) usarem o mesmo
+ * range — toda resposta de valor do bot sai da MESMA base de fluxo de caixa.
  */
-function resolveMonths(period: TelegramQueryPeriod): Array<{ year: number; month: number }> {
+export function resolvePeriodRange(period: TelegramQueryPeriod): { dateFrom: Date; dateTo: Date } {
   const now = nowInSaoPaulo();
   const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  const monthIndex = now.getMonth();
 
   switch (period) {
     case "this_month":
-      return [{ year, month }];
+      return monthRange(year, monthIndex);
     case "last_month":
-      return month === 1 ? [{ year: year - 1, month: 12 }] : [{ year, month: month - 1 }];
+      return monthIndex === 0 ? monthRange(year - 1, 11) : monthRange(year, monthIndex - 1);
     case "this_year":
-      return Array.from({ length: 12 }, (_, index) => ({ year, month: index + 1 }));
+      return {
+        dateFrom: parseInSaoPaulo(new Date(year, 0, 1, 0, 0, 0, 0)),
+        dateTo: parseInSaoPaulo(new Date(year, 11, 31, 0, 0, 0, 0)),
+      };
   }
-}
-
-/**
- * Soma um KPI mensal já existente (`transactionService.monthlyExpenseTotal`/
- * `monthlyIncomeTotal`/`monthlyUnpaidExpenseTotal`) por todos os meses do
- * período — mesma lógica de fluxo de caixa dos KPIs do Dashboard, nunca
- * reimplementada aqui (docs/30-TELEGRAM.md, "Consulta por IA"). 1 chamada por
- * mês, em paralelo — o período "this_year" é só 12 chamadas leves (índice já
- * cobre `userId + isPaid + type + data`, ver `sumAmountByTypeInRange`).
- */
-async function sumOverMonths(
-  userId: string,
-  months: Array<{ year: number; month: number }>,
-  monthlyTotal: (userId: string, year: number, month: number) => Promise<Prisma.Decimal>,
-): Promise<Prisma.Decimal> {
-  const totals = await Promise.all(months.map(({ year, month }) => monthlyTotal(userId, year, month)));
-  return totals.reduce((sum, total) => sum.plus(total), new Prisma.Decimal(0));
-}
-
-type CategoryTotalsMap = Map<string, { categoryName: string; total: Prisma.Decimal }>;
-
-/**
- * Gasto por categoria somado por todos os meses do período — reusa
- * `reportService.expenseByCategory` (já implementa a agregação mês a mês,
- * excluindo transfer/CARD_PAYMENT) por `categoryId`, insumo de
- * `category_total` e `top_categories` (docs/30-TELEGRAM.md, "Consulta por
- * IA"). Categoria sem NENHUM lançamento no período fica de fora do mapa —
- * o chamador trata "ausente" como 0, não como "categoria não existe" (essa
- * checagem é feita à parte, via `matchExpenseCategoryByName`).
- */
-async function categoryTotalsOverMonths(
-  userId: string,
-  months: Array<{ year: number; month: number }>,
-): Promise<CategoryTotalsMap> {
-  const perMonth = await Promise.all(
-    months.map(({ year, month }) => reportService.expenseByCategory(userId, year, month)),
-  );
-
-  const totals: CategoryTotalsMap = new Map();
-  for (const rows of perMonth) {
-    for (const row of rows) {
-      const existing = totals.get(row.categoryId);
-      const total = (existing?.total ?? new Prisma.Decimal(0)).plus(row.total);
-      totals.set(row.categoryId, { categoryName: row.categoryName, total });
-    }
-  }
-
-  return totals;
 }
 
 /**
@@ -123,11 +89,18 @@ async function resolveCardInvoice(userId: string, cardName: string | null): Prom
 /**
  * Executa uma consulta já classificada/parseada pela IA (docs/30-TELEGRAM.md,
  * "Consulta por IA") — mapeia cada `queryType` pro service de domínio
- * correspondente, SEM reimplementar nenhum cálculo (`transactionService`/
- * `accountService`/`cardService`/`reportService`, os mesmos usados pelos
- * KPIs do app web). Nunca lança pra "categoria/cartão não encontrado" —
- * esses são resultados tipados (`TelegramQueryResult`), formatados em texto
- * por `reply.ts` (`buildQueryReply`).
+ * correspondente, SEM reimplementar nenhum cálculo. TODA resposta de valor sai
+ * da MESMA base de FLUXO DE CAIXA do Dashboard/`/reports` (só conta, `cardId
+ * IS NULL`, `COALESCE(paidAt, date)`, paga, sem transferência): `spent`/
+ * `received` via `reportService.cashflow`, `category_total`/`top_categories`
+ * via `reportService.categoryTotals` — mesma base, mesmo range ⇒ "quanto
+ * gastei" SEMPRE fecha com a soma das categorias do mesmo período (era o bug
+ * de inconsistência: categorias vinham da base accrual+cartão,
+ * `expensesByCategory`). `unpaid` é o "Previsto / A Pagar" (`isPaid=false`,
+ * base própria por definição — dinheiro que ainda não saiu). Nunca lança pra
+ * "categoria/cartão não encontrado" — esses são resultados tipados
+ * (`TelegramQueryResult`), formatados em texto por `reply.ts`
+ * (`buildQueryReply`).
  */
 export async function executeTelegramQuery(
   userId: string,
@@ -137,17 +110,20 @@ export async function executeTelegramQuery(
 
   switch (query.queryType) {
     case "spent": {
-      const total = await sumOverMonths(userId, resolveMonths(period), transactionService.monthlyExpenseTotal);
-      return { kind: "spent", total: total.toString(), period };
+      const { dateFrom, dateTo } = resolvePeriodRange(period);
+      const { expense } = await reportService.cashflow(userId, dateFrom, dateTo);
+      return { kind: "spent", total: expense.toString(), period };
     }
 
     case "received": {
-      const total = await sumOverMonths(userId, resolveMonths(period), transactionService.monthlyIncomeTotal);
-      return { kind: "received", total: total.toString(), period };
+      const { dateFrom, dateTo } = resolvePeriodRange(period);
+      const { income } = await reportService.cashflow(userId, dateFrom, dateTo);
+      return { kind: "received", total: income.toString(), period };
     }
 
     case "unpaid": {
-      const total = await sumOverMonths(userId, resolveMonths(period), transactionService.monthlyUnpaidExpenseTotal);
+      const { dateFrom, dateTo } = resolvePeriodRange(period);
+      const total = await transactionService.unpaidExpenseTotalInRange(userId, dateFrom, dateTo);
       return { kind: "unpaid", total: total.toString(), period };
     }
 
@@ -162,20 +138,22 @@ export async function executeTelegramQuery(
       const matched = await matchExpenseCategoryByName(userId, query.categoryName);
       if (!matched) return { kind: "category_not_found", categoryName: query.categoryName };
 
-      const totals = await categoryTotalsOverMonths(userId, resolveMonths(period));
-      const total = totals.get(matched.id)?.total ?? new Prisma.Decimal(0);
+      // Categoria sem lançamento no período fica de fora de `categoryTotals` —
+      // ausente = 0, não "categoria não existe" (checado acima via match).
+      const { dateFrom, dateTo } = resolvePeriodRange(period);
+      const totals = await reportService.categoryTotals(userId, dateFrom, dateTo);
+      const total = totals.find((row) => row.categoryId === matched.id)?.total ?? new Prisma.Decimal(0);
       return { kind: "category_total", categoryName: matched.name, total: total.toString(), period };
     }
 
     case "top_categories": {
-      const totals = await categoryTotalsOverMonths(userId, resolveMonths(period));
-      const sorted = [...totals.values()]
-        .sort((a, b) => b.total.comparedTo(a.total))
-        .slice(0, TOP_CATEGORIES_LIMIT);
+      const { dateFrom, dateTo } = resolvePeriodRange(period);
+      const totals = await reportService.categoryTotals(userId, dateFrom, dateTo);
+      const top = totals.slice(0, TOP_CATEGORIES_LIMIT);
 
       return {
         kind: "top_categories",
-        categories: sorted.map((entry) => ({ name: entry.categoryName, total: entry.total.toString() })),
+        categories: top.map((row) => ({ name: row.categoryName, total: row.total.toString() })),
         period,
       };
     }

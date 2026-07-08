@@ -4,6 +4,7 @@ import { createTransactionSchema } from "@/modules/transactions/schemas";
 import { TransactionDomainError } from "@/modules/transactions/errors";
 import { accountService } from "@/modules/accounts/service";
 import { AccountDomainError } from "@/modules/accounts/errors";
+import { reportService } from "@/modules/reports/service";
 import { nowInSaoPaulo, parseInSaoPaulo } from "@/lib/date/timezone";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { parseTransactionFromImage, parseTransactionWithAI } from "./ai-parser";
@@ -17,7 +18,7 @@ import {
   resolveCategoryId,
   resolveOrigin,
 } from "./resolve";
-import { executeTelegramQuery } from "./query";
+import { executeTelegramQuery, resolvePeriodRange } from "./query";
 import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildBalanceReply,
@@ -206,9 +207,17 @@ async function handleQueryBalance(userId: string): Promise<CommandResult> {
   return { text: buildBalanceReply(total.toString()), resultCode: "balance_queried" };
 }
 
+/**
+ * "gastos mes" — MESMA base de fluxo de caixa das consultas por IA
+ * (`reportService.categoryTotals` via o range de `resolvePeriodRange`,
+ * query.ts): só conta (`cardId IS NULL`), `COALESCE(paidAt, date)`, paga, sem
+ * transferência. O total exibido é a soma das próprias linhas — a resposta
+ * fecha internamente E bate com o "quanto gastei esse mês" da IA (era o bug:
+ * este comando usava `expensesByCategory`, base accrual+cartão).
+ */
 async function handleQueryMonthExpenses(userId: string): Promise<CommandResult> {
-  const now = nowInSaoPaulo();
-  const categories = await transactionService.expensesByCategory(userId, now.getFullYear(), now.getMonth() + 1);
+  const { dateFrom, dateTo } = resolvePeriodRange("this_month");
+  const categories = await reportService.categoryTotals(userId, dateFrom, dateTo);
   const total = categories.reduce((sum, category) => sum.plus(category.total), new Prisma.Decimal(0));
 
   return {
@@ -220,24 +229,21 @@ async function handleQueryMonthExpenses(userId: string): Promise<CommandResult> 
   };
 }
 
-/** Sem agregação diária pronta em nenhum módulo existente — reusa `transactionService.list` (já exportado) em vez de tocar no módulo transactions. */
+/**
+ * "hoje" — gastos de hoje pela MESMA base de fluxo de caixa de todo o resto
+ * (`reportService.cashflow` com dateFrom=dateTo=meia-noite SP de hoje; o
+ * service estende até o fim do dia, ver `endOfDayInclusive`). Era o bug de
+ * contar o que não devia: o `transactionService.list({ type: EXPENSE })` cru
+ * incluía perna de transferência, compra no cartão e despesa não paga —
+ * transferir R$1000 entre contas respondia "gastou R$1000 hoje".
+ */
 async function handleQueryToday(userId: string): Promise<CommandResult> {
   const now = nowInSaoPaulo();
-  const startOfDayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  const endOfDayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const todayMidnight = parseInSaoPaulo(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
 
-  const result = await transactionService.list(userId, {
-    type: "EXPENSE",
-    dateFrom: parseInSaoPaulo(startOfDayLocal),
-    dateTo: parseInSaoPaulo(endOfDayLocal),
-    page: 1,
-    pageSize: 100,
-    sort: "date_desc",
-  });
+  const { expense } = await reportService.cashflow(userId, todayMidnight, todayMidnight);
 
-  const total = result.items.reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
-
-  return { text: buildTodaySummaryReply(total.toString()), resultCode: "today_summary_queried" };
+  return { text: buildTodaySummaryReply(expense.toString()), resultCode: "today_summary_queried" };
 }
 
 /**
