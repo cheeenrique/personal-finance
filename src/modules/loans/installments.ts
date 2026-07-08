@@ -151,8 +151,8 @@ type RegenerateUnpaidInstallmentsParams = {
  * `firstDueDate`/`totalToPay` mudam, o contrato de parcelamento original
  * (gerado por `createLoan`) fica desatualizado. Parcelas JÁ PAGAS
  * (`paidInstallments`) são fatos financeiros ocorridos — NUNCA apagadas nem
- * recriadas aqui (mesmo princípio de `service.ts` `deleteLoan`); o caller já
- * fez `softDeleteUnpaidInstallments` ANTES de chamar esta função.
+ * recriadas aqui; o caller (`update.ts` `updateLoan`) já fez
+ * `softDeleteUnpaidInstallments` ANTES de chamar esta função.
  *
  * O rateio roda sobre o RESTANTE, não sobre o contrato inteiro:
  * `remainingCount` = `installmentsCount` (novo) − parcelas já pagas,

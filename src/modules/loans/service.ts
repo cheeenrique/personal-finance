@@ -116,21 +116,23 @@ async function listActiveLoans(userId: string): Promise<LoanWithProgress[]> {
 
 /**
  * Soft delete do empréstimo (docs/03-DATABASE.md, "Soft Delete"). Decisão:
- * parcelas FUTURAS ainda não pagas (`isPaid=false`) recebem soft delete junto
- * — deixar de existir como dívida prevista faz sentido ao cancelar o
- * empréstimo, mesma regra de "Cancelamento" de `InstallmentPurchase`
- * (docs/23-INSTALLMENTS.md). Parcelas JÁ PAGAS (`isPaid=true`) mantêm o
- * histórico intacto — já são fatos financeiros ocorridos (saíram da conta),
- * apagá-las reescreveria o passado. As duas escritas rodam na mesma
- * `$transaction` pra não deixar o empréstimo soft-deletado com parcelas
- * futuras órfãs em caso de falha no meio do caminho.
+ * excluir o empréstimo "libera" TODAS as suas transações do sistema — as
+ * parcelas (pagas E não pagas) e o desembolso (`type=INCOME` com esse
+ * `loanId`) recebem soft delete junto, não só as pendentes. Diferente de
+ * editar (`update.ts` `updateLoan`, que preserva as parcelas já pagas ao
+ * regenerar só o restante do contrato): aqui a intenção é remover o
+ * empréstimo inteiro do histórico, então uma parcela paga sozinha (sem o
+ * contrato por trás) não faz sentido continuar contando em saldo/relatório
+ * — o saldo das contas volta ao estado de antes do empréstimo. As duas
+ * escritas rodam na mesma `$transaction` pra não deixar o Loan soft-deletado
+ * com transações órfãs vivas em caso de falha no meio do caminho.
  */
 async function deleteLoan(userId: string, id: string): Promise<void> {
   const existing = await loanRepository.findById(userId, id);
   if (!existing) throw new LoanNotFoundError(id);
 
   await prisma.$transaction(async (tx) => {
-    await loanRepository.softDeleteUnpaidInstallments(userId, id, tx);
+    await loanRepository.softDeleteAllTransactionsByLoanId(userId, id, tx);
     const deleted = await loanRepository.softDelete(userId, id, tx);
     if (!deleted) throw new LoanNotFoundError(id);
   });

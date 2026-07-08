@@ -119,7 +119,7 @@ export async function createInstallmentPurchase(
  * Cancela uma compra parcelada (docs/23-INSTALLMENTS.md, "Cancelamento"):
  * soft-delete das Transactions das parcelas FUTURAS (`date > hoje`). Parcelas
  * já vencidas/pagas (`date <= hoje`) nunca são tocadas — mesmo histórico
- * intacto, mesmo padrão de `modules/loans/service.ts` `deleteLoan`
+ * intacto, mesmo padrão de `modules/loans/update.ts` `updateLoan`
  * (`softDeleteUnpaidInstallments`).
  *
  * "Hoje" aqui é o mesmo instante usado por

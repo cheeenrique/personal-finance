@@ -128,13 +128,34 @@ async function markInstallmentPaid(installmentId: string, amount: Prisma.Decimal
 /**
  * Soft-delete das parcelas FUTURAS ainda não pagas (`isPaid=false`) de um
  * empréstimo — parcelas já pagas mantêm o histórico intacto (decisão de
- * `deleteLoan`, ver service.ts). Escopado por `userId` além de `loanId` —
- * defesa em profundidade, mesmo o `loanId` já vindo de um Loan validado pelo
- * chamador.
+ * `updateLoan`, ver `update.ts`: editar o contrato regenera só o que ainda
+ * não foi pago). Escopado por `userId` além de `loanId` — defesa em
+ * profundidade, mesmo o `loanId` já vindo de um Loan validado pelo chamador.
+ *
+ * Não usada por `deleteLoan` (ver `softDeleteAllTransactionsByLoanId`
+ * abaixo) — excluir o empréstimo é uma decisão diferente de editá-lo.
  */
 async function softDeleteUnpaidInstallments(userId: string, loanId: string, db: Db = prisma): Promise<void> {
   await db.transaction.updateMany({
     where: { userId, loanId, isPaid: false, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+}
+
+/**
+ * Soft-delete de TODAS as transações linkadas ao empréstimo — parcelas
+ * pagas e não pagas (`type=EXPENSE`) E o desembolso (`type=INCOME`), sem
+ * filtrar por `isPaid`/`type`. Usada exclusivamente por `service.ts`
+ * `deleteLoan`: excluir o empréstimo "libera" o sistema do histórico
+ * inteiro — parcela paga contava em saldo/relatório, o desembolso contava
+ * como receita na conta; deixar qualquer uma viva depois de excluir o
+ * contrato deixaria dado financeiro órfão sem empréstimo por trás. Diferente
+ * de `softDeleteUnpaidInstallments` (usada por `updateLoan`, que preserva o
+ * que já foi pago ao só regenerar o restante do contrato).
+ */
+async function softDeleteAllTransactionsByLoanId(userId: string, loanId: string, db: Db = prisma): Promise<void> {
+  await db.transaction.updateMany({
+    where: { userId, loanId, deletedAt: null },
     data: { deletedAt: new Date() },
   });
 }
@@ -145,6 +166,7 @@ export const loanRepository = {
   list,
   softDelete,
   softDeleteUnpaidInstallments,
+  softDeleteAllTransactionsByLoanId,
   update,
   findInstallment,
   markInstallmentPaid,

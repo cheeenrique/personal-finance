@@ -43,9 +43,11 @@ function isFutureInSaoPaulo(dateIso: string): boolean {
  * (`modules/loans/installments.ts` `createLoan`) — exceto quando o
  * empréstimo tem juros configurado E a parcela vence no futuro: aí abre
  * `EarlyPaymentDialog` (desconto de antecipação editável, docs da tarefa).
- * Excluir usa `deleteLoanAction` + `ConfirmDialog`, mesmo padrão de
- * `AccountGrid`. Quitar (`SettleLoanDialog`) só aparece havendo parcela não
- * paga.
+ * Excluir usa `deleteLoanAction` + `ConfirmDialog` (mesmo padrão de
+ * `AccountGrid`) — apaga o Loan E TODAS as transações ligadas a ele (parcelas
+ * pagas/pendentes + desembolso, ver `modules/loans/service.ts` `deleteLoan`),
+ * não só as pendentes. Quitar (`SettleLoanDialog`) só aparece havendo parcela
+ * não paga.
  */
 export function LoanDetailView({ loan }: LoanDetailViewProps) {
   const router = useRouter();
@@ -146,22 +148,23 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {unpaidRows.length > 0 && (
-            <Button type="button" variant="accent" onClick={() => setSettleOpen(true)}>
+            <Button type="button" variant="accent" size="lg" onClick={() => setSettleOpen(true)}>
               <ShieldCheck className="size-4" aria-hidden="true" />
               Quitar empréstimo
             </Button>
           )}
 
-          <button
+          <Button
             type="button"
+            variant="neutral"
+            size="icon-md"
             onClick={() => setEditOpen(true)}
             aria-label={`Editar ${loan.description}`}
-            className="flex size-9 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
           >
             <Pencil className="size-4" aria-hidden="true" />
-          </button>
+          </Button>
 
-          <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
+          <Button type="button" variant="destructive" size="lg" onClick={() => setDeleteOpen(true)}>
             <Trash2 className="size-4" aria-hidden="true" />
             Excluir empréstimo
           </Button>
@@ -251,7 +254,7 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title={`Excluir "${loan.description}"?`}
-        description="Parcelas futuras ainda não pagas são removidas junto. Parcelas já pagas continuam no histórico."
+        description="Remove o empréstimo e todas as parcelas do sistema — pagas e pendentes — junto com a entrada recebida. O saldo das contas volta ao estado de antes do empréstimo. Esta ação não pode ser desfeita."
         onConfirm={handleDelete}
       />
     </div>
