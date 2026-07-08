@@ -139,22 +139,26 @@ async function sumCashflowInRange(
 
 /**
  * Totais por categoria num período ARBITRÁRIO — insumo de
- * `reportService.categoryTotals` ("Por categoria" de `/reports` e "Gastos por
- * categoria" do Dashboard). MESMA regra de caixa do KPI "Despesas do mês"
- * (`transactions/repository.ts` `sumAmountByTypeInRange`): só conta (`cardId
- * IS NULL`), sem transferência, só paga, mês pelo MOVIMENTO do dinheiro
- * (`COALESCE("paidAt", "date")`) — sem isso o total divergia do KPI (cartão
- * entrava em dobro com a fatura, e uma parcela paga adiantada contava no mês
- * errado). Cartão já tem sua própria seção ("Por cartão"/fatura), não some do
- * relatório, só não some aqui de novo. Distinto de
+ * `reportService.categoryTotals` ("Por categoria" de `/reports`, "Gastos por
+ * categoria"/Sankey do Dashboard, Telegram e resumo semanal). GASTO REAL por
+ * categoria (accrual, MESMA base dos budgets — `budgets/repository.ts`
+ * `groupExpensesByCategoryInRange`): soma TODAS as transações do tipo,
+ * INCLUINDO as com `cardId` (compra no cartão), bucketizadas pela data da
+ * transação/compra (`date`), não pelo movimento de caixa (`paidAt`) — é onde o
+ * dinheiro foi gasto de verdade, não quando a fatura foi paga. Decisão
+ * deliberada: diverge do KPI "Despesas do mês" (cash-flow, conta-only) — mesmo
+ * período, base diferente, não deveria bater (fix anterior que alinhava os
+ * dois pra cash-flow foi revertido aqui a pedido do dono). Distinto de
  * `transactionRepository.groupExpensesByCategoryInRange` (mês único, sempre
  * EXPENSE, sem filtro extra — intocado porque também alimenta Dashboard
- * (gráfico de pizza histórico) e Telegram): aqui o tipo pode ser INCOME
- * quando o filtro global pede, e o range é o período inteiro selecionado (não
- * só um mês). `groupBy` do Prisma não expressa COALESCE no filtro, daí o
- * `$queryRaw` parametrizado (mesmo motivo de `buildCashflowConditions`
- * abaixo). `range` já deve vir com o fim do dia estendido (ver `service.ts`
- * `endOfDayInclusive`) — `paidAt` carrega hora real, diferente de `date`.
+ * (gráfico de pizza histórico) e Telegram/`expenseByCategory`): aqui o tipo
+ * pode ser INCOME quando o filtro global pede, e o range é o período inteiro
+ * selecionado (não só um mês). Continua `$queryRaw` (não `groupBy` do Prisma)
+ * só pra manter a mesma forma de `buildCashflowConditions` (SQL parametrizado
+ * consistente no módulo), embora `date` já dê pra expressar via `groupBy`.
+ * `range` já deve vir com o fim do dia estendido (ver `service.ts`
+ * `endOfDayInclusive`) — `date` nem sempre é meia-noite (lançamento
+ * rápido/Telegram usa `new Date()` como default).
  */
 async function groupCategoryTotalsInRange(
   userId: string,
@@ -168,11 +172,10 @@ async function groupCategoryTotalsInRange(
     Prisma.sql`"deletedAt" IS NULL`,
     Prisma.sql`"isPaid" = true`,
     Prisma.sql`"transferId" IS NULL`,
-    Prisma.sql`"cardId" IS NULL`,
     Prisma.sql`"type" = ${type}::"TransactionType"`,
     Prisma.sql`"categoryId" IS NOT NULL`,
-    Prisma.sql`COALESCE("paidAt", "date") >= ${range.gte}`,
-    Prisma.sql`COALESCE("paidAt", "date") <= ${range.lte}`,
+    Prisma.sql`"date" >= ${range.gte}`,
+    Prisma.sql`"date" <= ${range.lte}`,
   ];
 
   if (filters.accountId) conditions.push(Prisma.sql`"accountId" = ${filters.accountId}`);

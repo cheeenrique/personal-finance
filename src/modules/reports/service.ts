@@ -150,18 +150,20 @@ async function expenseByCategory(
 }
 
 /**
- * Totais por categoria num período ARBITRÁRIO — "Por categoria" de `/reports`
- * e "Gastos por categoria" do Dashboard (docs/28-REPORTS.md "Filtros
- * Globais": período + conta + tipo). Alinhado à MESMA regra de fluxo de caixa
- * do KPI "Despesas do mês" (`groupCategoryTotalsInRange`: conta-only +
- * `COALESCE(paidAt, date)`) — soma total bate exato com o KPI pro mesmo
- * período. `dateTo` estendido até o fim do dia aqui dentro (`endOfDayInclusive`,
- * mesmo padrão de `cashflow` abaixo): o range agora filtra por
- * `COALESCE(paidAt, date)`, que carrega hora real, então o caller passa
- * `dateTo` cru (meia-noite do dia), sem precisar estender por fora. Distinto de
- * `expenseByCategory` acima (mês único, sempre EXPENSE — intocada, também
- * alimenta Dashboard/Telegram). Tipo default EXPENSE; só vira RECEITA quando
- * o filtro pede INCOME explicitamente (ver `CategoryTotalsFilters`, types.ts).
+ * Totais por categoria num período ARBITRÁRIO — "Por categoria" de `/reports`,
+ * "Gastos por categoria"/Sankey do Dashboard, Telegram e resumo semanal
+ * (docs/28-REPORTS.md "Filtros Globais": período + conta + tipo). GASTO REAL
+ * accrual (`groupCategoryTotalsInRange`: inclui compra no cartão, bucketizado
+ * por `date`) — MESMA base dos budgets, deliberadamente DIFERENTE do KPI
+ * "Despesas do mês" (cash-flow, conta-only): mesmo período, totais diferentes
+ * por design (cartão entra aqui na data da compra, não quando a fatura é
+ * paga). `dateTo` estendido até o fim do dia aqui dentro (`endOfDayInclusive`,
+ * mesmo padrão de `cashflow` abaixo): `date` nem sempre é meia-noite
+ * (lançamento rápido/Telegram), então o caller passa `dateTo` cru (meia-noite
+ * do dia) sem precisar estender por fora. Distinto de `expenseByCategory`
+ * acima (mês único, sempre EXPENSE — intocada, também alimenta
+ * Dashboard/Telegram). Tipo default EXPENSE; só vira RECEITA quando o filtro
+ * pede INCOME explicitamente (ver `CategoryTotalsFilters`, types.ts).
  */
 async function categoryTotals(
   userId: string,
@@ -193,21 +195,22 @@ async function categoryTotals(
  * "5. Gráficos e Análises"): cada categoria de RECEITA → hub "Renda" → cada
  * categoria de DESPESA + "Sobrou" (receita − despesa, quando positivo).
  * Reaproveita `categoryTotals` (acima) nos dois sentidos — `type: INCOME` de
- * um lado, default (EXPENSE) do outro — mesma base de caixa (conta-only +
- * `COALESCE(paidAt, date)`) do KPI "Despesas do mês"/"Receitas do mês". Sem
- * repositório novo: `categoryTotals` já generaliza pra INCOME via
- * `CategoryTotalsFilters.type` (rule 02-dry-kiss-yagni — reusar em vez de
- * duplicar a query).
+ * um lado, default (EXPENSE) do outro — mesma base accrual (inclui cartão,
+ * bucketizado por `date`) que alimenta "Por categoria"/Dashboard, não a
+ * cash-flow do KPI "Despesas do mês"/"Receitas do mês". Sem repositório novo:
+ * `categoryTotals` já generaliza pra INCOME via `CategoryTotalsFilters.type`
+ * (rule 02-dry-kiss-yagni — reusar em vez de duplicar a query).
  *
  * `income`/`expense`/`isDeficit`/`deficit` são derivados da MESMA soma que
  * alimenta os nós (`incomeRows`/`expenseRows`, ambos via `categoryTotals`) —
  * garante que o diagrama nunca fique inconsistente internamente (entrada do
- * hub sempre bate com saída + Sobrou). `categoryTotals` exige
- * `categoryId IS NOT NULL` (mesma regra de `groupCategoryTotalsInRange`) —
- * na prática bate com o KPI de cash-flow (`reportService.cashflow`, sem esse
- * filtro) porque `categoryId` é obrigatório pra INCOME/EXPENSE via zod na
- * criação (`modules/transactions/schemas.ts`); só diverge se existir
- * transação sem categoria por import/seed que pule essa validação — mesma
+ * hub sempre bate com saída + Sobrou). NÃO bate com o KPI de cash-flow
+ * (`reportService.cashflow`, conta-only): aqui é accrual (inclui cartão), lá é
+ * caixa — divergência esperada, mesma dos outros consumidores de
+ * `categoryTotals`. `categoryTotals` exige `categoryId IS NOT NULL` (mesma
+ * regra de `groupCategoryTotalsInRange`) — só omite transação sem categoria
+ * por import/seed que pule essa validação (zod exige categoria pra
+ * INCOME/EXPENSE na criação, `modules/transactions/schemas.ts`), mesma
  * limitação que "Gastos por categoria" (`ExpenseCategoryChart`) já tem hoje,
  * não uma regressão nova.
  *
