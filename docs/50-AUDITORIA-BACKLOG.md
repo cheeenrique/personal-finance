@@ -66,7 +66,7 @@ calendário/bucket → manter `nowInSaoPaulo()`.
 
 ---
 
-## 🐛 Lógica / bugs (backlog)
+## ✅ Lógica / bugs — RESOLVIDO (`73e429f` L1/L3/L4/L6 · `91e0549` L2/L5/L7/L8)
 
 - **L1 · médio · `transactions/service.ts:157-164` (idem `recurring/service.ts:89-94`)** — editar EXPENSE→INCOME sem reenviar `categoryId`: `if (input.categoryId)` falso → não revalida → persiste INCOME com categoria de despesa; `categoryTotals(INCOME)` mostra "Alimentação" como receita. **Fix:** revalidar a categoria **resultante** (mesclada) sempre que `input.type` mudar.
 - **L2 · baixo/médio · `reports/repository.ts:246-263` (`buildCsvWhere`)** — `lte: dateTo` cru, mas `date` nem sempre é meia-noite (lançamento rápido/Telegram) → export corta transação do último dia. `accountReport` já corrige com `endOfDayInclusive`; o CSV esqueceu. **Fix:** `endOfDayInclusive(dateTo)`.
@@ -79,7 +79,7 @@ calendário/bucket → manter `nowInSaoPaulo()`.
 
 ---
 
-## 🧭 Fluxo / UX (backlog)
+## ✅ Fluxo / UX — RESOLVIDO (`59d4f10` F1/F2/F3/F6/F8 · `2eed0ca` F4/F5/F7/F9/F10/F11/F12)
 
 - **F1 · alto · `layout/command-palette.tsx:30`** — header promete "Buscar… ⌘K" (docs 06-SCREENS: transações/contas/cartões/etc.), mas só filtra os itens de navegação; "mercado" dá "Nada encontrado". **Fix:** implementar busca de entidades (server action + debounce) OU trocar placeholder pra "Navegar…" até existir.
 - **F2 · alto · `cards/pay-invoice-modal.tsx:34`** — pagar fatura abre com valor vazio (digitação manual de dinheiro = risco). **Fix:** pré-preencher com `min(fatura atual, saldo devedor)` OU botão "Usar total".
@@ -96,7 +96,7 @@ calendário/bucket → manter `nowInSaoPaulo()`.
 
 ---
 
-## 🎨 Layout / A11y (backlog, além do batch de Design)
+## ✅ Layout / A11y — RESOLVIDO (`4af0cbf`)
 
 - **LA1 · baixo · `kpi-card.tsx:84` (`text-on-success`) vs `kpi-summary-card.tsx:22` + `weekly-summary-box.tsx:112` (`text-success`)** — 2 verdes pro mesmo papel "valor positivo" na mesma dobra. **Fix:** padronizar (on-* pra tint, base pra texto sobre card) e documentar.
 - **LA2 · baixo · `kpi-card.tsx:60` (`rounded-[16px]`) vs `section-card.tsx:22`/`chart-wrapper.tsx:34` (`rounded-xl`=14px)** — cards lado a lado com raios diferentes. **Fix:** fixar um valor único de card.
@@ -107,8 +107,20 @@ calendário/bucket → manter `nowInSaoPaulo()`.
 
 ---
 
+## 🔭 Follow-ups descobertos (não críticos, ficaram fora das cercas)
+
+Itens que os agents acharam ao resolver o backlog, mas fora do escopo de cada ticket:
+
+- **`alerts/anomaly.ts` + `green.ts`** — mesma raiz das 2-verdades do L8 (usam `groupExpensesByCategoryInRange`, accrual+cartão). L8 só corrigiu o `weekly-summary.ts`. Trocar por `reportService.categoryTotals` nos dois.
+- **`transactions/repository.ts` `findCategoryNamesByIds`** — `userId` ficou OPCIONAL (callers em `transactions/service.ts` + `alerts/anomaly.ts` fora da cerca do L7). Passar `userId` nesses callers e tornar obrigatório.
+- **`loans/repository.ts` `update()`** — mesmo shape de TOCTOU do L4 (lê `existing` antes de escrever sem recheck). Aplicar o mesmo padrão se virar problema.
+- **`cards/cycle.ts`** — `seedCycleIfMissing` + novo ciclo podem gerar 2 `CardCycle` com `effectiveFrom` igual se o cartão for editado no mesmo ms da criação (inofensivo hoje; tie-break `>=` em `resolveRuleAt` se aparecer).
+- **`installments-board.tsx` + `new-installment-tile.tsx`** — labels "Novo parcelamento"/"Criar primeiro parcelamento" divergem do canônico "Nova compra parcelada" (F11 alinhou só os modais).
+- **`recent-transactions-table.tsx`** — as novas ações de linha buscam 5 transações completas via `getTransactionAction` no mount; se o padrão espalhar, criar um `listTransactionsByIdsAction` batch.
+- **`components/accounts/ui-actions.ts`** (novo, F6) — adapter fino Decimal→string pro TransferModal (espelha `cards/ui-actions.ts`); revisar se quer manter esse padrão.
+
 ## Notas de execução
 
-- Auditoria feita com **Fable 5** (3 agents em paralelo). Os fixes P0 + tema saíram com Fable 5; o batch P1 (timezone/telegram/design) começou com Fable mas **caiu no limite de sessão** — timezone/telegram já estavam prontos (verificados + commitados), design foi refeito com Sonnet. **Todos os P1 desta rodada estão resolvidos.** Restam os itens de Lógica/Fluxo/Layout abaixo.
+- Auditoria feita com **Fable 5** (3 agents em paralelo). Os fixes P0 + tema saíram com Fable 5; o batch P1 (timezone/telegram/design) começou com Fable mas **caiu no limite de sessão** — timezone/telegram já estavam prontos (verificados + commitados), design foi refeito com Sonnet. **Auditoria 100% resolvida** — P0, tema, P1 (timezone/telegram/design) e todo o backlog (lógica L1–L8, fluxo F1–F12, layout LA1–LA6). Restam só os follow-ups acima (não críticos), resolvidos pelos 5 agents Sonnet 5 em paralelo.
 - Padrão de trabalho: agent por área (sem conflito de arquivo), `tsc`/`eslint` limpos, teste tsx contra Docker local, **sem commit** pelo agent — coordenador commita + aplica migration de prod via **MCP do Supabase**.
 - Pontos verificados e **OK** (não são bug): rateio de centavos exato (parcela/empréstimo), juros compostos anual→mensal, transferência cria 2 pernas atômico, soft-delete + `userId` consistentes nos repositories, `parseFlexibleDate` trata `YYYY-MM-DD` como meia-noite SP, clamp de dia 29-31 em meses curtos.
