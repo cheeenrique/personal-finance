@@ -22,16 +22,14 @@ const buttonVariants = cva(
         // = --radius = 10px, transition-all já cobre a cor), só a cor muda aqui.
         neutral: "border-border bg-transparent text-muted-foreground hover:border-muted-foreground",
         // "Accent" — ações que movem dinheiro (nova transação, CTAs), nunca navegação
-        // (design/PERSONAL_FINANCE_DS_HANDOFF.md, "Button" > "Accent"). O demo
-        // (.dc.html) usa texto branco, mas branco sobre `--accent` falha AA nos 2
-        // temas (≈3.3–3.8:1 < 4.5:1) — `accent-foreground` (navy) resolve sem
-        // escurecer o laranja (docs/50-AUDITORIA-BACKLOG.md, D1; ≈4.9–5.7:1).
-        accent: "bg-accent text-accent-foreground font-extrabold hover:bg-accent/90",
+        // (design/PERSONAL_FINANCE_DS_HANDOFF.md, "Button" > "Accent"). Texto branco
+        // é decisão intencional do handoff (não `accent-foreground`/navy, reservado
+        // pras badges sólidas de Despesa/Receita).
+        accent: "bg-accent text-white font-extrabold hover:bg-accent/90",
         // "Danger" — sempre com ConfirmDialog antes de executar (mesmo handoff, "Danger").
-        // `destructive-foreground`: navy nos 2 temas — branco falhava AA no escuro
-        // (#EF4444 ≈3.77:1) e no claro (#F87171 ≈2.8:1); navy passa nos 2
-        // (≈4.96:1 / 6.8:1, D1).
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        // Texto branco por decisão do handoff (não `destructive-foreground`/navy,
+        // reservado pra badge sólida de Despesa).
+        destructive: "bg-destructive text-white hover:bg-destructive/90",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

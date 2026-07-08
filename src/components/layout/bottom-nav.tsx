@@ -37,9 +37,9 @@ export function BottomNav() {
             onClick={() => openTransactionModal()}
             aria-label="Nova transação"
             className={cn(
-              // Ícone navy (`accent-foreground`), não branco: mesma correção AA do
-              // CTA "Nova transação" do Header (docs/50-AUDITORIA-BACKLOG.md, D1).
-              "absolute bottom-8 flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-[0_6px_16px_rgba(234,88,12,0.45)]",
+              // Ícone branco por decisão do handoff, mesma cor do CTA "Nova
+              // transação" do Header (não `accent-foreground`/navy).
+              "absolute bottom-8 flex size-12 items-center justify-center rounded-full bg-accent text-white shadow-[0_6px_16px_rgba(234,88,12,0.45)]",
               FOCUS_RING_CLASS,
             )}
           >
