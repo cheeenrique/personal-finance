@@ -109,7 +109,10 @@ function SummaryRow({
   deltaPercent?: number | null;
   signed?: boolean;
 }) {
-  const toneClass = tone === "success" ? "text-success" : "text-destructive";
+  /** `on-*` — mesma regra de `reports/kpi-summary-card.tsx` `TONE_VALUE_CLASSES`
+   * (docs/04-DESIGN_SYSTEM.md, "Tokens": base `--success`/`--destructive` como
+   * cor de texto direto falha AA no tema claro, ~2.2:1 sobre `--card`). */
+  const toneClass = tone === "success" ? "text-on-success" : "text-on-danger";
   const prefix = signed && value > 0 ? "+ " : "";
 
   return (
@@ -124,7 +127,7 @@ function SummaryRow({
           <span
             className={cn(
               "inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold",
-              deltaPercent <= 0 ? "text-success" : "text-destructive",
+              deltaPercent <= 0 ? "text-on-success" : "text-on-danger",
             )}
           >
             {deltaPercent <= 0 ? (

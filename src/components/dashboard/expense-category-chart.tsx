@@ -1,18 +1,8 @@
 import type { CategoryExpenseTotal } from "@/modules/transactions/types";
 import { ChartWrapper } from "@/components/shared/chart-wrapper";
 import { AppDonutChart, type DonutChartSlice } from "@/components/shared/charts/donut-chart";
+import { resolveCategoryColor } from "@/components/shared/charts/category-palette";
 import { formatBRL } from "@/lib/money/format";
-
-/** Paleta cíclica pra N categorias — tokens do design system (docs/04-DESIGN_SYSTEM.md, "Gráficos"). */
-const PALETTE = [
-  "var(--primary)",
-  "var(--accent)",
-  "var(--warning)",
-  "var(--transfer)",
-  "var(--asset)",
-  "var(--success)",
-  "var(--destructive)",
-];
 
 type ExpenseCategoryChartProps = {
   categories: CategoryExpenseTotal[];
@@ -30,7 +20,7 @@ export function ExpenseCategoryChart({ categories }: ExpenseCategoryChartProps) 
   const slices: DonutChartSlice[] = sorted.map((category, index) => ({
     label: category.categoryName,
     value: category.total.toNumber(),
-    color: PALETTE[index % PALETTE.length],
+    color: resolveCategoryColor(index),
   }));
 
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);

@@ -15,7 +15,7 @@ import { createCategoryAction, updateCategoryAction } from "@/modules/categories
 import { CategoryType } from "@/generated/prisma/enums";
 import type { Category } from "@/modules/categories/types";
 import { notifySuccess } from "@/lib/toast";
-import { cn } from "@/lib/utils";
+import { cn, getContrastText } from "@/lib/utils";
 import {
   CATEGORY_COLOR_OPTIONS,
   CATEGORY_ICON_OPTIONS,
@@ -208,7 +208,13 @@ export function CategoryFormModal({
                 )}
                 style={{ backgroundColor: option }}
               >
-                {color === option && <Check className="size-4 text-white" aria-hidden="true" />}
+                {color === option && (
+                  <Check
+                    className="size-4"
+                    style={{ color: getContrastText(option) }}
+                    aria-hidden="true"
+                  />
+                )}
               </button>
             ))}
           </div>

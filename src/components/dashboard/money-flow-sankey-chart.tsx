@@ -3,18 +3,8 @@ import { TriangleAlert } from "lucide-react";
 import { SANKEY_HUB_NAME, SANKEY_LEFTOVER_NAME, type SankeyFlowReport } from "@/modules/reports/types";
 import { ChartWrapper } from "@/components/shared/chart-wrapper";
 import { AppSankeyChart, type AppSankeyChartNode } from "@/components/shared/charts/sankey-chart";
+import { resolveCategoryColor } from "@/components/shared/charts/category-palette";
 import { formatBRL } from "@/lib/money/format";
-
-/** Paleta cíclica pra N categorias — MESMOS tokens de `expense-category-chart.tsx` (docs/04-DESIGN_SYSTEM.md, "Gráficos"); 2ª ocorrência aceitável (rule 02-dry-kiss-yagni), extrair pra util compartilhado só se um 3º gráfico precisar. */
-const CATEGORY_PALETTE = [
-  "var(--primary)",
-  "var(--accent)",
-  "var(--warning)",
-  "var(--transfer)",
-  "var(--asset)",
-  "var(--success)",
-  "var(--destructive)",
-];
 
 const HUB_COLOR = "var(--foreground)";
 const LEFTOVER_COLOR = "var(--success)";
@@ -51,7 +41,7 @@ export function MoneyFlowSankeyChart({ data }: MoneyFlowSankeyChartProps) {
     if (node.name === SANKEY_LEFTOVER_NAME) return { name: node.name, color: LEFTOVER_COLOR };
 
     const categoryIndex = index < hubIndex ? index : index - hubIndex - 1;
-    return { name: node.name, color: CATEGORY_PALETTE[categoryIndex % CATEGORY_PALETTE.length] };
+    return { name: node.name, color: resolveCategoryColor(categoryIndex) };
   });
 
   return (

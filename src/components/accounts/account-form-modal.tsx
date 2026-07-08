@@ -15,7 +15,7 @@ import { isBlank } from "@/components/forms/validation";
 import { createAccountAction, updateAccountAction } from "@/modules/accounts/actions";
 import { AccountType } from "@/generated/prisma/enums";
 import { notifySuccess } from "@/lib/toast";
-import { cn } from "@/lib/utils";
+import { cn, getContrastText } from "@/lib/utils";
 import {
   ACCOUNT_COLOR_OPTIONS,
   ACCOUNT_ICON_OPTIONS,
@@ -168,7 +168,13 @@ export function AccountFormModal({ open, onOpenChange, account }: AccountFormMod
                 )}
                 style={{ backgroundColor: option }}
               >
-                {color === option && <Check className="size-4 text-white" aria-hidden="true" />}
+                {color === option && (
+                  <Check
+                    className="size-4"
+                    style={{ color: getContrastText(option) }}
+                    aria-hidden="true"
+                  />
+                )}
               </button>
             ))}
           </div>

@@ -113,6 +113,15 @@ Tabela mapeada 1:1 pros nomes do shadcn/ui. Cola direto no `globals.css` do proj
 
 Primária e accent **não mudam entre temas** — só o fundo/superfície/borda invertem claro↔escuro.
 
+## Regra `on-*` vs. base (success/destructive/warning)
+
+Um único par por semântica, sem exceção de contexto:
+
+* **`on-*`** (`on-success`, `on-danger`, `on-warning`, `on-transfer`, `on-asset`, `on-primary`, `on-accent`) — toda cor de **texto ou ícone**: valor positivo/negativo em KPI, badge/tile tintado, variação percentual, linha de resumo. Vale tanto sobre tint (`bg-success/16`) quanto direto sobre `--card`/`--background`.
+* **base** (`--success`, `--destructive`, `--warning`) — só como **preenchimento sólido** (pill com `-foreground` contrastante, ex. `bg-success text-success-foreground`), **borda**, ou cor de **dado em gráfico** (fatia de donut, linha, barra). Nunca como `text-*` cru.
+
+Motivo: a base é calibrada pra contraste de *fill* (grande área), não de texto pequeno. Medido: `text-destructive` direto sobre `--card` no escuro fica ~4,47:1 (abaixo de AA 4.5:1); no claro, `text-success`/`text-destructive` (pastéis, ~2.2–2.3:1 sobre `--card`) falham AA feio. Os `on-*` foram calibrados exatamente pra esse uso e passam AA nos 2 temas (referência: `shared/kpi-card.tsx`, `reports/kpi-summary-card.tsx`, `dashboard/weekly-summary-box.tsx` — docs/50-AUDITORIA-BACKLOG.md, LA1).
+
 ---
 
 # Tema
@@ -154,10 +163,12 @@ Escala fixa de border-radius, base ~12px:
 
 | Uso | Radius |
 |---|---|
-| Cards | 14–16px |
+| Cards | 14px (`rounded-xl`) |
 | Controles (botão, input) | 8–9px |
 | Pills (badge, status) | 999px |
 | Tiles de ícone | 12–14px |
+
+Valor único pra card — não 14–16px como faixa (docs/50-AUDITORIA-BACKLOG.md, LA2: `kpi-card.tsx` usava `rounded-[16px]` sozinho enquanto todo o resto (`section-card`, `chart-wrapper`, `account-card`, `card-tile` etc.) já usava `rounded-xl`/14px). Todo card novo usa `rounded-xl`.
 
 ---
 

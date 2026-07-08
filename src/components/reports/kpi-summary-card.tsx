@@ -17,10 +17,14 @@ const TONE_TILE_CLASSES = {
   danger: "bg-destructive/16 text-on-danger",
 } as const;
 
-/** Cor do valor em texto direto (não sobre tile) — mesmo padrão de `dashboard/weekly-summary-box.tsx` `SummaryRow`. */
+/** Cor do valor (tile ou texto direto sobre o card) — sempre `on-*`
+ * (docs/04-DESIGN_SYSTEM.md, "Tokens": é o único par success/danger que passa
+ * AA nos 2 temas como cor de texto; a base `--success`/`--destructive` é
+ * pastel demais no tema claro — ~2.2:1 sobre `--card`, ver "LA1"). Mesmo
+ * padrão de `dashboard/weekly-summary-box.tsx` `SummaryRow`. */
 const TONE_VALUE_CLASSES = {
-  success: "text-success",
-  danger: "text-destructive",
+  success: "text-on-success",
+  danger: "text-on-danger",
 } as const;
 
 /**

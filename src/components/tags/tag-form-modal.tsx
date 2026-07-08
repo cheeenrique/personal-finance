@@ -12,7 +12,7 @@ import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
 import { createTagAction, updateTagAction } from "@/modules/tags/actions";
 import { notifySuccess } from "@/lib/toast";
-import { cn } from "@/lib/utils";
+import { cn, getContrastText } from "@/lib/utils";
 import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from "./tag-config";
 import type { Tag } from "@/generated/prisma/client";
 
@@ -113,7 +113,13 @@ export function TagFormModal({ open, onOpenChange, tag }: TagFormModalProps) {
                 )}
                 style={{ backgroundColor: option }}
               >
-                {color === option && <Check className="size-4 text-white" aria-hidden="true" />}
+                {color === option && (
+                  <Check
+                    className="size-4"
+                    style={{ color: getContrastText(option) }}
+                    aria-hidden="true"
+                  />
+                )}
               </button>
             ))}
           </div>
