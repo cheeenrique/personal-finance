@@ -17,7 +17,12 @@ type InvoiceSummaryCardProps = {
 };
 
 /** Fatura atual + CTA "Pagar fatura" (docs/22-CREDIT_CARDS.md, "Detalhe do Cartão"). */
-export function InvoiceSummaryCard({ cardId, cardName, invoice, outstandingBalance }: InvoiceSummaryCardProps) {
+export function InvoiceSummaryCard({
+  cardId,
+  cardName,
+  invoice,
+  outstandingBalance,
+}: InvoiceSummaryCardProps) {
   const [payOpen, setPayOpen] = useState(false);
 
   return (
@@ -29,9 +34,12 @@ export function InvoiceSummaryCard({ cardId, cardName, invoice, outstandingBalan
     >
       <div>
         <p className="text-[13px] font-bold text-muted-foreground">Fatura atual</p>
-        <p className="font-mono text-2xl font-semibold text-foreground">{formatBRL(invoice.total)}</p>
+        <p className="font-mono text-2xl font-semibold text-foreground">
+          {formatBRL(invoice.total)}
+        </p>
         <p className="mt-1 text-xs font-medium text-muted-foreground">
-          {formatDateSaoPaulo(invoice.periodStart)} – {formatDateSaoPaulo(invoice.periodEnd)} · vence{" "}
+          {formatDateSaoPaulo(invoice.periodStart)} –{" "}
+          {formatDateSaoPaulo(invoice.periodEnd)} · vence{" "}
           {formatDateSaoPaulo(invoice.dueDate)}
         </p>
       </div>
@@ -51,6 +59,7 @@ export function InvoiceSummaryCard({ cardId, cardName, invoice, outstandingBalan
         onOpenChange={setPayOpen}
         cardId={cardId}
         cardName={cardName}
+        invoiceTotal={invoice.total}
         outstandingBalance={outstandingBalance}
       />
     </div>

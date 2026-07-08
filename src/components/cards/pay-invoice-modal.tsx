@@ -23,12 +23,30 @@ type PayInvoiceModalProps = {
   onOpenChange: (open: boolean) => void;
   cardId: string;
   cardName: string;
+  /** Total da fatura atual (decimal string) — usado pra sugerir o valor de pagamento junto com `outstandingBalance`. */
+  invoiceTotal: string;
   /** Saldo devedor do cartão (decimal string) — teto do pagamento (docs/22, Regra 1: "cartão nunca pode ter saldo positivo"). */
   outstandingBalance: string;
 };
 
+/** `min(fatura atual, saldo devedor)` — sugestão de valor ao abrir o modal (docs/50-AUDITORIA-BACKLOG.md, F2: nunca abrir com valor vazio, risco de digitação manual de dinheiro). */
+function suggestedPaymentAmount(
+  invoiceTotal: string,
+  outstandingBalance: string,
+): string {
+  const suggested = Math.min(Number(invoiceTotal), Number(outstandingBalance));
+  return suggested > 0 ? suggested.toFixed(2) : "";
+}
+
 /** Pagamento de fatura (docs/22-CREDIT_CARDS.md, "Pagamento da fatura"). */
-export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstandingBalance }: PayInvoiceModalProps) {
+export function PayInvoiceModal({
+  open,
+  onOpenChange,
+  cardId,
+  cardName,
+  invoiceTotal,
+  outstandingBalance,
+}: PayInvoiceModalProps) {
   const [accountId, setAccountId] = useState<string | undefined>(undefined);
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(toDateInputValueSaoPaulo());
@@ -45,7 +63,7 @@ export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstand
     setWasOpen(open);
     if (open) {
       setAccountId(undefined);
-      setAmount("");
+      setAmount(suggestedPaymentAmount(invoiceTotal, outstandingBalance));
       setDate(toDateInputValueSaoPaulo());
       setDescription("");
       setFormError(null);
@@ -67,7 +85,9 @@ export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstand
       })
       .then((result) => {
         if (result.success) {
-          setAccountOptions(result.data.map((account) => ({ value: account.id, label: account.name })));
+          setAccountOptions(
+            result.data.map((account) => ({ value: account.id, label: account.name })),
+          );
         }
       })
       .finally(() => setLoadingAccounts(false));
@@ -84,7 +104,9 @@ export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstand
     if (Object.keys(errors).length > 0) return;
 
     if (Number(amount) > Number(outstandingBalance)) {
-      setFormError(`O valor não pode ser maior que o saldo devedor (${formatBRL(outstandingBalance)}).`);
+      setFormError(
+        `O valor não pode ser maior que o saldo devedor (${formatBRL(outstandingBalance)}).`,
+      );
       return;
     }
 
@@ -119,7 +141,12 @@ export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstand
       description={`Abate o saldo devedor de ${cardName}.`}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <FormField label="Conta pagadora" htmlFor="pay-account" required error={fieldErrors.accountId}>
+        <FormField
+          label="Conta pagadora"
+          htmlFor="pay-account"
+          required
+          error={fieldErrors.accountId}
+        >
           <EntitySelect
             id="pay-account"
             options={accountOptions}
@@ -153,7 +180,12 @@ export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstand
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="pay-date">Data</Label>
-          <DateField id="pay-date" value={date} onValueChange={setDate} disabled={isPending} />
+          <DateField
+            id="pay-date"
+            value={date}
+            onValueChange={setDate}
+            disabled={isPending}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -174,7 +206,12 @@ export function PayInvoiceModal({ open, onOpenChange, cardId, cardName, outstand
         )}
 
         <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isPending}
+          >
             Cancelar
           </Button>
           <Button type="submit" disabled={isPending || Number(outstandingBalance) <= 0}>
