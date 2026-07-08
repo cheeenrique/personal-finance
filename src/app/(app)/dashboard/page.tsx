@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { auth } from "@/lib/auth";
-import { AlertType } from "@/generated/prisma/enums";
+import { AlertType, LoanKind } from "@/generated/prisma/enums";
 import { accountService } from "@/modules/accounts/service";
 import { transactionService } from "@/modules/transactions/service";
 import { alertService } from "@/modules/alerts/service";
@@ -97,7 +97,7 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     activeAlertsRaw,
     cards,
     installmentPurchases,
-    activeLoans,
+    activeLoansRaw,
     expenseByCategory,
     incomeVsExpenseByMonth,
     moneyFlow,
@@ -150,6 +150,12 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
   // WEEKLY_SUMMARY já tem o box dedicado acima — não duplicar na lista de
   // alertas ativos (docs/29-ALERTS.md, "Interface no Dashboard": só anomalia/verde).
   const activeAlerts = activeAlertsRaw.filter((alert) => alert.type !== AlertType.WEEKLY_SUMMARY);
+
+  // `loanService.listActiveLoans` traz LOAN e FINANCING juntos (mesma entidade
+  // `Loan`, ver docs/03-DATABASE.md) — o bloco "Empréstimos ativos" só cobre
+  // `kind=LOAN` e linka pra `/loans/[id]`; financiamento tem seção própria
+  // (`/financings`), mesmo filtro de `app/(app)/loans/page.tsx`.
+  const activeLoans = activeLoansRaw.filter((loan) => loan.kind === LoanKind.LOAN);
 
   // Só os meses já decorridos do ANO CORRENTE — série zero-preenchida evita
   // meses futuros "achatados" em zero na linha do tempo. Anos passados (ex.:

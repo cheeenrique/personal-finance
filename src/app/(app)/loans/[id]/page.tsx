@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { loanService } from "@/modules/loans/service";
 import { LoanNotFoundError } from "@/modules/loans/errors";
+import { LoanKind } from "@/generated/prisma/enums";
 import { LoanDetailView } from "@/components/loans/loan-detail-view";
 import type { LoanDetailData } from "@/components/loans/types";
 
@@ -19,7 +20,11 @@ type LoanDetailPageProps = {
  * ver docs/99-CLAUDE.md "Regra de Ouro"). `LoanNotFoundError` (erro de
  * domínio tipado, ver `modules/loans/errors.ts`) é mapeado pro boundary HTTP
  * equivalente (`notFound()`) aqui — mesmo racional de
- * ~/.claude/rules/06-composition-errors.md.
+ * ~/.claude/rules/06-composition-errors.md. Um `Loan` `kind=FINANCING`
+ * acessado via esta rota redireciona pra `/financings/[id]` (seção própria,
+ * mesmo raciocínio inverso de `/financings/[id]` redirecionando `kind=LOAN`
+ * de volta pra cá) — nunca `notFound()`: o registro existe, só mora na tela
+ * certa.
  */
 export default async function LoanDetailPage({ params }: LoanDetailPageProps) {
   const { id } = await params;
@@ -34,6 +39,8 @@ export default async function LoanDetailPage({ params }: LoanDetailPageProps) {
     if (error instanceof LoanNotFoundError) notFound();
     throw error;
   }
+
+  if (loan.kind === LoanKind.FINANCING) redirect(`/financings/${id}`);
 
   const loanView: LoanDetailData = {
     id: loan.id,

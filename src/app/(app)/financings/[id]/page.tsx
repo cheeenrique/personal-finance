@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 import { auth } from "@/lib/auth";
@@ -23,9 +23,10 @@ type FinancingDetailPageProps = {
  * `loanService.getLoanDetail` direto (docs/99-CLAUDE.md "Regra de Ouro").
  * `LoanNotFoundError` mapeado pro boundary HTTP equivalente (`notFound()`),
  * mesmo racional de `~/.claude/rules/06-composition-errors.md`. Um `Loan`
- * `kind=LOAN` acessado via esta rota também vira 404 — `/financings` é seção
- * própria, não mostra empréstimo comum (mesmo raciocínio inverso de
- * `/loans` filtrar `kind=LOAN` na listagem).
+ * `kind=LOAN` acessado via esta rota redireciona pra `/loans/[id]` (seção
+ * própria, mesmo raciocínio inverso de `/loans/[id]` redirecionando
+ * `kind=FINANCING` de volta pra cá) — nunca `notFound()`: o registro existe,
+ * só mora na tela certa.
  */
 export default async function FinancingDetailPage({ params }: FinancingDetailPageProps) {
   const { id } = await params;
@@ -41,7 +42,7 @@ export default async function FinancingDetailPage({ params }: FinancingDetailPag
     throw error;
   }
 
-  if (loan.kind !== LoanKind.FINANCING) notFound();
+  if (loan.kind !== LoanKind.FINANCING) redirect(`/loans/${id}`);
 
   const unpaidInstallments = loan.installments.filter((installment) => !installment.isPaid);
   const settleTodayAmount =
