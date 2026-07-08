@@ -14,7 +14,7 @@ import {
   BudgetCategoryNotFoundError,
   BudgetCategoryTypeMismatchError,
 } from "./errors";
-import type { BudgetStatus, BudgetWithProgress, Money } from "./types";
+import type { BudgetStatus, BudgetWithProgress, CloneBudgetsResult, Money } from "./types";
 
 /** Códigos de erro do Postgres via Prisma — ver https://www.prisma.io/docs/orm/reference/error-reference. */
 const UNIQUE_CONSTRAINT_VIOLATION = "P2002";
@@ -91,6 +91,11 @@ function monthWindowUtc(year: number, month: number): DateRange {
     gte: parseInSaoPaulo(startOfMonthLocal),
     lt: parseInSaoPaulo(startOfNextMonthLocal),
   };
+}
+
+/** Mês anterior ao (year, month) informado, com rollover Jan→Dez do ano anterior — insumo de `cloneFromPreviousMonth`. */
+function previousPeriod(year: number, month: number): { year: number; month: number } {
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
 }
 
 /** Faixas do card de budget (docs/26-BUDGETS.md, "Estados Visuais"): Normal até 80%, Atenção 80-100%, Estourado >100%. */
@@ -214,10 +219,56 @@ async function listWithProgress(
   });
 }
 
+/**
+ * Clona os budgets ATIVOS do mês anterior pro (targetYear, targetMonth)
+ * informado — botão "Clonar do mês anterior" em /budgets. Categoria que já
+ * tem budget ativo no destino é PULADA (mantém o valor existente, nunca
+ * sobrescreve); ausente é criada via `createBudget`, que já resolve a
+ * reativação de soft-deletado (ver seu docblock). Sem N+1: 1 query pro mês de
+ * origem, 1 query pro mês de destino, comparação em memória via Set — depois
+ * só as escritas necessárias (1 por categoria faltante no destino).
+ */
+async function cloneFromPreviousMonth(
+  userId: string,
+  targetYear: number,
+  targetMonth: number,
+): Promise<CloneBudgetsResult> {
+  const { year: sourceYear, month: sourceMonth } = previousPeriod(targetYear, targetMonth);
+
+  const sourceBudgets = await budgetRepository.listByPeriod(userId, sourceYear, sourceMonth);
+  if (sourceBudgets.length === 0) {
+    return { created: 0, skipped: 0, sourceMonth, sourceYear };
+  }
+
+  const targetBudgets = await budgetRepository.listByPeriod(userId, targetYear, targetMonth);
+  const targetCategoryIds = new Set(targetBudgets.map((budget) => budget.categoryId));
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const sourceBudget of sourceBudgets) {
+    if (targetCategoryIds.has(sourceBudget.categoryId)) {
+      skipped += 1;
+      continue;
+    }
+
+    await createBudget(userId, {
+      categoryId: sourceBudget.categoryId,
+      month: targetMonth,
+      year: targetYear,
+      plannedAmount: sourceBudget.plannedAmount.toString(),
+    });
+    created += 1;
+  }
+
+  return { created, skipped, sourceMonth, sourceYear };
+}
+
 export const budgetService = {
   createBudget,
   updateBudget,
   deleteBudget,
   spentAmount,
   listWithProgress,
+  cloneFromPreviousMonth,
 };

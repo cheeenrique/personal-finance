@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { nowInSaoPaulo } from "@/lib/date/timezone";
 import { budgetService } from "./service";
-import { createBudgetSchema, updateBudgetSchema, listBudgetsWithProgressSchema } from "./schemas";
+import { createBudgetSchema, updateBudgetSchema, listBudgetsWithProgressSchema, clonePreviousMonthSchema } from "./schemas";
 import { BudgetDomainError } from "./errors";
-import type { ActionResult, Budget, BudgetWithProgress } from "./types";
+import type { ActionResult, Budget, BudgetWithProgress, CloneBudgetsResult } from "./types";
 
 const BUDGETS_PATH = "/budgets";
 const DASHBOARD_PATH = "/dashboard";
@@ -113,6 +113,28 @@ export async function listWithProgressAction(input?: unknown): Promise<ActionRes
   try {
     const budgets = await budgetService.listWithProgress(userId, parsed.data.year, parsed.data.month);
     return { success: true, data: budgets };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Clona os budgets ativos do mês anterior pro (year, month) informado — botão "Clonar do mês anterior" em /budgets. */
+export async function cloneBudgetsFromPreviousMonthAction(input: unknown): Promise<ActionResult<CloneBudgetsResult>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  const parsed = clonePreviousMonthSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Dados inválidos." },
+    };
+  }
+
+  try {
+    const result = await budgetService.cloneFromPreviousMonth(userId, parsed.data.year, parsed.data.month);
+    revalidateBudgetRoutes();
+    return { success: true, data: result };
   } catch (error) {
     return toActionError(error);
   }

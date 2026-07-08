@@ -29,6 +29,13 @@ export const listBudgetsWithProgressSchema = z.object({
   month: monthSchema,
 });
 
+/** (year, month) do mês DESTINO da clonagem — o mês de origem é derivado no service.ts (`previousPeriod`). */
+export const clonePreviousMonthSchema = z.object({
+  year: yearSchema,
+  month: monthSchema,
+});
+
 export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
 export type ListBudgetsWithProgressInput = z.infer<typeof listBudgetsWithProgressSchema>;
+export type ClonePreviousMonthInput = z.infer<typeof clonePreviousMonthSchema>;

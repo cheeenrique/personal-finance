@@ -1,17 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, PiggyBank } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Plus, PiggyBank, Copy, Loader2 } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { deleteBudgetAction } from "@/modules/budgets/actions";
-import { notifySuccess } from "@/lib/toast";
+import { deleteBudgetAction, cloneBudgetsFromPreviousMonthAction } from "@/modules/budgets/actions";
+import type { CloneBudgetsResult } from "@/modules/budgets/types";
+import { notifySuccess, notifyError } from "@/lib/toast";
 import { PeriodSelector } from "./period-selector";
 import { BudgetCard } from "./budget-card";
 import { BudgetFormModal } from "./budget-form-modal";
 import type { BudgetCardData } from "./types";
+
+/** Mensagem do toast pós-clonagem — singular/plural conforme `created`/`skipped` (docs da tarefa: "X criados, Y já existiam"). */
+function formatCloneMessage({ created, skipped }: CloneBudgetsResult): string {
+  if (created === 0 && skipped === 0) return "O mês anterior não tem orçamentos para clonar";
+  if (created === 0) return `As ${skipped} categorias do mês anterior já tinham orçamento neste mês`;
+  if (skipped === 0) return `${created} orçamento${created === 1 ? "" : "s"} clonado${created === 1 ? "" : "s"} do mês anterior`;
+  return `${created} orçamento${created === 1 ? "" : "s"} clonado${created === 1 ? "" : "s"}, ${skipped} já existia${skipped === 1 ? "" : "m"}`;
+}
 
 type BudgetGridProps = {
   budgets: BudgetCardData[];
@@ -31,6 +40,7 @@ export function BudgetGrid({ budgets, month, year }: BudgetGridProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<BudgetCardData | null>(null);
   const [deletingBudget, setDeletingBudget] = useState<BudgetCardData | null>(null);
+  const [isCloning, startClone] = useTransition();
 
   function openCreate() {
     setEditingBudget(null);
@@ -49,15 +59,37 @@ export function BudgetGrid({ budgets, month, year }: BudgetGridProps) {
     notifySuccess("Orçamento excluído");
   }
 
+  function handleClone() {
+    startClone(async () => {
+      const result = await cloneBudgetsFromPreviousMonthAction({ year, month });
+      if (!result.success) {
+        notifyError(result.error.message);
+        return;
+      }
+      notifySuccess(formatCloneMessage(result.data));
+    });
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <PeriodSelector month={month} year={year} />
 
-        <Button type="button" variant="accent" size="lg" onClick={openCreate} className="shrink-0">
-          <Plus className="size-4" aria-hidden="true" />
-          Novo orçamento
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button type="button" variant="outline" size="lg" onClick={handleClone} disabled={isCloning}>
+            {isCloning ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Copy className="size-4" aria-hidden="true" />
+            )}
+            Clonar do mês anterior
+          </Button>
+
+          <Button type="button" variant="accent" size="lg" onClick={openCreate}>
+            <Plus className="size-4" aria-hidden="true" />
+            Novo orçamento
+          </Button>
+        </div>
       </div>
 
       {budgets.length === 0 ? (

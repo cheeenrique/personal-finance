@@ -19,6 +19,14 @@ export type BudgetWithProgress = Budget & {
   status: BudgetStatus;
 };
 
+/** Retorno de `cloneFromPreviousMonth` (service.ts) — resumo pro toast da UI. */
+export type CloneBudgetsResult = {
+  created: number;
+  skipped: number;
+  sourceMonth: number;
+  sourceYear: number;
+};
+
 export type ActionError = { code: string; message: string };
 
 /** Envelope de retorno de toda Server Action deste módulo. */
