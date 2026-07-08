@@ -5,10 +5,11 @@ import { useMemo, useState } from "react";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { periodToRange } from "@/components/transactions/period-presets";
 
-/** 3 opções do filtro de período do detalhe de conta (docs/21-ACCOUNTS.md, "Filtros") — subconjunto de `PeriodPreset` + "custom" (range livre, sem preset). */
-export type AccountPeriodMode = "this_month" | "last_month" | "custom";
+/** Opções do filtro de período do detalhe de conta (docs/21-ACCOUNTS.md, "Filtros") — subconjunto de `PeriodPreset` + "custom" (range livre, sem preset). */
+export type AccountPeriodMode = "all" | "this_month" | "last_month" | "custom";
 
 export const ACCOUNT_PERIOD_MODE_OPTIONS: { value: AccountPeriodMode; label: string }[] = [
+  { value: "all", label: "Todos os períodos" },
   { value: "this_month", label: "Mês atual" },
   { value: "last_month", label: "Mês passado" },
   { value: "custom", label: "Personalizado" },
@@ -23,7 +24,10 @@ export const ACCOUNT_PERIOD_MODE_OPTIONS: { value: AccountPeriodMode; label: str
  * sem os demais filtros de `/transactions` (docs/06-SCREENS.md, "Contas").
  */
 export function useAccountPeriodFilter() {
-  const [mode, setMode] = useState<AccountPeriodMode>("this_month");
+  // Default "all": importação de OFX traz lançamentos de meses passados — com
+  // "Mês atual" eles somem da tabela (mas contam no saldo/gráfico), o que
+  // confunde ("importei e não apareceu"). "Todos" mostra tudo (paginado).
+  const [mode, setMode] = useState<AccountPeriodMode>("all");
   const [customFrom, setCustomFrom] = useState(() => toDateInputValueSaoPaulo());
   const [customTo, setCustomTo] = useState(() => toDateInputValueSaoPaulo());
 
