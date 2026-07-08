@@ -92,11 +92,11 @@
 
   /* Cores financeiras (design/PERSONAL_FINANCE_DS_HANDOFF.md, "Accents &
    * Semantic (ambos os temas)") — transferência (ciano) e patrimônio (roxo).
-   * `on-transfer`/`on-asset`/`on-success`/`on-danger` são constantes nos dois
-   * temas (o handoff só as lista uma vez, fora da seção "Tema Claro");
-   * `transfer`/`asset` (a base) já variam por tema, redefinidos abaixo em
-   * `.light`. Usados nos botões "outline + tint" (ex.: Ações Rápidas do
-   * Dashboard — design/Personal Finance App.dc.html). */
+   * Os `on-*` daqui são os pastéis do TEMA ESCURO (texto/ícone sobre tint
+   * escuro); no claro eles caem pra ~1.4–2.6:1 sobre superfície clara, então
+   * `.light` redefine todos com os tons escuros de docs/04-DESIGN_SYSTEM.md.
+   * Usados nos botões "outline + tint" (ex.: Ações Rápidas do Dashboard —
+   * design/Personal Finance App.dc.html). */
   --transfer: #38bdf8;
   --on-transfer: #7dd3fc;
   --asset: #a855f7;
@@ -136,6 +136,26 @@
 
   --transfer: #06b6d4;
   --asset: #d946ef;
+
+  /* Texto sobre superfície sólida success/destructive — no claro elas são
+   * pastéis (#22C55E/#F87171) e branco cai pra ~2.3:1; foreground escuro
+   * passa AA com folga (8.2:1 / 6.8:1). No escuro seguem brancas (`:root`). */
+  --success-foreground: #0b1223;
+  --destructive-foreground: #0b1223;
+
+  /* `on-*` do tema claro — docs/04-DESIGN_SYSTEM.md, "Tokens (dark + light)".
+   * on-success/on-warning/on-accent estão um passo mais escuros que a tabela
+   * (#15803D→#166534, #B45309→#92400E, #C2410C→#9A3412) porque o valor da
+   * tabela fica 4.2–4.4:1 sobre os tints /12–/16 (Ações Rápidas, pill de
+   * parcela, "Pendente") — abaixo do AA 4.5:1. on-transfer/on-asset não têm
+   * valor light documentado; ciano-800/fúcsia-700 seguem a mesma lógica. */
+  --on-success: #166534;
+  --on-danger: #b91c1c;
+  --on-warning: #92400e;
+  --on-primary: #1e40af;
+  --on-accent: #9a3412;
+  --on-transfer: #155e75;
+  --on-asset: #a21caf;
 }
 
 @layer base {

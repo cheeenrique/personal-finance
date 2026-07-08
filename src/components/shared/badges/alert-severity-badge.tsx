@@ -7,20 +7,22 @@ const SEVERITY_CONFIG: Record<
   AlertSeverity,
   { label: string; icon: typeof Info; className: string }
 > = {
+  /* Texto sobre tint usa `on-*` (mesma regra do AlertCard/KPICard): a cor-base
+   * não passa AA em nenhum dos temas sobre o próprio tint /16. */
   [AlertSeverity.INFO]: {
     label: "Resumo",
     icon: Info,
-    className: "bg-primary/16 text-primary",
+    className: "bg-primary/16 text-on-primary",
   },
   [AlertSeverity.WARN]: {
     label: "Atenção",
     icon: TriangleAlert,
-    className: "bg-warning/16 text-warning",
+    className: "bg-warning/16 text-on-warning",
   },
   [AlertSeverity.GOOD]: {
     label: "No verde",
     icon: CheckCircle2,
-    className: "bg-success/16 text-success",
+    className: "bg-success/16 text-on-success",
   },
 };
 
@@ -50,7 +52,9 @@ export function ReadStatusBadge({ read }: { read: boolean }) {
         "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap",
         read
           ? "bg-secondary text-muted-foreground"
-          : "bg-destructive/15 text-destructive",
+          : // `on-danger`, não `destructive` — é o que o layout handoff pede pro
+            // "Novo" e o que passa AA sobre o tint /15 nos dois temas.
+            "bg-destructive/15 text-on-danger",
       )}
     >
       {read ? "Lido" : "Novo"}

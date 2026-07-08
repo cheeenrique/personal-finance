@@ -13,10 +13,13 @@ const SEVERITY_ICON: Record<AlertSeverity, typeof Info> = {
   [AlertSeverity.GOOD]: CheckCircle2,
 };
 
+/* Ícone sobre tint usa os tokens `on-*` (como o KPICard) — a cor-base como
+ * texto não passa nos dois temas: `text-primary` some no tint escuro (1.8:1)
+ * e `text-warning`/`text-success` somem no tint claro (1.5–1.9:1). */
 const SEVERITY_TINT: Record<AlertSeverity, string> = {
-  [AlertSeverity.INFO]: "bg-primary/16 text-primary",
-  [AlertSeverity.WARN]: "bg-warning/16 text-warning",
-  [AlertSeverity.GOOD]: "bg-success/16 text-success",
+  [AlertSeverity.INFO]: "bg-primary/16 text-on-primary",
+  [AlertSeverity.WARN]: "bg-warning/16 text-on-warning",
+  [AlertSeverity.GOOD]: "bg-success/16 text-on-success",
 };
 
 export type AlertCardData = {

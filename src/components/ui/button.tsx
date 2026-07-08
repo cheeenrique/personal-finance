@@ -27,7 +27,10 @@ const buttonVariants = cva(
         // botão "Nova transação" do header de fato usam em todo CTA laranja.
         accent: "bg-accent text-white font-extrabold hover:bg-accent/90",
         // "Danger" — sempre com ConfirmDialog antes de executar (mesmo handoff, "Danger").
-        destructive: "bg-destructive text-white hover:bg-destructive/90",
+        // `destructive-foreground`, não `text-white`: no escuro continua branco
+        // (token = #fff), mas no claro o destructive é pastel (#F87171) e branco
+        // cai pra 2.8:1 — o token vira foreground escuro lá (AA 6.8:1).
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
