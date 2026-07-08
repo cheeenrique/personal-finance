@@ -9,7 +9,7 @@ import { ImportModal } from "./import-modal";
 type ImportButtonProps = { accountId: string };
 
 /**
- * Gatilho do importador de extrato (OFX/CSV — docs/03-DATABASE.md,
+ * Gatilho do importador de extrato (OFX/CSV/XLSX — docs/03-DATABASE.md,
  * "Importação de Extrato OFX"; multi-formato em
  * docs/superpowers/specs/2026-07-08-import-multiformato-design.md) —
  * cinza/neutro (`buttonVariants({ variant: "neutral" })`, ajuste do dono),

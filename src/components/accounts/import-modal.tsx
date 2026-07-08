@@ -26,10 +26,32 @@ type ImportModalProps = {
 
 type Step = "select" | "preview" | "result";
 
+/** Extensões binárias — lidas via `file.arrayBuffer()` + base64 em vez de `file.text()` (XLSX não é texto; `parsers/index.ts` espera base64 pra esses formatos, ver `xlsx-parser.ts`). */
+const BINARY_EXTENSIONS = [".xls", ".xlsx"];
+
+function isBinaryImportFile(fileName: string): boolean {
+  const lower = fileName.trim().toLowerCase();
+  return BINARY_EXTENSIONS.some((extension) => lower.endsWith(extension));
+}
+
+/** `ArrayBuffer` → base64 sem passar por `FileReader` (mesma técnica de `FinancingImportButton.fileToBase64` — a `data:` URL do `FileReader` traria o prefixo `data:<mime>;base64,` junto). */
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index]);
+  return btoa(binary);
+}
+
+/** OFX/CSV são texto (`file.text()`, decodifica utf-8); XLS/XLSX é binário (base64, ver `fileToBase64`) — cada parser em `modules/imports/parsers/` espera o encoding certo pro seu formato. */
+async function readFileContent(file: File): Promise<string> {
+  return isBinaryImportFile(file.name) ? fileToBase64(file) : file.text();
+}
+
 /**
  * Importador de extrato (docs/03-DATABASE.md, "Importação de Extrato OFX";
  * multi-formato em docs/superpowers/specs/2026-07-08-import-multiformato-design.md
- * — hoje OFX e CSV, formato detectado pela extensão do arquivo em
+ * — hoje OFX, CSV e XLSX, formato detectado pela extensão do arquivo em
  * `modules/imports/parsers/index.ts`): sobe o arquivo → prévia
  * (novos/duplicados/erros, nada gravado) → confirma → grava. 3 passos dentro
  * do MESMO modal (nunca telas separadas, docs/05-UX_RULES.md, "Modais").
@@ -76,10 +98,10 @@ export function ImportModal({ open, onOpenChange, accountId }: ImportModalProps)
     setFileName(file.name);
 
     startTransition(async () => {
-      // `file.text()` já decodifica utf-8 — o parser (`parsers/index.ts`)
-      // recebe string pronta, sem lidar com encoding (docs/03-DATABASE.md).
-      // `file.name` decide o formato (extensão), nunca persistido.
-      const content = await file.text();
+      // Texto (OFX/CSV) ou base64 (XLS/XLSX) — `readFileContent` decide pelo
+      // encoding certo (ver comentário acima). `file.name` decide o formato
+      // (extensão), nunca persistido.
+      const content = await readFileContent(file);
       setFileContent(content);
 
       const response = await previewImportAction(accountId, file.name, content);
@@ -120,18 +142,18 @@ export function ImportModal({ open, onOpenChange, accountId }: ImportModalProps)
       open={open}
       onOpenChange={handleOpenChange}
       title="Importar extrato"
-      description="Sobe o extrato do banco (.ofx ou .csv), confere uma prévia e só grava depois de confirmar."
+      description="Sobe o extrato do banco (.ofx, .csv ou .xlsx), confere uma prévia e só grava depois de confirmar."
       size="wide"
     >
       <div className="flex flex-col gap-4">
         {step === "select" && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="statement-file">Arquivo (OFX ou CSV)</Label>
+            <Label htmlFor="statement-file">Arquivo (OFX, CSV ou XLSX)</Label>
             <Input
               key={fileInputKey}
               id="statement-file"
               type="file"
-              accept=".ofx,.csv"
+              accept=".ofx,.csv,.xls,.xlsx"
               onChange={handleFileChange}
               disabled={isPending}
             />

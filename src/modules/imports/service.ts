@@ -113,7 +113,7 @@ async function previewImport(
 ): Promise<ImportPreview> {
   await assertAccountOwnership(userId, accountId);
 
-  const { transactions, errors } = parseImportFile(fileName, fileContent);
+  const { transactions, errors } = await parseImportFile(fileName, fileContent);
 
   const withFitId = transactions.filter(hasFitId);
   const withoutFitId = transactions.filter((item) => !hasFitId(item));
@@ -176,7 +176,7 @@ async function commitImport(
 ): Promise<ImportCommitResult> {
   await assertAccountOwnership(userId, accountId);
 
-  const { transactions, errors } = parseImportFile(fileName, fileContent);
+  const { transactions, errors } = await parseImportFile(fileName, fileContent);
   if (transactions.length === 0) return { imported: 0, duplicados: 0, erros: errors };
 
   const withCategory = await Promise.all(
