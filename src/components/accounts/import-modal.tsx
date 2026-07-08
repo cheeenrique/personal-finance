@@ -14,11 +14,11 @@ import { formatDateSaoPaulo } from "@/lib/date/format";
 import { notifySuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
-import { previewOfxImportAction, commitOfxImportAction } from "@/modules/imports/actions";
+import { previewImportAction, commitImportAction } from "@/modules/imports/actions";
 import { TransactionType } from "@/generated/prisma/enums";
-import type { OfxImportCommitResult, OfxImportPreview } from "@/modules/imports/types";
+import type { ImportCommitResult, ImportPreview } from "@/modules/imports/types";
 
-type OfxImportModalProps = {
+type ImportModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   accountId: string;
@@ -27,14 +27,16 @@ type OfxImportModalProps = {
 type Step = "select" | "preview" | "result";
 
 /**
- * Importador de extrato OFX (docs/03-DATABASE.md, "Importação de Extrato
- * OFX"): sobe o arquivo → prévia (novos/duplicados/erros, nada gravado) →
- * confirma → grava. 3 passos dentro do MESMO modal (nunca telas separadas,
- * docs/05-UX_RULES.md, "Modais"). Reimportar o mesmo arquivo é seguro — o
- * módulo dedupa por `fitId` (ou fallback), então repetir a confirmação não
- * duplica nada.
+ * Importador de extrato (docs/03-DATABASE.md, "Importação de Extrato OFX";
+ * multi-formato em docs/superpowers/specs/2026-07-08-import-multiformato-design.md
+ * — hoje OFX e CSV, formato detectado pela extensão do arquivo em
+ * `modules/imports/parsers/index.ts`): sobe o arquivo → prévia
+ * (novos/duplicados/erros, nada gravado) → confirma → grava. 3 passos dentro
+ * do MESMO modal (nunca telas separadas, docs/05-UX_RULES.md, "Modais").
+ * Reimportar o mesmo arquivo é seguro — o módulo dedupa por `fitId` (ou
+ * fallback), então repetir a confirmação não duplica nada.
  */
-export function OfxImportModal({ open, onOpenChange, accountId }: OfxImportModalProps) {
+export function ImportModal({ open, onOpenChange, accountId }: ImportModalProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -46,8 +48,8 @@ export function OfxImportModal({ open, onOpenChange, accountId }: OfxImportModal
   const [fileInputKey, setFileInputKey] = useState(0);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
-  const [preview, setPreview] = useState<OfxImportPreview | null>(null);
-  const [result, setResult] = useState<OfxImportCommitResult | null>(null);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [result, setResult] = useState<ImportCommitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -74,12 +76,13 @@ export function OfxImportModal({ open, onOpenChange, accountId }: OfxImportModal
     setFileName(file.name);
 
     startTransition(async () => {
-      // `file.text()` já decodifica utf-8 — o parser (`ofx-parser.ts`) recebe
-      // string pronta, sem lidar com encoding (docs/03-DATABASE.md).
+      // `file.text()` já decodifica utf-8 — o parser (`parsers/index.ts`)
+      // recebe string pronta, sem lidar com encoding (docs/03-DATABASE.md).
+      // `file.name` decide o formato (extensão), nunca persistido.
       const content = await file.text();
       setFileContent(content);
 
-      const response = await previewOfxImportAction(accountId, content);
+      const response = await previewImportAction(accountId, file.name, content);
       if (!response.success) {
         setError(response.error.message);
         return;
@@ -91,10 +94,10 @@ export function OfxImportModal({ open, onOpenChange, accountId }: OfxImportModal
   }
 
   function handleConfirm() {
-    if (!fileContent) return;
+    if (!fileContent || !fileName) return;
 
     startTransition(async () => {
-      const response = await commitOfxImportAction(accountId, fileContent);
+      const response = await commitImportAction(accountId, fileName, fileContent);
       if (!response.success) {
         setError(response.error.message);
         return;
@@ -116,19 +119,19 @@ export function OfxImportModal({ open, onOpenChange, accountId }: OfxImportModal
     <FormModal
       open={open}
       onOpenChange={handleOpenChange}
-      title="Importar extrato OFX"
-      description="Sobe o extrato do banco (.ofx), confere uma prévia e só grava depois de confirmar."
+      title="Importar extrato"
+      description="Sobe o extrato do banco (.ofx ou .csv), confere uma prévia e só grava depois de confirmar."
       size="wide"
     >
       <div className="flex flex-col gap-4">
         {step === "select" && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ofx-file">Arquivo OFX</Label>
+            <Label htmlFor="statement-file">Arquivo (OFX ou CSV)</Label>
             <Input
               key={fileInputKey}
-              id="ofx-file"
+              id="statement-file"
               type="file"
-              accept=".ofx"
+              accept=".ofx,.csv"
               onChange={handleFileChange}
               disabled={isPending}
             />

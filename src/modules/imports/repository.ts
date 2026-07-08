@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db/client";
 import { Prisma } from "@/generated/prisma/client";
 import type { TransactionType } from "@/generated/prisma/enums";
 
-/** Client Prisma padrão ou escopado a uma `$transaction` interativa (mesmo padrão de `modules/cards/repository.ts`, ver service.ts `commitOfxImport`). */
+/** Client Prisma padrão ou escopado a uma `$transaction` interativa (mesmo padrão de `modules/cards/repository.ts`, ver service.ts `commitImport`). */
 type Db = Prisma.TransactionClient;
 
 export type CommitItem = {
@@ -23,7 +23,7 @@ export type FallbackRow = { date: Date; amount: string; description: string };
  * "Princípio Principal": isolamento total por usuário).
  */
 
-/** `fitId`s já existentes (não deletados) nesta conta, dentre os informados — insumo do dedup (ver service.ts `previewOfxImport`/`commitOfxImport`). */
+/** `fitId`s já existentes (não deletados) nesta conta, dentre os informados — insumo do dedup (ver service.ts `previewImport`/`commitImport`). */
 async function findExistingFitIds(
   userId: string,
   accountId: string,
@@ -52,8 +52,9 @@ async function findFallbackRows(userId: string, accountId: string, db: Db = pris
   });
 
   // `toFixed(2)` (nunca `toString()`, que emite "50"/"50.1") — a chave de
-  // fallback exige o MESMO formato do lado parseado (`parseOfxAmount`, também
-  // `Decimal.toFixed(2)`); formato divergente duplica tudo sem fitId no reimport.
+  // fallback exige o MESMO formato do lado parseado (todo parser em
+  // `parsers/*.ts` também usa `Decimal.toFixed(2)`); formato divergente
+  // duplica tudo sem fitId no reimport.
   return rows.map((row) => ({ date: row.date, amount: row.amount.toFixed(2), description: row.description }));
 }
 

@@ -5,7 +5,7 @@
  * ~/.claude/rules/06-composition-errors.md. Mapeamento para HTTP/mensagem de
  * UI acontece no boundary (actions.ts), não aqui. Erros de PARSE do arquivo
  * OFX (bloco sem valor/data, etc.) não entram aqui — são dados, não
- * exceções, retornados como `OfxParseError[]` no resultado (ver types.ts).
+ * exceções, retornados como `ImportParseError[]` no resultado (ver types.ts).
  */
 export class ImportDomainError extends Error {
   constructor(

@@ -1,7 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 import { calendarPartsSP, startOfDaySP } from "@/lib/date/calendar-sp";
-import type { OfxParseError, OfxParseResult, OfxTransactionType, ParsedOfxTransaction } from "./types";
+import type { ImportParseError, ImportParseResult, ImportTransactionType, ParsedTransaction } from "../types";
 
 /**
  * Parser de extrato OFX (SGML — ver docs/03-DATABASE.md, "Importação de
@@ -80,14 +80,14 @@ function parseOfxAmount(raw: string): string | null {
   return new Prisma.Decimal(normalized).abs().toFixed(2);
 }
 
-function parseOfxType(raw: string): OfxTransactionType | null {
+function parseOfxType(raw: string): ImportTransactionType | null {
   const normalized = raw.trim().toUpperCase();
   if (normalized === "CREDIT") return TransactionType.INCOME;
   if (normalized === "DEBIT") return TransactionType.EXPENSE;
   return null;
 }
 
-function parseBlock(block: string): { transaction: ParsedOfxTransaction } | { error: OfxParseError } {
+function parseBlock(block: string): { transaction: ParsedTransaction } | { error: ImportParseError } {
   const snippet = block.trim();
 
   const trnamtRaw = extractField(block, "TRNAMT");
@@ -122,11 +122,11 @@ function parseBlock(block: string): { transaction: ParsedOfxTransaction } | { er
   };
 }
 
-export function parseOfx(content: string): OfxParseResult {
+export function parseOfx(content: string): ImportParseResult {
   const blocks = content.match(STMTTRN_BLOCK_REGEX) ?? [];
 
-  const transactions: ParsedOfxTransaction[] = [];
-  const errors: OfxParseError[] = [];
+  const transactions: ParsedTransaction[] = [];
+  const errors: ImportParseError[] = [];
 
   for (const block of blocks) {
     const result = parseBlock(block);

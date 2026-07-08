@@ -29,7 +29,7 @@ async function fileToBase64(file: File): Promise<string> {
  * "Importar de documento" (docs da tarefa, item 5) — sobe PDF/foto do
  * CCB/contrato de banco, chama `parseFinancingDocumentAction` (Gemini) e
  * devolve o `ParsedFinancing` pro `FinancingFormModal` pré-preencher via
- * `onParsed`. Sem passo de prévia separado (diferente de `OfxImportModal`):
+ * `onParsed`. Sem passo de prévia separado (diferente de `ImportModal`):
  * o próprio form de criação JÁ é a prévia — o usuário revisa/edita os campos
  * pré-preenchidos e só grava ao clicar "Salvar" (nunca cria nada aqui).
  * Só aparece na CRIAÇÃO (`FinancingFormModal` não renderiza isto editando).
@@ -53,7 +53,7 @@ export function FinancingImportButton({ onParsed, disabled }: FinancingImportBut
       onParsed(result.data);
     } finally {
       setImporting(false);
-      // Remonta o <input type="file"> (mesmo truque de `OfxImportModal`) —
+      // Remonta o <input type="file"> (mesmo truque de `ImportModal`) —
       // permite reimportar o MESMO arquivo (ex.: tentar de novo depois de
       // corrigir algo), já que um `<input>` não dispara `onChange` de novo
       // pro mesmo valor sem isso.

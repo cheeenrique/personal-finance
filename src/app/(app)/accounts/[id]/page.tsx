@@ -9,7 +9,7 @@ import { KPICard } from "@/components/shared/kpi-card";
 import { AccountTransactionsHistory } from "@/components/accounts/account-transactions-history";
 import { ACCOUNT_TYPE_LABELS, DEFAULT_ACCOUNT_COLOR } from "@/components/accounts/account-config";
 import { AccountIcon } from "@/components/accounts/account-icon";
-import { OfxImportButton } from "@/components/accounts/ofx-import-button";
+import { ImportButton } from "@/components/accounts/import-button";
 
 /**
  * Detalhe da conta (docs/21-ACCOUNTS.md, "Detalhe da Conta"): saldo atual,
@@ -76,7 +76,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-extrabold text-foreground">Histórico de transações</h3>
-          <OfxImportButton accountId={account.id} />
+          <ImportButton accountId={account.id} />
         </div>
         <AccountTransactionsHistory accountId={account.id} />
       </div>

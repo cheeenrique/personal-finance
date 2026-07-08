@@ -2,17 +2,17 @@ import { prisma } from "@/lib/db/client";
 import { accountRepository } from "@/modules/accounts/repository";
 import { transactionService } from "@/modules/transactions/service";
 import { calendarPartsSP } from "@/lib/date/calendar-sp";
-import { parseOfx } from "./ofx-parser";
+import { parseImportFile } from "./parsers";
 import { importRepository, type FallbackRow } from "./repository";
 import { AccountNotFoundError } from "./errors";
-import type { OfxImportCommitResult, OfxImportPreview, OfxPreviewItem, ParsedOfxTransaction } from "./types";
+import type { ImportCommitResult, ImportPreview, ImportPreviewItem, ParsedTransaction } from "./types";
 
 async function assertAccountOwnership(userId: string, accountId: string): Promise<void> {
   const account = await accountRepository.findById(userId, accountId);
   if (!account) throw new AccountNotFoundError(accountId);
 }
 
-/** Genérico em `T` (não fixo em `ParsedOfxTransaction`) — preserva campos extras do chamador (ex.: `categoryId` já resolvido em `commitOfxImport`) no `Array.prototype.filter` narrowing. */
+/** Genérico em `T` (não fixo em `ParsedTransaction`) — preserva campos extras do chamador (ex.: `categoryId` já resolvido em `commitImport`) no `Array.prototype.filter` narrowing. */
 function hasFitId<T extends { fitId: string | null }>(item: T): item is T & { fitId: string } {
   return item.fitId !== null;
 }
@@ -22,13 +22,13 @@ function hasFitId<T extends { fitId: string | null }>(item: T): item is T & { fi
  * Extrato OFX") — mesma regra dos dois lados (linha existente no banco vs.
  * item recém-parseado). Dia-calendário em America/Sao_Paulo (`calendarPartsSP`,
  * não `date.toISOString()`): a mesma transação pode existir no banco com hora
- * diferente do que o parser OFX produz (que sempre nasce à meia-noite SP, ver
- * `ofx-parser.ts`) — comparar o instante exato deixava passar duplicata real
+ * diferente do que o parser produz (todo parser em `parsers/*.ts` nasce à
+ * meia-noite SP) — comparar o instante exato deixava passar duplicata real
  * (bug: extrato Nubank conta/Pix sem `<FITID>`). CONTRATO: `amount` sempre
- * normalizado como `Decimal.toFixed(2)` ("50.00", nunca "50" ou "50.1") — o
- * parser garante em `parseOfxAmount`, o repository em `findFallbackRows`.
- * Formato divergente entre os lados quebra a chave e duplica tudo sem fitId
- * no reimport.
+ * normalizado como `Decimal.toFixed(2)` ("50.00", nunca "50" ou "50.1") — cada
+ * parser garante isso (`parseOfxAmount`/`parseCsvAmount`), o repository em
+ * `findFallbackRows`. Formato divergente entre os lados quebra a chave e
+ * duplica tudo sem fitId no reimport.
  */
 function fallbackKey(date: Date, amount: string, description: string): string {
   const { year, month, day } = calendarPartsSP(date);
@@ -61,13 +61,13 @@ function buildDedupState(existingFitIds: Set<string>, fallbackRows: FallbackRow[
 }
 
 /**
- * Único ponto de decisão "é duplicata?" — usado IDÊNTICO por `previewOfxImport`
- * e `commitOfxImport` (nunca podem divergir). Muta `state`: fitId novo entra
+ * Único ponto de decisão "é duplicata?" — usado IDÊNTICO por `previewImport`
+ * e `commitImport` (nunca podem divergir). Muta `state`: fitId novo entra
  * no Set (pega duplicata do mesmo fitId dentro do MESMO arquivo); chave de
  * fallback duplicada decrementa a contagem (consome 1 ocorrência do banco por
  * item do arquivo que bateu nela — dedup in-batch natural, sem Set à parte).
  */
-function isDuplicate(item: ParsedOfxTransaction, state: DedupState): boolean {
+function isDuplicate(item: ParsedTransaction, state: DedupState): boolean {
   if (item.fitId) {
     if (state.fitIds.has(item.fitId)) return true;
     state.fitIds.add(item.fitId);
@@ -98,15 +98,22 @@ async function resolveCategoryId(userId: string, description: string): Promise<s
 }
 
 /**
- * Prévia da importação — parseia o arquivo e classifica cada `<STMTTRN>` em
- * novo/duplicado/erro, sem gravar nada (docs/03-DATABASE.md, "Importação de
- * Extrato OFX"). Dedup por `fitId` já existente na CONTA; fallback por
- * `(date, amount, description)` só para o raro item sem `fitId`.
+ * Prévia da importação — parseia o arquivo (parser resolvido por extensão,
+ * `parsers/index.ts`) e classifica cada transação em novo/duplicado/erro, sem
+ * gravar nada (docs/03-DATABASE.md, "Importação de Extrato OFX"; formatos
+ * além de OFX em docs/superpowers/specs/2026-07-08-import-multiformato-design.md).
+ * Dedup por `fitId` já existente na CONTA; fallback por `(date, amount,
+ * description)` pros itens sem `fitId` (CSV nunca tem).
  */
-async function previewOfxImport(userId: string, accountId: string, fileContent: string): Promise<OfxImportPreview> {
+async function previewImport(
+  userId: string,
+  accountId: string,
+  fileName: string,
+  fileContent: string,
+): Promise<ImportPreview> {
   await assertAccountOwnership(userId, accountId);
 
-  const { transactions, errors } = parseOfx(fileContent);
+  const { transactions, errors } = parseImportFile(fileName, fileContent);
 
   const withFitId = transactions.filter(hasFitId);
   const withoutFitId = transactions.filter((item) => !hasFitId(item));
@@ -122,7 +129,7 @@ async function previewOfxImport(userId: string, accountId: string, fileContent: 
   const state = buildDedupState(existingFitIds, fallbackRows);
 
   let duplicados = 0;
-  const novosParsed: ParsedOfxTransaction[] = [];
+  const novosParsed: ParsedTransaction[] = [];
 
   for (const item of transactions) {
     if (isDuplicate(item, state)) {
@@ -132,7 +139,7 @@ async function previewOfxImport(userId: string, accountId: string, fileContent: 
     novosParsed.push(item);
   }
 
-  const novos: OfxPreviewItem[] = await Promise.all(
+  const novos: ImportPreviewItem[] = await Promise.all(
     novosParsed.map(async (item) => ({
       date: item.date,
       amount: item.amount,
@@ -161,10 +168,15 @@ async function previewOfxImport(userId: string, accountId: string, fileContent: 
  * é o índice único parcial em (accountId, fitId) + `skipDuplicates` no insert
  * (ver `repository.insertMany` e a migration `transaction_fitid_unique`).
  */
-async function commitOfxImport(userId: string, accountId: string, fileContent: string): Promise<OfxImportCommitResult> {
+async function commitImport(
+  userId: string,
+  accountId: string,
+  fileName: string,
+  fileContent: string,
+): Promise<ImportCommitResult> {
   await assertAccountOwnership(userId, accountId);
 
-  const { transactions, errors } = parseOfx(fileContent);
+  const { transactions, errors } = parseImportFile(fileName, fileContent);
   if (transactions.length === 0) return { imported: 0, duplicados: 0, erros: errors };
 
   const withCategory = await Promise.all(
@@ -189,8 +201,8 @@ async function commitOfxImport(userId: string, accountId: string, fileContent: s
     ]);
     const state = buildDedupState(existingFitIds, fallbackRows);
 
-    // Dedup in-batch: `isDuplicate` muta `state` a cada item — dois
-    // `<STMTTRN>` com o mesmo `<FITID>` (ou a mesma chave de fallback, até o
+    // Dedup in-batch: `isDuplicate` muta `state` a cada item — duas
+    // transações com o mesmo `fitId` (ou a mesma chave de fallback, até o
     // limite do que o banco já tem) no MESMO arquivo inserem só o necessário.
     // O snapshot do banco não enxerga o que ainda está no próprio batch.
     const toInsert = withCategory.filter((item) => !isDuplicate(item, state));
@@ -206,6 +218,6 @@ async function commitOfxImport(userId: string, accountId: string, fileContent: s
 }
 
 export const importService = {
-  previewOfxImport,
-  commitOfxImport,
+  previewImport,
+  commitImport,
 };

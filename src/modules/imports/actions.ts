@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { importService } from "./service";
-import { ofxImportSchema } from "./schemas";
+import { importSchema } from "./schemas";
 import { ImportDomainError } from "./errors";
-import type { ActionResult, OfxImportCommitResult, OfxImportPreview } from "./types";
+import type { ActionResult, ImportCommitResult, ImportPreview } from "./types";
 
 /** Server Actions só delegam para o module (docs/99-CLAUDE.md, "Regra de Ouro"). */
 
@@ -29,14 +29,15 @@ function toActionError(error: unknown): { success: false; error: { code: string;
 }
 
 /** Só leitura — parseia e classifica, nada é gravado. Sem `revalidatePath`. */
-export async function previewOfxImportAction(
+export async function previewImportAction(
   accountId: string,
+  fileName: string,
   fileContent: string,
-): Promise<ActionResult<OfxImportPreview>> {
+): Promise<ActionResult<ImportPreview>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
-  const parsed = ofxImportSchema.safeParse({ accountId, fileContent });
+  const parsed = importSchema.safeParse({ accountId, fileName, fileContent });
   if (!parsed.success) {
     return {
       success: false,
@@ -45,21 +46,27 @@ export async function previewOfxImportAction(
   }
 
   try {
-    const preview = await importService.previewOfxImport(userId, parsed.data.accountId, parsed.data.fileContent);
+    const preview = await importService.previewImport(
+      userId,
+      parsed.data.accountId,
+      parsed.data.fileName,
+      parsed.data.fileContent,
+    );
     return { success: true, data: preview };
   } catch (error) {
     return toActionError(error);
   }
 }
 
-export async function commitOfxImportAction(
+export async function commitImportAction(
   accountId: string,
+  fileName: string,
   fileContent: string,
-): Promise<ActionResult<OfxImportCommitResult>> {
+): Promise<ActionResult<ImportCommitResult>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
-  const parsed = ofxImportSchema.safeParse({ accountId, fileContent });
+  const parsed = importSchema.safeParse({ accountId, fileName, fileContent });
   if (!parsed.success) {
     return {
       success: false,
@@ -68,7 +75,12 @@ export async function commitOfxImportAction(
   }
 
   try {
-    const result = await importService.commitOfxImport(userId, parsed.data.accountId, parsed.data.fileContent);
+    const result = await importService.commitImport(
+      userId,
+      parsed.data.accountId,
+      parsed.data.fileName,
+      parsed.data.fileContent,
+    );
     revalidatePath("/accounts");
     revalidatePath(`/accounts/${parsed.data.accountId}`);
     revalidatePath("/dashboard");

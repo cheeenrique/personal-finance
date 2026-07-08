@@ -1,57 +1,59 @@
 import type { TransactionType } from "@/generated/prisma/enums";
 
-/** OFX só produz lançamento de conta bancária (CREDIT/DEBIT) — nunca TRANSFER/CARD_PAYMENT (ver ofx-parser.ts). */
-export type OfxTransactionType = Extract<TransactionType, "INCOME" | "EXPENSE">;
+/** Todo parser de import só produz lançamento simples (CREDIT/DEBIT) — nunca TRANSFER/CARD_PAYMENT (ver parsers/*.ts). */
+export type ImportTransactionType = Extract<TransactionType, "INCOME" | "EXPENSE">;
 
 /**
- * Um `<STMTTRN>` já parseado (ver `ofx-parser.ts`, função pura). `fitId` é
- * `null` só no raro caso de bloco sem `<FITID>` no arquivo — o módulo cai num
- * fallback de dedup por `(accountId, date, amount, description)` nesse caso
+ * Contrato comum de todo parser de extrato (OFX, CSV, e formatos futuros —
+ * docs/superpowers/specs/2026-07-08-import-multiformato-design.md). `fitId`
+ * é `null` quando o formato não tem identificador único de transação (CSV
+ * nunca tem; OFX só no raro bloco sem `<FITID>`) — o módulo cai num fallback
+ * de dedup por `(accountId, date, amount, description)` nesse caso
  * (docs/03-DATABASE.md, "Importação de Extrato OFX").
  */
-export type ParsedOfxTransaction = {
+export type ParsedTransaction = {
   fitId: string | null;
   date: Date;
-  /** Decimal string, sempre positivo (`abs`) — o sinal vem só do `type` (CREDIT/DEBIT), nunca do valor cru do OFX. */
+  /** Decimal string, sempre positivo (`abs`) — o sinal vem só do `type`, nunca do valor cru do arquivo. */
   amount: string;
-  type: OfxTransactionType;
+  type: ImportTransactionType;
   description: string;
 };
 
-/** Um bloco `<STMTTRN>` que falhou o parse — trecho cru + motivo, pro usuário identificar o lançamento no arquivo original. */
-export type OfxParseError = {
+/** Uma linha/bloco do arquivo que falhou o parse — trecho cru + motivo, pro usuário identificar o lançamento no arquivo original. */
+export type ImportParseError = {
   snippet: string;
   reason: string;
 };
 
-export type OfxParseResult = {
-  transactions: ParsedOfxTransaction[];
-  errors: OfxParseError[];
+export type ImportParseResult = {
+  transactions: ParsedTransaction[];
+  errors: ImportParseError[];
 };
 
-/** Item "novo" da prévia — ainda não gravado (ver service.ts `previewOfxImport`). */
-export type OfxPreviewItem = {
+/** Item "novo" da prévia — ainda não gravado (ver service.ts `previewImport`). */
+export type ImportPreviewItem = {
   date: Date;
   amount: string;
-  type: OfxTransactionType;
+  type: ImportTransactionType;
   description: string;
   /** Sugestão de `transactionService.lastCategoryForDescription` — `null` quando não há histórico (nunca inventada). */
   categoryName: string | null;
 };
 
 /** Resultado da prévia (docs entregues pelo coordenador) — nada gravado ainda. */
-export type OfxImportPreview = {
+export type ImportPreview = {
   total: number;
-  novos: OfxPreviewItem[];
+  novos: ImportPreviewItem[];
   duplicados: number;
-  erros: OfxParseError[];
+  erros: ImportParseError[];
 };
 
 /** Resultado da confirmação — o que de fato foi gravado. */
-export type OfxImportCommitResult = {
+export type ImportCommitResult = {
   imported: number;
   duplicados: number;
-  erros: OfxParseError[];
+  erros: ImportParseError[];
 };
 
 export type ActionError = { code: string; message: string };
