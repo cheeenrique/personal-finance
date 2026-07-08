@@ -6,6 +6,7 @@ import { transactionService } from "@/modules/transactions/service";
 import { assetService } from "@/modules/assets/service";
 import { reportRepository, type DateRange } from "./repository";
 import { InvalidDateRangeError } from "./errors";
+import { SANKEY_HUB_NAME, SANKEY_LEFTOVER_NAME } from "./types";
 import type {
   AccountMovementReport,
   CashflowFilters,
@@ -13,6 +14,9 @@ import type {
   CategoryExpenseTotal,
   CategoryTotalsFilters,
   IncomeExpenseMonthPoint,
+  SankeyFlowLink,
+  SankeyFlowNode,
+  SankeyFlowReport,
   TotalEvolutionPoint,
 } from "./types";
 
@@ -182,6 +186,80 @@ async function categoryTotals(
 }
 
 /**
+ * Fluxo de dinheiro do período pro Sankey do Dashboard (docs/11-DASHBOARD.md,
+ * "5. Gráficos e Análises"): cada categoria de RECEITA → hub "Renda" → cada
+ * categoria de DESPESA + "Sobrou" (receita − despesa, quando positivo).
+ * Reaproveita `categoryTotals` (acima) nos dois sentidos — `type: INCOME` de
+ * um lado, default (EXPENSE) do outro — mesma base de caixa (conta-only +
+ * `COALESCE(paidAt, date)`) do KPI "Despesas do mês"/"Receitas do mês". Sem
+ * repositório novo: `categoryTotals` já generaliza pra INCOME via
+ * `CategoryTotalsFilters.type` (rule 02-dry-kiss-yagni — reusar em vez de
+ * duplicar a query).
+ *
+ * `income`/`expense`/`isDeficit`/`deficit` são derivados da MESMA soma que
+ * alimenta os nós (`incomeRows`/`expenseRows`, ambos via `categoryTotals`) —
+ * garante que o diagrama nunca fique inconsistente internamente (entrada do
+ * hub sempre bate com saída + Sobrou). `categoryTotals` exige
+ * `categoryId IS NOT NULL` (mesma regra de `groupCategoryTotalsInRange`) —
+ * na prática bate com o KPI de cash-flow (`reportService.cashflow`, sem esse
+ * filtro) porque `categoryId` é obrigatório pra INCOME/EXPENSE via zod na
+ * criação (`modules/transactions/schemas.ts`); só diverge se existir
+ * transação sem categoria por import/seed que pule essa validação — mesma
+ * limitação que "Gastos por categoria" (`ExpenseCategoryChart`) já tem hoje,
+ * não uma regressão nova.
+ *
+ * Déficit (despesa > receita, pela MESMA base categorizada acima): Sankey
+ * não lida bem com link de valor negativo, então "Sobrou" só existe quando
+ * há sobra real (`> 0`) — em déficit o nó nem aparece em `nodes`/`links`, o
+ * caller sinaliza via `isDeficit`/`deficit` pra UI mostrar o aviso fora do
+ * diagrama.
+ */
+async function sankeyFlow(userId: string, dateFrom: Date, dateTo: Date): Promise<SankeyFlowReport> {
+  assertValidRange(dateFrom, dateTo);
+
+  const [incomeCategories, expenseCategories] = await Promise.all([
+    categoryTotals(userId, dateFrom, dateTo, { type: TransactionType.INCOME }),
+    categoryTotals(userId, dateFrom, dateTo),
+  ]);
+
+  // Zero-value defensivo: `categoryTotals` só retorna categoria com soma > 0
+  // na prática (query agrupada de transações existentes), mas um link de
+  // valor 0 não agrega nada ao diagrama — fora por clareza, não por bug real.
+  const incomeRows = incomeCategories.filter((row) => row.total.greaterThan(0));
+  const expenseRows = expenseCategories.filter((row) => row.total.greaterThan(0));
+
+  const totalIncome = incomeRows.reduce((sum, row) => sum.plus(row.total), new Prisma.Decimal(0));
+  const totalExpense = expenseRows.reduce((sum, row) => sum.plus(row.total), new Prisma.Decimal(0));
+  const net = totalIncome.minus(totalExpense);
+  const isDeficit = net.lessThan(0);
+  const leftover = isDeficit ? new Prisma.Decimal(0) : net;
+
+  const hubIndex = incomeRows.length;
+  const expenseStartIndex = hubIndex + 1;
+  const leftoverIndex = expenseStartIndex + expenseRows.length;
+  const hasLeftoverNode = leftover.greaterThan(0);
+
+  const nodes: SankeyFlowNode[] = [
+    ...incomeRows.map((row) => ({ name: row.categoryName })),
+    { name: SANKEY_HUB_NAME },
+    ...expenseRows.map((row) => ({ name: row.categoryName })),
+    ...(hasLeftoverNode ? [{ name: SANKEY_LEFTOVER_NAME }] : []),
+  ];
+
+  const links: SankeyFlowLink[] = [
+    ...incomeRows.map((row, index) => ({ source: index, target: hubIndex, value: row.total.toNumber() })),
+    ...expenseRows.map((row, index) => ({
+      source: hubIndex,
+      target: expenseStartIndex + index,
+      value: row.total.toNumber(),
+    })),
+    ...(hasLeftoverNode ? [{ source: hubIndex, target: leftoverIndex, value: leftover.toNumber() }] : []),
+  ];
+
+  return { nodes, links, isDeficit, deficit: isDeficit ? net.abs() : new Prisma.Decimal(0) };
+}
+
+/**
  * Fluxo de caixa CORRETO: entradas − saídas num período arbitrário
  * (docs/28-REPORTS.md, "Relatório de Fluxo de Caixa"), com a MESMA base de
  * caixa do Dashboard (conta-only + `COALESCE(paidAt, date)`, ver
@@ -274,6 +352,7 @@ export const reportService = {
   cashflowByMonth,
   expenseByCategory,
   categoryTotals,
+  sankeyFlow,
   cashflow,
   accountReport,
   patrimonyEvolution,

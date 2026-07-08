@@ -76,3 +76,28 @@ export type CategoryTotalsFilters = {
   accountId?: string;
   type?: TransactionType;
 };
+
+/** Nome do nó central do Sankey "Fluxo de dinheiro" — fonte única pra `service.ts` (monta o nó) e pro componente (decide a cor, ver `components/dashboard/money-flow-sankey-chart.tsx`). */
+export const SANKEY_HUB_NAME = "Renda";
+/** Nome do nó de destino que representa receita não gasta no período (só existe quando `income - expense > 0`, ver `service.ts` `sankeyFlow`). */
+export const SANKEY_LEFTOVER_NAME = "Sobrou";
+
+/** Nó do gráfico Sankey "Fluxo de dinheiro" (Dashboard) — só o nome; cor é decisão de quem compõe a tela (ver `components/dashboard/money-flow-sankey-chart.tsx`). */
+export type SankeyFlowNode = { name: string };
+
+/** Link do Sankey — `source`/`target` são índices em `SankeyFlowReport.nodes` (convenção da lib de gráficos, ver docs/04-DESIGN_SYSTEM.md "Gráficos"). */
+export type SankeyFlowLink = { source: number; target: number; value: number };
+
+/**
+ * Fluxo de dinheiro do período pro Dashboard (docs/11-DASHBOARD.md, "5.
+ * Gráficos e Análises"): receita por categoria → hub "Renda" → despesa por
+ * categoria + "Sobrou". `isDeficit`/`deficit` sinalizam despesa > receita —
+ * nesse caso o nó "Sobrou" nem existe em `links`/`nodes` (Sankey não lida bem
+ * com link de valor negativo), a UI mostra o aviso fora do diagrama.
+ */
+export type SankeyFlowReport = {
+  nodes: SankeyFlowNode[];
+  links: SankeyFlowLink[];
+  isDeficit: boolean;
+  deficit: Money;
+};

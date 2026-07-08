@@ -25,6 +25,7 @@ import { InstallmentsSummary } from "@/components/dashboard/installments-summary
 import { LoansSummary } from "@/components/dashboard/loans-summary";
 import { ExpenseCategoryChart } from "@/components/dashboard/expense-category-chart";
 import { MonthlyEvolutionChart } from "@/components/dashboard/monthly-evolution-chart";
+import { MoneyFlowSankeyChart } from "@/components/dashboard/money-flow-sankey-chart";
 import { RecentTransactionsTable } from "@/components/dashboard/recent-transactions-table";
 
 const RECENT_TRANSACTIONS_LIMIT = 5;
@@ -90,6 +91,7 @@ async function DashboardContent({ period }: { period: PeriodPreset }) {
     activeLoans,
     expenseByCategory,
     incomeVsExpenseByMonth,
+    moneyFlow,
     recentTransactions,
   ] = await Promise.all([
     accountService.getInsufficientBalanceReport(userId),
@@ -119,6 +121,11 @@ async function DashboardContent({ period }: { period: PeriodPreset }) {
     // interna a `categoryTotals` (`endOfDayInclusive`), sem precisar do wrap aqui.
     reportService.categoryTotals(userId, parsedDateFrom, parsedDateTo),
     reportService.incomeVsExpenseByMonth(userId, year),
+    // "Fluxo de dinheiro" (Sankey) do período selecionado — MESMA base de
+    // caixa de `categoryTotals` acima (reusada nos dois sentidos, ver
+    // `modules/reports/service.ts` `sankeyFlow` pro detalhe de quando essa
+    // soma diverge do KPI de cash-flow: transação sem categoria).
+    reportService.sankeyFlow(userId, parsedDateFrom, parsedDateTo),
     transactionService.listRecentForDashboard(userId, RECENT_TRANSACTIONS_LIMIT),
   ]);
 
@@ -174,6 +181,8 @@ async function DashboardContent({ period }: { period: PeriodPreset }) {
         <MonthlyEvolutionChart points={monthlyEvolutionPoints} />
       </div>
 
+      <MoneyFlowSankeyChart data={moneyFlow} />
+
       <RecentTransactionsTable
         transactions={recentTransactions.map((transaction) => ({
           ...transaction,
@@ -211,6 +220,8 @@ function DashboardSkeleton() {
         <Skeleton className="h-72 w-full rounded-xl" />
         <Skeleton className="h-72 w-full rounded-xl" />
       </div>
+
+      <Skeleton className="h-[340px] w-full rounded-xl" />
 
       <Skeleton className="h-72 w-full rounded-xl" />
     </div>
