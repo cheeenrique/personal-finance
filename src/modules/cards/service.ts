@@ -1,7 +1,6 @@
 import { Prisma, type Card, type CardCycle as CardCycleRow, type CardInvoice } from "@/generated/prisma/client";
 import { TransactionType, CardType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db/client";
-import { nowInSaoPaulo } from "@/lib/date/timezone";
 import {
   cardRepository,
   type CreateCardData,
@@ -118,10 +117,16 @@ function assertCreditCard(card: Card, operation: string): void {
 
 /**
  * Fatura ABERTA do ciclo atual (docs/22-CREDIT_CARDS.md, "Fatura Atual").
- * `refDate` default = agora em America/Sao_Paulo. Ver `cycle.ts` para a regra
- * completa de fechamento/vencimento. CREDIT-only — ver `assertCreditCard`.
+ * `refDate` default = instante REAL (`new Date()`), nunca `nowInSaoPaulo()`:
+ * `cycleContaining` já converte pra calendário SP internamente e compara
+ * `refDate.getTime()` contra o instante real do fechamento (meia-noite SP em
+ * UTC) — um epoch deslocado mostraria o ciclo ANTERIOR como aberto na
+ * madrugada (00:00–03:00 SP) do dia de fechamento (ver JSDoc em
+ * `modules/transactions/installments.ts` `cancelInstallmentPurchase`).
+ * Ver `cycle.ts` para a regra completa de fechamento/vencimento.
+ * CREDIT-only — ver `assertCreditCard`.
  */
-async function currentInvoice(userId: string, cardId: string, refDate: Date = nowInSaoPaulo()): Promise<Invoice> {
+async function currentInvoice(userId: string, cardId: string, refDate: Date = new Date()): Promise<Invoice> {
   const card = await getCard(userId, cardId);
   assertCreditCard(card, "currentInvoice");
   const fallback = { closingDay: card.closingDay, dueDay: card.dueDay };
@@ -211,7 +216,10 @@ async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
   if (cards.length === 0) return [];
 
   const cardIds = cards.map((card) => card.id);
-  const refDate = nowInSaoPaulo();
+  // Instante REAL — mesmo racional do default de `currentInvoice` (acima):
+  // `cycleContaining` espera um epoch verdadeiro, não o Date deslocado de
+  // `nowInSaoPaulo()`.
+  const refDate = new Date();
 
   const [expenseRows, typeSums, cycleRows] = await Promise.all([
     cardRepository.listExpensesForCards(userId, cardIds),

@@ -1,7 +1,6 @@
 import { Prisma, type Account } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
 import { calendarPartsSP, startOfDaySP } from "@/lib/date/calendar-sp";
-import { nowInSaoPaulo } from "@/lib/date/timezone";
 import {
   accountRepository,
   type CreateAccountData,
@@ -139,10 +138,17 @@ function waterfallShortfall(
  * `isPaid=true`). Retorna client-ready (`amount`/`falta`/`deficitTotal` como
  * string, ver types.ts `InsufficientBalanceReport`) porque não há outro
  * consumidor do relatório além do Dashboard.
+ *
+ * `refDate` default = instante REAL (`new Date()`), nunca `nowInSaoPaulo()`:
+ * `startOfNextMonthSP` → `calendarPartsSP` já converte pra calendário SP —
+ * um epoch deslocado converteria DUAS vezes e, na madrugada (00:00–03:00 SP)
+ * do dia 1º, o corte cairia no mês ANTERIOR, perdendo as previstas do mês
+ * corrente (ver JSDoc em `modules/transactions/installments.ts`
+ * `cancelInstallmentPurchase`).
  */
 async function getInsufficientBalanceReport(
   userId: string,
-  refDate: Date = nowInSaoPaulo(),
+  refDate: Date = new Date(),
 ): Promise<InsufficientBalanceReport> {
   const accounts = await listWithBalances(userId);
   if (accounts.length === 0) return { deficitTotal: "0.00", items: [] };

@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { Prisma, type Asset, type AssetSnapshot } from "@/generated/prisma/client";
 import type { AssetType } from "@/generated/prisma/enums";
-import { nowInSaoPaulo } from "@/lib/date/timezone";
 
 export type CreateAssetData = {
   name: string;
@@ -48,7 +47,7 @@ async function create(userId: string, data: CreateAssetData): Promise<Asset> {
 /**
  * Update escopado (ownership via `findById` antes de escrever, mesmo padrão
  * de `modules/accounts/repository.ts`). Quando `currentValue` é enviado,
- * grava o novo valor + um `AssetSnapshot(assetId, value, date=agora em SP)`
+ * grava o novo valor + um `AssetSnapshot(assetId, value, date=agora)`
  * atomicamente no mesmo `$transaction` — regra central do módulo
  * (docs/27-ASSETS.md, "Toda atualização de currentValue grava um
  * AssetSnapshot"). Demais campos não disparam snapshot.
@@ -69,7 +68,14 @@ async function update(userId: string, id: string, data: UpdateAssetData): Promis
     return prisma.asset.update({ where: { id }, data: fields });
   }
 
-  const snapshotDate = nowInSaoPaulo();
+  // Instante REAL (`new Date()`), nunca `nowInSaoPaulo()` — `date` é um
+  // `timestamptz` persistido, e `nowInSaoPaulo()` retorna um Date com epoch
+  // deslocado (helper de calendário, ver JSDoc em
+  // `modules/transactions/installments.ts` `cancelInstallmentPurchase`).
+  // Gravar o epoch deslocado faz a bucketização por dia SP na leitura
+  // (`service.ts` `dayKeySP`) deslocar DE NOVO: snapshot feito na madrugada
+  // (00:00–03:00 SP) cairia no dia-calendário ANTERIOR.
+  const snapshotDate = new Date();
 
   const [updated] = await prisma.$transaction([
     prisma.asset.update({ where: { id }, data: { ...fields, currentValue: data.currentValue } }),
