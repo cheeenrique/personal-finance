@@ -220,24 +220,32 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
   return lines.join("\n");
 }
 
-type GeminiContentPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+/** Parte de um `content` da API Gemini — texto puro ou bytes inline (imagem/PDF) em base64. Exportado pra `financing-parser.ts` montar seu próprio `contents` (mesmo formato, documento em vez de foto de lançamento). */
+export type GeminiContentPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
 /**
- * Chamada Gemini compartilhada por texto (`parseTransactionWithAI`) e imagem
- * (`parseTransactionFromImage`) — só o `contents` (texto puro vs.
- * `inlineData` + texto) muda entre os dois; parsing da resposta, validação
- * zod e tratamento de erro são idênticos (rule 02-dry-kiss-yagni, DRY a
- * partir do 2º caso concreto). `source` só rotula os logs pra diferenciar
- * qual caminho falhou. `null` em qualquer falha (sem `GEMINI_API_KEY`, erro
- * de rede, timeout, resposta não-2xx, JSON inválido/fora do shape esperado)
- * — NUNCA lança, webhook do Telegram não pode quebrar por causa de uma
- * dependência externa opcional. NUNCA loga o conteúdo de `contents` (texto
- * do usuário/bytes de imagem) nem a API key (docs/30-TELEGRAM.md, "Segurança").
+ * Chamada Gemini genérica — compartilhada por transação (texto
+ * `parseTransactionWithAI`, imagem `parseTransactionFromImage`) e documento
+ * de financiamento (`financing-parser.ts`, `parseFinancingFromDocument`).
+ * `responseSchema` (formato Gemini/OpenAPI) e `parseResponse` (valida com zod
+ * + mapeia pro tipo final do caller) são parametrizados pra reuso — só o
+ * `contents` e o shape esperado mudam entre os casos de uso; a chamada
+ * HTTP/timeout/tratamento de erro é idêntico (rule 02-dry-kiss-yagni, DRY a
+ * partir do 2º caso concreto real). `source` só rotula os logs pra
+ * diferenciar qual caminho falhou. `null` em qualquer falha (sem
+ * `GEMINI_API_KEY`, erro de rede, timeout, resposta não-2xx, JSON
+ * inválido/fora do shape esperado — `parseResponse` decide isso) — NUNCA
+ * lança, webhook do Telegram não pode quebrar por causa de uma dependência
+ * externa opcional. NUNCA loga o conteúdo de `contents` (texto do
+ * usuário/bytes de imagem/documento) nem a API key (docs/30-TELEGRAM.md,
+ * "Segurança").
  */
-async function callGemini(
+export async function callGemini<T>(
   contents: Array<{ parts: GeminiContentPart[] }>,
-  source: "text" | "vision",
-): Promise<AiParsedTransaction | null> {
+  source: string,
+  responseSchema: object,
+  parseResponse: (rawJson: unknown) => T | null,
+): Promise<T | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
@@ -253,7 +261,7 @@ async function callGemini(
         contents,
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
+          responseSchema,
         },
       }),
     });
@@ -270,29 +278,7 @@ async function callGemini(
     if (typeof text !== "string") return null;
 
     const rawJson: unknown = JSON.parse(text);
-    const parsed = aiResponseSchema.safeParse(rawJson);
-    if (!parsed.success) return null;
-
-    return {
-      isTransaction: parsed.data.isTransaction,
-      type: parsed.data.type,
-      amount: parsed.data.amount ?? null,
-      description: parsed.data.description,
-      date: parsed.data.date ?? null,
-      categoryName: parsed.data.categoryName ?? null,
-      paymentMethod: parsed.data.paymentMethod ?? null,
-      originKind: parsed.data.originKind ?? null,
-      originName: parsed.data.originName ?? null,
-      intent: parsed.data.intent ?? undefined,
-      query: parsed.data.query
-        ? {
-            queryType: parsed.data.query.queryType,
-            period: parsed.data.query.period,
-            categoryName: parsed.data.query.categoryName ?? null,
-            cardName: parsed.data.query.cardName ?? null,
-          }
-        : null,
-    };
+    return parseResponse(rawJson);
   } catch (error) {
     console.error(`[modules/telegram] gemini ${source} parse failed`, {
       reason: error instanceof Error ? error.name : "unknown",
@@ -301,6 +287,39 @@ async function callGemini(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * Valida a saída bruta do Gemini contra `aiResponseSchema` e mapeia pro shape
+ * final `AiParsedTransaction` — usado como `parseResponse` de `callGemini`
+ * nos dois caminhos de transação (texto e imagem). `null` quando o shape não
+ * bate (nunca confiamos cegamente em saída de LLM, é input externo como
+ * qualquer outro).
+ */
+function parseAiTransactionResponse(rawJson: unknown): AiParsedTransaction | null {
+  const parsed = aiResponseSchema.safeParse(rawJson);
+  if (!parsed.success) return null;
+
+  return {
+    isTransaction: parsed.data.isTransaction,
+    type: parsed.data.type,
+    amount: parsed.data.amount ?? null,
+    description: parsed.data.description,
+    date: parsed.data.date ?? null,
+    categoryName: parsed.data.categoryName ?? null,
+    paymentMethod: parsed.data.paymentMethod ?? null,
+    originKind: parsed.data.originKind ?? null,
+    originName: parsed.data.originName ?? null,
+    intent: parsed.data.intent ?? undefined,
+    query: parsed.data.query
+      ? {
+          queryType: parsed.data.query.queryType,
+          period: parsed.data.query.period,
+          categoryName: parsed.data.query.categoryName ?? null,
+          cardName: parsed.data.query.cardName ?? null,
+        }
+      : null,
+  };
 }
 
 /**
@@ -315,7 +334,7 @@ export async function parseTransactionWithAI(
   rawText: string,
   ctx: AiParserContext,
 ): Promise<AiParsedTransaction | null> {
-  return callGemini([{ parts: [{ text: buildPrompt(rawText, ctx) }] }], "text");
+  return callGemini([{ parts: [{ text: buildPrompt(rawText, ctx) }] }], "text", RESPONSE_SCHEMA, parseAiTransactionResponse);
 }
 
 /**
@@ -344,5 +363,7 @@ export async function parseTransactionFromImage(
       },
     ],
     "vision",
+    RESPONSE_SCHEMA,
+    parseAiTransactionResponse,
   );
 }

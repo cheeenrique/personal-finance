@@ -178,3 +178,51 @@ export type TelegramDraft = {
   originKind: TelegramOriginKind | null;
   originName: string | null;
 };
+
+/** Sistema de amortização identificado num documento de financiamento (`financing-parser.ts`) — mesmos valores do enum Prisma `AmortizationSystem` (`prisma/schema.prisma`, model `Loan`). */
+export type ParsedAmortizationSystem = "PRICE" | "SAC" | "CUSTOM";
+
+/** Periodicidade da taxa de juros/CET lida do documento — mesmos valores do enum Prisma `InterestPeriod`. */
+export type ParsedInterestPeriod = "MONTHLY" | "ANNUAL";
+
+/** Uma parcela lida da TABELA de parcelas do documento (só presente quando o documento traz valores variáveis — SAC/CUSTOM "lidos prontos", ver `financing-parser.ts`, `buildFinancingPrompt`). */
+export type ParsedFinancingInstallment = {
+  amount: string;
+  dueDate: string;
+};
+
+/**
+ * Saída estruturada do parsing de um DOCUMENTO de financiamento (CCB/contrato
+ * de banco, PDF ou foto) via Gemini (`financing-parser.ts`,
+ * `parseFinancingFromDocument`) — já validada contra `parsedFinancingSchema`
+ * (zod). Todo campo monetário vem como STRING decimal (ponto decimal, sem
+ * separador de milhar) pra não perder precisão antes de virar `Decimal` no
+ * Prisma. Todo campo é nullable — o Gemini preenche só o que encontrar no
+ * documento; o módulo `loans` (fora do escopo deste parser) decide o que é
+ * obrigatório antes de criar o `Loan`. Nomes espelham 1:1 os campos de
+ * `prisma/schema.prisma`, model `Loan` (`kind=FINANCING`), pra zero fricção
+ * na hora de mapear pro input de criação do módulo `loans`. `installments`
+ * só vem preenchido quando o documento traz a tabela de parcelas com valores
+ * variáveis (ver `ParsedFinancingInstallment`).
+ */
+export type ParsedFinancing = {
+  description: string | null;
+  lender: string | null;
+  operationRef: string | null;
+  principal: string | null;
+  downPayment: string | null;
+  assetValue: string | null;
+  assetDescription: string | null;
+  installmentsCount: number | null;
+  installmentAmount: string | null;
+  totalToPay: string | null;
+  firstDueDate: string | null;
+  interestRate: string | null;
+  interestPeriod: ParsedInterestPeriod | null;
+  cet: string | null;
+  amortizationSystem: ParsedAmortizationSystem | null;
+  financedTaxes: string | null;
+  financedInsurance: string | null;
+  financedFees: string | null;
+  installments: ParsedFinancingInstallment[] | null;
+};
