@@ -1,22 +1,20 @@
 "use client";
 
-import { useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { Loader2 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { formatBRL } from "@/lib/money/format";
-import { formatDateSaoPaulo } from "@/lib/date/format";
-import { notifySuccess } from "@/lib/toast";
-import { cn } from "@/lib/utils";
 import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
-import { previewImportAction, commitImportAction } from "@/modules/imports/actions";
-import { TransactionType } from "@/generated/prisma/enums";
-import type { ImportCommitResult, ImportPreview } from "@/modules/imports/types";
+import { notifySuccess } from "@/lib/toast";
+import { aggregateCommit, isPdfImportFile } from "./import-file-utils";
+import { ImportDropzone } from "./import-dropzone";
+import { STEP_TRANSITION, stepVariants } from "./import-motion";
+import { ImportPreview } from "./import-preview";
+import { ImportResult } from "./import-result";
+import { useImportFiles } from "./use-import-files";
 
 type ImportModalProps = {
   open: boolean;
@@ -24,258 +22,100 @@ type ImportModalProps = {
   accountId: string;
 };
 
-type Step = "select" | "preview" | "result";
-
-/** Extensões binárias — lidas via `file.arrayBuffer()` + base64 em vez de `file.text()` (XLSX/PDF não são texto; `parsers/index.ts` espera base64 pra esses formatos, ver `xlsx-parser.ts`/`pdf-parser.ts`). */
-const BINARY_EXTENSIONS = [".xls", ".xlsx", ".pdf"];
-
-function isBinaryImportFile(fileName: string): boolean {
-  const lower = fileName.trim().toLowerCase();
-  return BINARY_EXTENSIONS.some((extension) => lower.endsWith(extension));
-}
-
-/** PDF passa por extração via Gemini no backend (`pdf-parser.ts`) — bem mais lento que os parsers determinísticos (CSV/XLSX/OFX), merece um texto de espera próprio em vez do genérico "Lendo e analisando". */
-function isPdfImportFile(fileName: string): boolean {
-  return fileName.trim().toLowerCase().endsWith(".pdf");
-}
-
-/** `ArrayBuffer` → base64 sem passar por `FileReader` (mesma técnica de `FinancingImportButton.fileToBase64` — a `data:` URL do `FileReader` traria o prefixo `data:<mime>;base64,` junto). */
-async function fileToBase64(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index]);
-  return btoa(binary);
-}
-
-/** OFX/CSV são texto (`file.text()`, decodifica utf-8); XLS/XLSX é binário (base64, ver `fileToBase64`) — cada parser em `modules/imports/parsers/` espera o encoding certo pro seu formato. */
-async function readFileContent(file: File): Promise<string> {
-  return isBinaryImportFile(file.name) ? fileToBase64(file) : file.text();
-}
-
 /**
- * Importador de extrato (docs/03-DATABASE.md, "Importação de Extrato OFX";
- * multi-formato em docs/superpowers/specs/2026-07-08-import-multiformato-design.md
- * — hoje OFX, CSV e XLSX, formato detectado pela extensão do arquivo em
- * `modules/imports/parsers/index.ts`): sobe o arquivo → prévia
- * (novos/duplicados/erros, nada gravado) → confirma → grava. 3 passos dentro
- * do MESMO modal (nunca telas separadas, docs/05-UX_RULES.md, "Modais").
- * Reimportar o mesmo arquivo é seguro — o módulo dedupa por `fitId` (ou
- * fallback), então repetir a confirmação não duplica nada.
+ * Importador de extrato multi-arquivo (docs/03-DATABASE.md, "Importação de
+ * Extrato OFX"; multi-formato em
+ * docs/superpowers/specs/2026-07-08-import-multiformato-design.md) —
+ * dropzone com drag&drop de vários arquivos de uma vez → prévia agregada
+ * (nada gravado) → confirma → grava. O front itera as Server Actions por
+ * arquivo (`use-import-files.ts`: 1 preview + 1 commit cada), sem action
+ * batch nova. 3 passos dentro do MESMO modal, nunca telas separadas
+ * (docs/05-UX_RULES.md, "Modais"). Reimportar é seguro — o módulo dedupa
+ * por `fitId` (ou fallback) no backend, então repetir a confirmação não
+ * duplica nada.
  */
 export function ImportModal({ open, onOpenChange, accountId }: ImportModalProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-
-  const [step, setStep] = useState<Step>("select");
-  // Muda a cada reset — remonta o <input type="file"> (componente não
-  // controlado) pra limpar a seleção anterior, sem depender de ref através do
-  // wrapper `@base-ui/react/input` (nenhum outro componente do projeto passa
-  // `ref` pro `Input`; remount por `key` é mais simples e sem ambiguidade).
-  const [fileInputKey, setFileInputKey] = useState(0);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [fileContent, setFileContent] = useState<string | null>(null);
-  const [preview, setPreview] = useState<ImportPreview | null>(null);
-  const [result, setResult] = useState<ImportCommitResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function resetState() {
-    setStep("select");
-    setFileInputKey((key) => key + 1);
-    setFileName(null);
-    setFileContent(null);
-    setPreview(null);
-    setResult(null);
-    setError(null);
-  }
+  const { step, entries, isAnalyzing, isConfirming, addFiles, removeFile, analyze, confirm, reset } =
+    useImportFiles(accountId);
 
   function handleOpenChange(next: boolean) {
-    if (!next) resetState();
+    if (!next) reset();
     onOpenChange(next);
-  }
-
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setError(null);
-    setFileName(file.name);
-
-    startTransition(async () => {
-      // Texto (OFX/CSV) ou base64 (XLS/XLSX) — `readFileContent` decide pelo
-      // encoding certo (ver comentário acima). `file.name` decide o formato
-      // (extensão), nunca persistido.
-      const content = await readFileContent(file);
-      setFileContent(content);
-
-      const response = await previewImportAction(accountId, file.name, content);
-      if (!response.success) {
-        setError(response.error.message);
-        return;
-      }
-
-      setPreview(response.data);
-      setStep("preview");
-    });
-  }
-
-  function handleConfirm() {
-    if (!fileContent || !fileName) return;
-
-    startTransition(async () => {
-      const response = await commitImportAction(accountId, fileName, fileContent);
-      if (!response.success) {
-        setError(response.error.message);
-        return;
-      }
-
-      setResult(response.data);
-      setStep("result");
-      invalidateAllTransactionLists(queryClient);
-      router.refresh();
-      notifySuccess("Extrato importado");
-    });
   }
 
   function handleClose() {
     handleOpenChange(false);
   }
 
+  async function handleConfirm() {
+    const nextEntries = await confirm();
+    const totals = aggregateCommit(nextEntries);
+
+    invalidateAllTransactionLists(queryClient);
+    router.refresh();
+    if (totals.imported > 0 || totals.duplicados > 0) notifySuccess("Extrato importado");
+  }
+
+  const hasReadyFiles = entries.some((entry) => entry.status === "ready");
+  const isReadingAny = entries.some((entry) => entry.status === "reading");
+  const totalNovos = entries.reduce((sum, entry) => sum + (entry.preview?.novos.length ?? 0), 0);
+  const isAnalyzingPdf = isAnalyzing && entries.some((entry) => entry.status === "ready" && isPdfImportFile(entry.name));
+
   return (
     <FormModal
       open={open}
       onOpenChange={handleOpenChange}
       title="Importar extrato"
-      description="Sobe o extrato do banco (.ofx, .csv, .xlsx ou .pdf), confere uma prévia e só grava depois de confirmar."
+      description="Arraste um ou mais extratos (OFX, CSV, XLS, XLSX ou PDF), confira a prévia agregada e só grava depois de confirmar."
       size="wide"
     >
-      <div className="flex flex-col gap-4">
-        {step === "select" && (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="statement-file">Arquivo (OFX, CSV, XLSX ou PDF)</Label>
-            <Input
-              key={fileInputKey}
-              id="statement-file"
-              type="file"
-              accept=".ofx,.csv,.xls,.xlsx,.pdf"
-              onChange={handleFileChange}
-              disabled={isPending}
-            />
-            {isPending && (
-              <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                {fileName && isPdfImportFile(fileName)
-                  ? "Extraindo lançamentos do PDF (pode levar alguns segundos)…"
-                  : "Lendo e analisando o arquivo…"}
-              </p>
+      <MotionConfig reducedMotion="user">
+        <div className="flex flex-col gap-4">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={step} variants={stepVariants} initial="enter" animate="center" exit="exit" transition={STEP_TRANSITION}>
+              {step === "select" && (
+                <ImportDropzone entries={entries} onAddFiles={addFiles} onRemoveFile={removeFile} disabled={isAnalyzing} />
+              )}
+              {step === "preview" && <ImportPreview entries={entries} />}
+              {step === "result" && <ImportResult entries={entries} />}
+            </motion.div>
+          </AnimatePresence>
+
+          {isAnalyzingPdf && (
+            <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              Extraindo lançamentos do PDF com IA (pode levar alguns segundos)…
+            </p>
+          )}
+
+          <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
+            {step !== "result" && (
+              <Button type="button" variant="outline" onClick={handleClose} disabled={isAnalyzing || isConfirming}>
+                Cancelar
+              </Button>
+            )}
+            {step === "select" && (
+              <Button type="button" onClick={() => void analyze()} disabled={!hasReadyFiles || isReadingAny || isAnalyzing}>
+                {isAnalyzing && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                Analisar arquivos
+              </Button>
+            )}
+            {step === "preview" && (
+              <Button type="button" onClick={() => void handleConfirm()} disabled={isConfirming || totalNovos === 0}>
+                {isConfirming && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                Confirmar importação
+              </Button>
+            )}
+            {step === "result" && (
+              <Button type="button" onClick={handleClose}>
+                Concluir
+              </Button>
             )}
           </div>
-        )}
-
-        {step === "preview" && preview && (
-          <>
-            {fileName && <p className="text-xs font-medium text-muted-foreground">Arquivo: {fileName}</p>}
-
-            <div className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-muted/40 p-3 text-center">
-              <div>
-                <p className="text-lg font-extrabold text-foreground">{preview.total}</p>
-                <p className="text-xs font-semibold text-muted-foreground">No arquivo</p>
-              </div>
-              <div>
-                <p className="text-lg font-extrabold text-success">{preview.novos.length}</p>
-                <p className="text-xs font-semibold text-muted-foreground">Novos</p>
-              </div>
-              <div>
-                <p className="text-lg font-extrabold text-muted-foreground">{preview.duplicados}</p>
-                <p className="text-xs font-semibold text-muted-foreground">Já importados</p>
-              </div>
-            </div>
-
-            {preview.novos.length > 0 && (
-              <div className="flex max-h-64 flex-col overflow-y-auto rounded-lg border border-border">
-                {preview.novos.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 text-sm last:border-b-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-foreground">{item.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDateSaoPaulo(item.date)} · {item.categoryName ?? "Sem categoria"}
-                      </p>
-                    </div>
-                    <span
-                      className={cn(
-                        "shrink-0 font-mono font-semibold",
-                        item.type === TransactionType.INCOME ? "text-success" : "text-destructive",
-                      )}
-                    >
-                      {item.type === TransactionType.INCOME ? "+" : "-"}
-                      {formatBRL(item.amount)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {preview.erros.length > 0 && (
-              <div className="flex flex-col gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                <p className="text-xs font-extrabold text-destructive">
-                  {preview.erros.length} linha(s) com erro — não serão importadas
-                </p>
-                <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  {preview.erros.map((item, index) => (
-                    <li key={index}>{item.reason}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </>
-        )}
-
-        {step === "result" && result && (
-          <div className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-muted/40 p-3 text-center">
-            <div>
-              <p className="text-lg font-extrabold text-success">{result.imported}</p>
-              <p className="text-xs font-semibold text-muted-foreground">Importados</p>
-            </div>
-            <div>
-              <p className="text-lg font-extrabold text-muted-foreground">{result.duplicados}</p>
-              <p className="text-xs font-semibold text-muted-foreground">Já existiam</p>
-            </div>
-            <div>
-              <p className="text-lg font-extrabold text-destructive">{result.erros.length}</p>
-              <p className="text-xs font-semibold text-muted-foreground">Com erro</p>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <p role="alert" className="text-sm font-medium text-destructive">
-            {error}
-          </p>
-        )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          {step !== "result" && (
-            <Button type="button" variant="outline" onClick={handleClose} disabled={isPending}>
-              Cancelar
-            </Button>
-          )}
-          {step === "preview" && (
-            <Button type="button" onClick={handleConfirm} disabled={isPending || preview?.novos.length === 0}>
-              {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-              Confirmar importação
-            </Button>
-          )}
-          {step === "result" && (
-            <Button type="button" onClick={handleClose}>
-              Concluir
-            </Button>
-          )}
         </div>
-      </div>
+      </MotionConfig>
     </FormModal>
   );
 }

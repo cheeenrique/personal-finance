@@ -1,0 +1,68 @@
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { aggregatePreview } from "./import-file-utils";
+import { ImportPreviewPanel } from "./import-preview-panel";
+import type { ImportFileEntry } from "./import-types";
+
+type ImportPreviewProps = { entries: ImportFileEntry[] };
+
+/**
+ * Step 2 do import: KPIs agregados de todos os arquivos + prévia por
+ * arquivo. Com mais de um arquivo analisado, cada um ganha sua própria aba
+ * (total/novos/duplicados/erros nunca se misturam entre arquivos — handoff,
+ * "Step preview"). Com um só, mostra a prévia direto, sem o chrome de abas.
+ */
+export function ImportPreview({ entries }: ImportPreviewProps) {
+  const analyzed = entries.filter((entry) => entry.preview !== null || entry.previewError !== null);
+  const totals = aggregatePreview(entries);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-muted/40 p-3 text-center">
+        <div>
+          <p className="text-lg font-extrabold text-foreground">{totals.total}</p>
+          <p className="text-xs font-semibold text-muted-foreground">No total</p>
+        </div>
+        <div>
+          <p className="text-lg font-extrabold text-on-success">{totals.novos}</p>
+          <p className="text-xs font-semibold text-muted-foreground">Novos</p>
+        </div>
+        <div>
+          <p className="text-lg font-extrabold text-muted-foreground">{totals.duplicados}</p>
+          <p className="text-xs font-semibold text-muted-foreground">Já importados</p>
+        </div>
+      </div>
+
+      {analyzed.length > 1 ? (
+        <Tabs defaultValue={analyzed[0]?.id}>
+          <TabsList className="w-full overflow-x-auto">
+            {analyzed.map((entry) => (
+              <TabsTrigger key={entry.id} value={entry.id} className="gap-1.5">
+                <span className="max-w-32 truncate">{entry.name}</span>
+                {entry.preview && (
+                  <Badge variant={entry.preview.erros.length > 0 ? "destructive" : "secondary"} className="shrink-0">
+                    {entry.preview.novos.length}
+                  </Badge>
+                )}
+                {entry.previewError && (
+                  <Badge variant="destructive" className="shrink-0">
+                    !
+                  </Badge>
+                )}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {analyzed.map((entry) => (
+            <TabsContent key={entry.id} value={entry.id} className="pt-3">
+              <ImportPreviewPanel entry={entry} />
+            </TabsContent>
+          ))}
+        </Tabs>
+      ) : (
+        analyzed[0] && <ImportPreviewPanel entry={analyzed[0]} />
+      )}
+    </div>
+  );
+}
