@@ -8,6 +8,9 @@ import {
   updateTransactionAction,
 } from "@/modules/transactions/actions";
 import type { ClientTransaction } from "@/modules/transactions/types";
+import type { TransactionDraft } from "@/components/providers/shell-provider";
+import { TransactionType } from "@/generated/prisma/enums";
+import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { notifyError, notifySuccess } from "@/lib/toast";
 import { invalidateAllTransactionLists } from "./transaction-query-keys";
 
@@ -31,6 +34,37 @@ export function isTransferLeg(row: { transferId: string | null }): boolean {
  */
 export function isCardTransaction(row: { cardId: string | null }): boolean {
   return Boolean(row.cardId);
+}
+
+/**
+ * Elegibilidade da ação "Duplicar" (`TransactionRowActions`,
+ * docs/50-AUDITORIA-BACKLOG.md F5) — o modal de criação (`NewTransactionForm`)
+ * só sabe criar INCOME/EXPENSE com uma única origem (conta OU cartão); perna
+ * de TRANSFER (`isTransferLeg`) e `CARD_PAYMENT` não têm representação nele,
+ * mesma restrição já aplicada a "Editar".
+ */
+export function canDuplicate(row: { transferId: string | null; type: TransactionType }): boolean {
+  return !isTransferLeg(row) && row.type !== TransactionType.CARD_PAYMENT;
+}
+
+/**
+ * Rascunho pra pré-preencher o modal global de Nova Transação a partir de uma
+ * linha existente (`useShell().duplicateTransaction`, ação "Duplicar") — só
+ * chamado depois de `canDuplicate` confirmar elegibilidade. Copia a data
+ * original (não força "hoje"): o usuário ajusta se for uma nova ocorrência.
+ */
+export function buildTransactionDraft(row: ClientTransaction): TransactionDraft {
+  return {
+    type: row.type === TransactionType.INCOME ? TransactionType.INCOME : TransactionType.EXPENSE,
+    description: row.description,
+    amount: row.amount,
+    date: toDateInputValueSaoPaulo(row.date),
+    categoryId: row.categoryId ?? undefined,
+    accountId: row.accountId ?? undefined,
+    cardId: row.cardId ?? undefined,
+    notes: row.notes ?? undefined,
+    tagIds: row.transactionTags.map((link) => link.tagId),
+  };
 }
 
 /**

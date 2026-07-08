@@ -42,6 +42,19 @@ export function NewInstallmentModal({ open, onOpenChange, referenceData, onSaved
   const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
 
+  /**
+   * Reset ao reabrir — "adjusting state when a prop changes"
+   * (react.dev/learn/you-might-not-need-an-effect) feito durante o render,
+   * mesmo padrão de `InstallmentFormModal`/`NewTransactionForm`. Sem isso,
+   * cancelar e reabrir mostrava o rascunho anterior (docs/50-AUDITORIA-BACKLOG.md
+   * F11) — antes só `resetForm()` no sucesso do submit cobria esse caminho.
+   */
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) resetForm();
+  }
+
   const cardOptions = referenceData.originOptions
     .filter((option) => option.group === "Cartões")
     .map((option) => ({ ...option, value: option.value.replace("card:", "") }));
@@ -97,7 +110,7 @@ export function NewInstallmentModal({ open, onOpenChange, referenceData, onSaved
       open={open}
       onOpenChange={onOpenChange}
       title="Nova compra parcelada"
-      description="Cria a compra e todas as parcelas de uma vez."
+      description="Compra parcelada no cartão — as parcelas são criadas automaticamente."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField label="Descrição" htmlFor="installment-description" required error={fieldErrors.description}>
@@ -195,7 +208,7 @@ export function NewInstallmentModal({ open, onOpenChange, referenceData, onSaved
           </Button>
           <Button type="submit" disabled={isPending}>
             {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Criar
+            Salvar
           </Button>
         </div>
       </form>

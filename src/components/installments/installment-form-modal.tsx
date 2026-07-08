@@ -142,7 +142,7 @@ export function InstallmentFormModal({ open, onOpenChange }: InstallmentFormModa
         return;
       }
 
-      notifySuccess("Parcelamento criado");
+      notifySuccess("Compra parcelada criada");
       onOpenChange(false);
     });
   }
@@ -151,7 +151,7 @@ export function InstallmentFormModal({ open, onOpenChange }: InstallmentFormModa
     <FormModal
       open={open}
       onOpenChange={onOpenChange}
-      title="Novo parcelamento"
+      title="Nova compra parcelada"
       description="Compra parcelada no cartão — as parcelas são criadas automaticamente."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">

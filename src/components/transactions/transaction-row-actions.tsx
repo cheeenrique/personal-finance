@@ -1,7 +1,7 @@
-import { CircleCheck, Eye, Pencil, Trash2 } from "lucide-react";
+import { CircleCheck, Copy, Eye, Pencil, Trash2 } from "lucide-react";
 
 import { IconActionButton } from "@/components/shared/icon-action-button";
-import { isCardTransaction, isTransferLeg } from "./use-transaction-mutations";
+import { canDuplicate, isCardTransaction, isTransferLeg } from "./use-transaction-mutations";
 import type { ClientTransaction } from "@/modules/transactions/types";
 
 type TransactionRowActionsProps = {
@@ -9,14 +9,17 @@ type TransactionRowActionsProps = {
   onView: () => void;
   onMarkPaid: () => void;
   onEdit: () => void;
+  /** Omitido ⇒ o botão "Duplicar" não aparece — caller que ainda não tem onde abrir o modal pré-preenchido (ex.: fatura do cartão, `invoice-items-table.tsx`) simplesmente não passa esta prop. */
+  onDuplicate?: () => void;
   onDelete: () => void;
 };
 
 /**
- * Ações de linha das 4 tabelas que reaproveitam `buildTransactionColumns`
+ * Ações de linha das tabelas que reaproveitam `buildTransactionColumns`
  * (`/transactions`, histórico da conta em `/accounts/[id]`, fatura do cartão
- * de crédito e cartão alimentação) — extraído daqui em vez de duplicado em
- * cada uma (rule 02-dry-kiss-yagni, "3 ocorrências = extrair"; eram 4).
+ * de crédito, cartão alimentação e preview "Últimas transações" do Dashboard)
+ * — extraído daqui em vez de duplicado em cada uma (rule 02-dry-kiss-yagni,
+ * "3 ocorrências = extrair").
  *
  * "Marcar como paga" só aparece em linha PENDENTE (`!row.isPaid`) de CONTA
  * (`!isCardTransaction`) — transação de cartão não tem esse controle por
@@ -27,8 +30,12 @@ type TransactionRowActionsProps = {
  * "Excluir transferência" e o ConfirmDialog do caller explica o efeito nas
  * 2 contas. `isTransferLeg` é sempre `false` pra transações de cartão (nunca
  * têm `transferId`), então nada muda nas tabelas de cartão.
+ *
+ * "Duplicar" (docs/50-AUDITORIA-BACKLOG.md F5) reusa a mesma restrição de
+ * elegibilidade de "Editar" + `CARD_PAYMENT` (ver `canDuplicate`) — o modal de
+ * criação só sabe INCOME/EXPENSE.
  */
-export function TransactionRowActions({ row, onView, onMarkPaid, onEdit, onDelete }: TransactionRowActionsProps) {
+export function TransactionRowActions({ row, onView, onMarkPaid, onEdit, onDuplicate, onDelete }: TransactionRowActionsProps) {
   const isTransfer = isTransferLeg(row);
 
   return (
@@ -44,6 +51,15 @@ export function TransactionRowActions({ row, onView, onMarkPaid, onEdit, onDelet
         disabled={isTransfer}
         disabledReason="Transferências não são editáveis aqui"
       />
+      {onDuplicate && (
+        <IconActionButton
+          icon={Copy}
+          label="Duplicar"
+          onClick={onDuplicate}
+          disabled={!canDuplicate(row)}
+          disabledReason={isTransfer ? "Transferências não podem ser duplicadas aqui" : "Pagamento de fatura não pode ser duplicado"}
+        />
+      )}
       <IconActionButton
         icon={Trash2}
         tone="danger"

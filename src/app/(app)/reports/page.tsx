@@ -56,7 +56,7 @@ async function ReportsContent({ filters }: { filters: ReturnType<typeof parseRep
     return <p className="text-sm text-muted-foreground">Sessão inválida.</p>;
   }
 
-  const { dateFrom, dateTo } = resolveDateRange(filters.period);
+  const { dateFrom, dateTo } = resolveDateRange(filters.period, { dateFrom: filters.customFrom, dateTo: filters.customTo });
   const { year, month } = deriveYearMonth(dateTo);
   const parsedDateFrom = parseFlexibleDate(dateFrom);
   const parsedDateTo = parseFlexibleDate(dateTo);

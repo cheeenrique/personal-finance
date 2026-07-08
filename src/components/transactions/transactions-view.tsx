@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowLeftRight, Layers3, Receipt } from "lucide-react";
 
 import { DataTable } from "@/components/tables/data-table";
@@ -19,7 +20,7 @@ import { NewInstallmentModal } from "./new-installment-modal";
 import { useTransactionFilters } from "./use-transaction-filters";
 import { useTransactionsReferenceData } from "./use-transactions-reference-data";
 import { useTransactionsList } from "./use-transactions-list";
-import { isTransferLeg, useTransactionMutations } from "./use-transaction-mutations";
+import { buildTransactionDraft, isTransferLeg, useTransactionMutations } from "./use-transaction-mutations";
 import type { ClientTransaction } from "@/modules/transactions/types";
 
 /**
@@ -29,7 +30,8 @@ import type { ClientTransaction } from "@/modules/transactions/types";
  * `revalidatePath` pra refletir mutations — cada mutation chama `reload()`.
  */
 export function TransactionsView() {
-  const { openTransactionModal } = useShell();
+  const router = useRouter();
+  const { openTransactionModal, duplicateTransaction } = useShell();
   const filters = useTransactionFilters();
   const referenceData = useTransactionsReferenceData();
   const { page, installmentTotals, loading, error, reload } = useTransactionsList(filters.state);
@@ -55,6 +57,12 @@ export function TransactionsView() {
   );
 
   const selectedRows = page.items.filter((item) => selectedIds.includes(item.id));
+
+  // Base zerada (docs/50-AUDITORIA-BACKLOG.md F7): sem conta NEM cartão
+  // cadastrado, o modal de Nova Transação abre com os 2 selects "Nada
+  // encontrado" e nenhum caminho pra sair de lá — troca o CTA da tabela vazia
+  // pra apontar pro cadastro em vez de abrir um modal sem como salvar.
+  const hasNoOrigins = !referenceData.loading && referenceData.originOptions.length === 0;
 
   function handleSortChange(column: string) {
     const current = filters.state.sort;
@@ -100,11 +108,13 @@ export function TransactionsView() {
         emptyState={{
           icon: Receipt,
           title: "Nenhuma transação encontrada.",
-          description: filters.hasActiveFilters
-            ? "Ajuste os filtros ou crie uma nova transação."
-            : "Comece registrando sua primeira transação.",
-          actionLabel: "Criar transação",
-          onAction: () => openTransactionModal(),
+          description: hasNoOrigins
+            ? "Cadastre uma conta ou cartão antes de lançar sua primeira transação."
+            : filters.hasActiveFilters
+              ? "Ajuste os filtros ou crie uma nova transação."
+              : "Comece registrando sua primeira transação.",
+          actionLabel: hasNoOrigins ? "Criar primeira conta" : "Criar transação",
+          onAction: () => (hasNoOrigins ? router.push("/accounts") : openTransactionModal()),
         }}
         search={{ value: filters.state.q, onChange: filters.setQuery, placeholder: "Buscar por descrição…" }}
         filters={
@@ -117,6 +127,10 @@ export function TransactionsView() {
             onOriginChange={filters.setOrigin}
             period={filters.state.period}
             onPeriodChange={filters.setPeriod}
+            customFrom={filters.state.customFrom}
+            onCustomFromChange={filters.setCustomFrom}
+            customTo={filters.state.customTo}
+            onCustomToChange={filters.setCustomTo}
             tagId={filters.state.tagId}
             onTagIdChange={filters.setTagId}
             isPaid={filters.state.isPaid}
@@ -135,6 +149,7 @@ export function TransactionsView() {
             onView={() => setViewing(row)}
             onMarkPaid={() => void mutations.markPaid(row)}
             onEdit={() => setEditing(row)}
+            onDuplicate={() => duplicateTransaction(buildTransactionDraft(row))}
             onDelete={() => setDeleting(row)}
           />
         )}

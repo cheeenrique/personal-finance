@@ -24,6 +24,9 @@ export type TransactionFiltersState = {
   categoryId: string | undefined;
   origin: OriginValue | undefined;
   period: PeriodPreset;
+  /** Só usados quando `period === "custom"` (docs/50-AUDITORIA-BACKLOG.md F12) — persistidos em `?dateFrom=&dateTo=`. */
+  customFrom: string | undefined;
+  customTo: string | undefined;
   tagId: string | undefined;
   isPaid: IsPaidFilter;
   page: number;
@@ -53,6 +56,8 @@ function parseState(params: URLSearchParams): TransactionFiltersState {
     categoryId: params.get("categoryId") ?? undefined,
     origin: (params.get("origin") as OriginValue) ?? undefined,
     period: (params.get("period") as PeriodPreset) ?? "all",
+    customFrom: params.get("dateFrom") ?? undefined,
+    customTo: params.get("dateTo") ?? undefined,
     tagId: params.get("tagId") ?? undefined,
     isPaid: isPaidParam === "paid" || isPaidParam === "pending" ? isPaidParam : "all",
     page: Number(params.get("page") ?? "1") || 1,
@@ -87,6 +92,8 @@ export function useTransactionFilters() {
         ["categoryId", merged.categoryId],
         ["origin", merged.origin],
         ["period", merged.period === "all" ? undefined : merged.period],
+        ["dateFrom", merged.period === "custom" ? merged.customFrom : undefined],
+        ["dateTo", merged.period === "custom" ? merged.customTo : undefined],
         ["tagId", merged.tagId],
         ["isPaid", merged.isPaid === "all" ? undefined : merged.isPaid],
         ["page", merged.page > 1 ? String(merged.page) : undefined],
@@ -110,6 +117,8 @@ export function useTransactionFilters() {
   const setCategoryId = useCallback((categoryId: string | undefined) => replace({ categoryId }), [replace]);
   const setOrigin = useCallback((origin: OriginValue | undefined) => replace({ origin }), [replace]);
   const setPeriod = useCallback((period: PeriodPreset) => replace({ period }), [replace]);
+  const setCustomFrom = useCallback((customFrom: string | undefined) => replace({ customFrom }), [replace]);
+  const setCustomTo = useCallback((customTo: string | undefined) => replace({ customTo }), [replace]);
   const setTagId = useCallback((tagId: string | undefined) => replace({ tagId }), [replace]);
   const setIsPaid = useCallback((isPaid: IsPaidFilter) => replace({ isPaid }), [replace]);
 
@@ -130,6 +139,8 @@ export function useTransactionFilters() {
     setCategoryId,
     setOrigin,
     setPeriod,
+    setCustomFrom,
+    setCustomTo,
     setTagId,
     setIsPaid,
     clearAll,
@@ -140,7 +151,7 @@ export function useTransactionFilters() {
 /** Converte o estado de filtros da UI pro formato aceito por `listTransactionsAction` (ver `listFilterSchema`). */
 export function buildServerFilter(state: TransactionFiltersState, pageSize = DEFAULT_PAGE_SIZE) {
   const [originKind, originId] = state.origin?.split(":") ?? [undefined, undefined];
-  const { dateFrom, dateTo } = periodToRange(state.period);
+  const { dateFrom, dateTo } = periodToRange(state.period, { dateFrom: state.customFrom, dateTo: state.customTo });
 
   return {
     search: state.q || undefined,

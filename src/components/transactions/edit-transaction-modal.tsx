@@ -240,8 +240,14 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label>Tags</Label>
-          <TagMultiSelect tags={referenceData.tags} value={tagIds} onValueChange={setTagIds} disabled={isPending} />
+          <Label htmlFor="edit-tx-tags">Tags</Label>
+          <TagMultiSelect
+            id="edit-tx-tags"
+            tags={referenceData.tags}
+            value={tagIds}
+            onValueChange={setTagIds}
+            disabled={isPending}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">

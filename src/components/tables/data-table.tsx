@@ -93,6 +93,22 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const [searchInput, setSearchInput] = useState(search?.value ?? "");
 
+  /**
+   * Resync quando `search.value` muda por uma fonte EXTERNA ao próprio debounce
+   * abaixo — ex.: "Limpar filtros" zera `?q=` na URL, mas sem isso o termo
+   * digitado ficava preso no input (F10, docs/50-AUDITORIA-BACKLOG.md).
+   * "Adjusting state when a prop changes" (react.dev/learn/you-might-not-need-an-effect),
+   * feito durante o render — mesmo padrão de `new-transaction-form.tsx`/
+   * `edit-transaction-modal.tsx`. Inofensivo pro fluxo normal de digitação: o
+   * debounce só atualiza `search.value` DEPOIS que `searchInput` já bate com
+   * ele, então o `if` abaixo não dispara de novo nesse caminho.
+   */
+  const [lastSyncedSearchValue, setLastSyncedSearchValue] = useState(search?.value ?? "");
+  if (search && search.value !== lastSyncedSearchValue) {
+    setLastSyncedSearchValue(search.value);
+    setSearchInput(search.value);
+  }
+
   useEffect(() => {
     if (!search) return;
     const timer = setTimeout(() => {

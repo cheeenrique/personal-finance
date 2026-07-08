@@ -12,6 +12,9 @@ export type ReportTypeFilter = TransactionType | "TRANSFER";
  */
 export type ReportFiltersState = {
   period: PeriodPreset;
+  /** Só usados quando `period === "custom"` (docs/50-AUDITORIA-BACKLOG.md F12). */
+  customFrom: string | undefined;
+  customTo: string | undefined;
   categoryId: string | undefined;
   accountId: string | undefined;
   cardId: string | undefined;
@@ -24,6 +27,8 @@ type ParamGetter = (key: string) => string | null;
 export function parseReportFilters(get: ParamGetter): ReportFiltersState {
   return {
     period: (get("period") as PeriodPreset | null) ?? "all",
+    customFrom: get("dateFrom") ?? undefined,
+    customTo: get("dateTo") ?? undefined,
     categoryId: get("categoryId") ?? undefined,
     accountId: get("accountId") ?? undefined,
     cardId: get("cardId") ?? undefined,
@@ -35,6 +40,8 @@ export function parseReportFilters(get: ParamGetter): ReportFiltersState {
 export function reportFilterEntries(state: ReportFiltersState): [string, string | undefined][] {
   return [
     ["period", state.period === "all" ? undefined : state.period],
+    ["dateFrom", state.period === "custom" ? state.customFrom : undefined],
+    ["dateTo", state.period === "custom" ? state.customTo : undefined],
     ["categoryId", state.categoryId],
     ["accountId", state.accountId],
     ["cardId", state.cardId],
@@ -51,12 +58,13 @@ export function hasActiveReportFilters(state: ReportFiltersState): boolean {
 /**
  * Intervalo de datas efetivo pro período selecionado — `reportService.cashflow`/
  * `accountReport` exigem `dateFrom`/`dateTo` sempre presentes (nunca opcionais,
- * ver `modules/reports/service.ts`). `periodToRange("all")` devolve `{}`
- * (sem limite) — aqui resolvemos pro default "ano corrente até hoje" nesse
- * caso, em vez de propagar `undefined` pro service.
+ * ver `modules/reports/service.ts`). `periodToRange("all")` (e "custom" sem
+ * as 2 datas escolhidas ainda) devolve `{}` (sem limite) — aqui resolvemos pro
+ * default "ano corrente até hoje" nesse caso, em vez de propagar `undefined`
+ * pro service.
  */
-export function resolveDateRange(period: PeriodPreset): { dateFrom: string; dateTo: string } {
-  const range = periodToRange(period);
+export function resolveDateRange(period: PeriodPreset, custom?: { dateFrom?: string; dateTo?: string }): { dateFrom: string; dateTo: string } {
+  const range = periodToRange(period, custom);
   if (range.dateFrom && range.dateTo) return { dateFrom: range.dateFrom, dateTo: range.dateTo };
 
   const today = toDateInputValueSaoPaulo();

@@ -17,11 +17,14 @@ import { FormField } from "@/components/forms/form-field";
 import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
 import { useShell } from "@/components/providers/shell-provider";
+import { TagMultiSelect } from "@/components/transactions/tag-multi-select";
 import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
 import { createTransactionAction, getLastCategoryByDescriptionAction } from "@/modules/transactions/actions";
 import { listAccountOptionsAction, listCardOptionsAction } from "@/components/shared/entity-options-actions";
 import { listCategoryTreeAction } from "@/modules/categories/actions";
 import type { CategoryTreeNode } from "@/modules/categories/types";
+import { listTagsAction } from "@/modules/tags/actions";
+import type { Tag } from "@/modules/tags/types";
 import { TransactionType, CategoryType } from "@/generated/prisma/enums";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { cn } from "@/lib/utils";
@@ -67,6 +70,7 @@ export function NewTransactionForm() {
     isTransactionModalOpen,
     transactionModalDefaultType,
     transactionModalDefaultCardId,
+    transactionModalDraft,
     closeTransactionModal,
   } = useShell();
   const queryClient = useQueryClient();
@@ -88,9 +92,16 @@ export function NewTransactionForm() {
   // default automático (data futura → previsto) para de sobrescrever a
   // escolha explícita dele, mesmo que a data mude de novo.
   const [isPaidTouched, setIsPaidTouched] = useState(false);
+  const [tagIds, setTagIds] = useState<string[]>([]);
+  // Tags começa colapsada (docs/50-AUDITORIA-BACKLOG.md F4) — mantém o
+  // lançamento rápido (docs/20-TRANSACTIONS.md: "menos de 10 segundos") sem um
+  // campo extra raramente usado; expande sozinha quando um rascunho de
+  // "Duplicar" já traz tags (senão elas ficariam preenchidas mas escondidas).
+  const [showTags, setShowTags] = useState(false);
 
   const [categories, setCategories] = useState<CategoryTreeNode[]>([]);
   const [originOptions, setOriginOptions] = useState<EntitySelectOption[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
@@ -109,19 +120,51 @@ export function NewTransactionForm() {
     setWasOpen(isTransactionModalOpen);
     if (isTransactionModalOpen) {
       setFieldErrors({});
-      setType(initialType);
+      // `transactionModalDraft` presente ⇒ abertura via "Duplicar"
+      // (`TransactionRowActions`, docs/50-AUDITORIA-BACKLOG.md F5) — pré-
+      // preenche os campos com os dados da linha original em vez do form em
+      // branco. `useShell().duplicateTransaction` já cuidou de zerar o
+      // rascunho num "Nova transação" comum, então esse ramo nunca vaza pra
+      // uma abertura normal.
+      const draft = transactionModalDraft;
+      const nextType = draft?.type ?? initialType;
+      setType(nextType);
+      setDescription(draft?.description ?? "");
+      setAmount(draft?.amount ?? "");
+      setNotes(draft?.notes ?? "");
+      setTagIds(draft?.tagIds ?? []);
+      setShowTags(Boolean(draft?.tagIds?.length));
       setCategoryId(
-        typeof window === "undefined"
-          ? undefined
-          : (window.localStorage.getItem(lastCategoryStorageKey(initialType)) ?? undefined),
+        draft?.categoryId ??
+          (typeof window === "undefined"
+            ? undefined
+            : (window.localStorage.getItem(lastCategoryStorageKey(nextType)) ?? undefined)),
       );
       // "+ Recarga" do detalhe de cartão MEAL (`card-detail-view-meal.tsx`)
       // abre este modal com a origem já preenchida — `EntitySelect` mostra o
       // label assim que `originOptions` termina de carregar (efeito abaixo),
-      // mesmo com o value já setado antes disso.
-      setOrigin(transactionModalDefaultCardId ? `card:${transactionModalDefaultCardId}` : undefined);
+      // mesmo com o value já setado antes disso. Origem do rascunho tem
+      // prioridade sobre `transactionModalDefaultCardId`.
+      setOrigin(
+        draft?.cardId
+          ? `card:${draft.cardId}`
+          : draft?.accountId
+            ? `account:${draft.accountId}`
+            : transactionModalDefaultCardId
+              ? `card:${transactionModalDefaultCardId}`
+              : undefined,
+      );
+      // Duplicar copia a data original da linha (docs/50-AUDITORIA-BACKLOG.md
+      // F5: "pré-preenchido com os dados da linha") — sem rascunho, cai no
+      // default de sempre (hoje). Usa `nextDate` (não a `date` do state, que
+      // neste render ainda é o valor ANTIGO) pra calcular `isPaid` já correto
+      // de primeira, em vez de depender só do hop extra do bloco de sync
+      // abaixo (`lastDateForIsPaid`) — que roda de qualquer forma e reafirma
+      // o mesmo valor, então nenhum dos dois fica dessincronizado.
+      const nextDate = draft?.date ?? toDateInputValueSaoPaulo();
+      setDate(nextDate);
       setIsPaidTouched(false);
-      setIsPaid(!isFutureDate(date));
+      setIsPaid(!isFutureDate(nextDate));
     }
   }
 
@@ -149,9 +192,14 @@ export function NewTransactionForm() {
       .then(() => {
         setFormError(null);
         setLoadingOptions(true);
-        return Promise.all([listCategoryTreeAction(), listAccountOptionsAction(), listCardOptionsAction()]);
+        return Promise.all([
+          listCategoryTreeAction(),
+          listAccountOptionsAction(),
+          listCardOptionsAction(),
+          listTagsAction(),
+        ]);
       })
-      .then(([categoryResult, accountResult, cardResult]) => {
+      .then(([categoryResult, accountResult, cardResult, tagResult]) => {
         if (categoryResult.success) setCategories(categoryResult.data);
 
         const accountOptions: EntitySelectOption[] = accountResult.success
@@ -169,6 +217,7 @@ export function NewTransactionForm() {
             }))
           : [];
         setOriginOptions([...accountOptions, ...cardOptions]);
+        if (tagResult.success) setTags(tagResult.data);
       })
       .finally(() => setLoadingOptions(false));
   }, [isTransactionModalOpen]);
@@ -187,6 +236,8 @@ export function NewTransactionForm() {
     setDate(toDateInputValueSaoPaulo());
     setIsPaid(true);
     setIsPaidTouched(false);
+    setTagIds([]);
+    setShowTags(false);
   }
 
   /**
@@ -228,6 +279,7 @@ export function NewTransactionForm() {
         date,
         notes: notes.trim() || undefined,
         isPaid,
+        tagIds,
       });
 
       if (!result.success) {
@@ -344,6 +396,24 @@ export function NewTransactionForm() {
           <Label htmlFor="tx-date">Data</Label>
           <DateField id="tx-date" value={date} onValueChange={setDate} disabled={isPending} />
         </div>
+
+        {/* Colapsada por padrão (docs/50-AUDITORIA-BACKLOG.md F4) — campo raramente
+            usado no lançamento rápido; expande sozinha quando "Duplicar" já traz tags. */}
+        {showTags ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="tx-tags">Tags (opcional)</Label>
+            <TagMultiSelect id="tx-tags" tags={tags} value={tagIds} onValueChange={setTagIds} disabled={isPending} />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowTags(true)}
+            className="self-start text-[12.5px] font-bold text-muted-foreground hover:text-foreground hover:underline"
+            disabled={isPending}
+          >
+            + Adicionar tags (opcional)
+          </button>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="tx-notes">Observações (opcional)</Label>

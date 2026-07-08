@@ -1,10 +1,14 @@
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 
 /**
- * Presets do dropdown "Período" da tela de Transações
- * (design/PERSONAL_FINANCE_LAYOUT_HANDOFF.md, "Transações").
+ * Presets do dropdown "Período" — compartilhado por `/transactions`,
+ * `/reports` e o Dashboard (design/PERSONAL_FINANCE_LAYOUT_HANDOFF.md,
+ * "Transações"). "custom" (De/Até livre) só existia em `/accounts/[id]`
+ * (`use-account-period-filter.ts`, escopo próprio, fora deste preset
+ * compartilhado) — promovido aqui pra ficar disponível nas 3 telas
+ * (docs/50-AUDITORIA-BACKLOG.md F12).
  */
-export type PeriodPreset = "all" | "this_month" | "last_month" | "last_30_days" | "this_year";
+export type PeriodPreset = "all" | "this_month" | "last_month" | "last_30_days" | "this_year" | "custom";
 
 export const PERIOD_OPTIONS: { value: PeriodPreset; label: string }[] = [
   { value: "all", label: "Todos os períodos" },
@@ -12,7 +16,11 @@ export const PERIOD_OPTIONS: { value: PeriodPreset; label: string }[] = [
   { value: "last_month", label: "Mês passado" },
   { value: "last_30_days", label: "Últimos 30 dias" },
   { value: "this_year", label: "Este ano" },
+  { value: "custom", label: "Personalizado" },
 ];
+
+/** Range livre (De/Até) do preset "custom" — `undefined` quando o usuário ainda não escolheu um dos dois lados. */
+export type CustomRange = { dateFrom?: string; dateTo?: string };
 
 type CalendarDate = { year: number; month: number; day: number };
 
@@ -45,13 +53,21 @@ function addDaysCalendar({ year, month, day }: CalendarDate, delta: number): Cal
   return { year: anchor.getUTCFullYear(), month: anchor.getUTCMonth() + 1, day: anchor.getUTCDate() };
 }
 
-/** `{ dateFrom, dateTo }` em `YYYY-MM-DD` — compatível com `dateInputSchema` (@/lib/date/schema). */
-export function periodToRange(preset: PeriodPreset): { dateFrom?: string; dateTo?: string } {
+/**
+ * `{ dateFrom, dateTo }` em `YYYY-MM-DD` — compatível com `dateInputSchema`
+ * (@/lib/date/schema). `preset === "custom"` devolve o `customRange` recebido
+ * como está (sem cálculo de calendário — o usuário escolheu as duas datas
+ * livremente); omitido ou incompleto ⇒ mesmo formato de "all" (sem limite de
+ * um dos lados), quem chama decide o fallback (ver `resolveDateRange`).
+ */
+export function periodToRange(preset: PeriodPreset, customRange?: CustomRange): { dateFrom?: string; dateTo?: string } {
   const today = todaySaoPaulo();
 
   switch (preset) {
     case "all":
       return {};
+    case "custom":
+      return { dateFrom: customRange?.dateFrom || undefined, dateTo: customRange?.dateTo || undefined };
     case "this_month":
       return {
         dateFrom: toDateStr({ ...today, day: 1 }),

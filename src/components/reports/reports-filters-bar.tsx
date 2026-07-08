@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 
+import { DateField } from "@/components/forms/date-field";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TransactionType } from "@/generated/prisma/enums";
@@ -87,6 +89,33 @@ function FilterControls({ filters, categoryOptions, accountOptions, cardOptions 
         onValueChange={(value) => filters.setPeriod(value as (typeof PERIOD_OPTIONS)[number]["value"])}
         className="h-[38px] w-auto min-w-[160px]"
       />
+
+      {filters.state.period === "custom" && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor="report-period-from" className="text-[12.5px] text-muted-foreground">
+              De
+            </Label>
+            <DateField
+              id="report-period-from"
+              value={filters.state.customFrom ?? ""}
+              onValueChange={filters.setCustomFrom}
+              className="h-[38px] w-[150px]"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor="report-period-to" className="text-[12.5px] text-muted-foreground">
+              Até
+            </Label>
+            <DateField
+              id="report-period-to"
+              value={filters.state.customTo ?? ""}
+              onValueChange={filters.setCustomTo}
+              className="h-[38px] w-[150px]"
+            />
+          </div>
+        </div>
+      )}
 
       <EntitySelect
         options={[{ value: ALL_VALUE, label: "Todas as categorias" }, ...categoryOptions]}

@@ -37,6 +37,11 @@ function parsePeriod(raw: string | string[] | undefined): PeriodPreset {
   return typeof raw === "string" && VALID_PERIODS.has(raw) ? (raw as PeriodPreset) : DEFAULT_PERIOD;
 }
 
+/** `?dateFrom=`/`?dateTo=` — só fazem sentido junto de `period=custom` (docs/50-AUDITORIA-BACKLOG.md F12); `resolveDateRange` ignora quando o período não é "custom". */
+function parseCustomDate(raw: string | string[] | undefined): string | undefined {
+  return typeof raw === "string" && raw ? raw : undefined;
+}
+
 type DashboardPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
@@ -53,15 +58,19 @@ type DashboardPageProps = {
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const rawParams = await searchParams;
   const period = parsePeriod(rawParams.period);
+  const customFrom = parseCustomDate(rawParams.dateFrom);
+  const customTo = parseCustomDate(rawParams.dateTo);
 
   return (
     <Suspense fallback={<DashboardSkeleton />}>
-      <DashboardContent period={period} />
+      <DashboardContent period={period} customFrom={customFrom} customTo={customTo} />
     </Suspense>
   );
 }
 
-async function DashboardContent({ period }: { period: PeriodPreset }) {
+type DashboardContentProps = { period: PeriodPreset; customFrom: string | undefined; customTo: string | undefined };
+
+async function DashboardContent({ period, customFrom, customTo }: DashboardContentProps) {
   const session = await auth();
   const userId = session?.user?.id;
 
@@ -73,7 +82,7 @@ async function DashboardContent({ period }: { period: PeriodPreset }) {
   // período) — reusa o mesmo resolver de `/reports`, sem duplicar a lógica de
   // presets (rule 02-dry-kiss-yagni). `year` do gráfico de evolução mensal
   // segue o ANO do período (fim do range), não necessariamente o ano corrente.
-  const { dateFrom, dateTo } = resolveDateRange(period);
+  const { dateFrom, dateTo } = resolveDateRange(period, { dateFrom: customFrom, dateTo: customTo });
   const parsedDateFrom = parseFlexibleDate(dateFrom);
   const parsedDateTo = parseFlexibleDate(dateTo);
   const { year } = deriveYearMonth(dateTo);
@@ -156,7 +165,7 @@ async function DashboardContent({ period }: { period: PeriodPreset }) {
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <QuickActions />
-        <DashboardPeriodSelect period={period} />
+        <DashboardPeriodSelect period={period} customFrom={customFrom} customTo={customTo} />
       </div>
 
       {weeklySummary && <WeeklySummaryBox summary={weeklySummary} />}

@@ -40,6 +40,8 @@ export function useReportFilters() {
   );
 
   const setPeriod = useCallback((period: PeriodPreset) => replace({ period }), [replace]);
+  const setCustomFrom = useCallback((customFrom: string | undefined) => replace({ customFrom }), [replace]);
+  const setCustomTo = useCallback((customTo: string | undefined) => replace({ customTo }), [replace]);
   const setCategoryId = useCallback((categoryId: string | undefined) => replace({ categoryId }), [replace]);
   const setAccountId = useCallback((accountId: string | undefined) => replace({ accountId }), [replace]);
   const setCardId = useCallback((cardId: string | undefined) => replace({ cardId }), [replace]);
@@ -49,6 +51,8 @@ export function useReportFilters() {
   return {
     state,
     setPeriod,
+    setCustomFrom,
+    setCustomTo,
     setCategoryId,
     setAccountId,
     setCardId,

@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 
+import { DateField } from "@/components/forms/date-field";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TransactionType } from "@/generated/prisma/enums";
@@ -37,6 +39,11 @@ type TransactionFiltersBarProps = {
   onOriginChange: (value: OriginValue | undefined) => void;
   period: PeriodPreset;
   onPeriodChange: (value: PeriodPreset) => void;
+  /** Só usados quando `period === "custom"` (docs/50-AUDITORIA-BACKLOG.md F12). */
+  customFrom: string | undefined;
+  onCustomFromChange: (value: string) => void;
+  customTo: string | undefined;
+  onCustomToChange: (value: string) => void;
   tagId: string | undefined;
   onTagIdChange: (value: string | undefined) => void;
   isPaid: IsPaidFilter;
@@ -137,6 +144,10 @@ function FilterControls({
   onOriginChange,
   period,
   onPeriodChange,
+  customFrom,
+  onCustomFromChange,
+  customTo,
+  onCustomToChange,
   tagId,
   onTagIdChange,
   isPaid,
@@ -174,6 +185,33 @@ function FilterControls({
         onValueChange={(value) => onPeriodChange(value as PeriodPreset)}
         className="h-[38px] w-auto min-w-[160px]"
       />
+
+      {period === "custom" && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor="tx-period-from" className="text-[12.5px] text-muted-foreground">
+              De
+            </Label>
+            <DateField
+              id="tx-period-from"
+              value={customFrom ?? ""}
+              onValueChange={onCustomFromChange}
+              className="h-[38px] w-[150px]"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor="tx-period-to" className="text-[12.5px] text-muted-foreground">
+              Até
+            </Label>
+            <DateField
+              id="tx-period-to"
+              value={customTo ?? ""}
+              onValueChange={onCustomToChange}
+              className="h-[38px] w-[150px]"
+            />
+          </div>
+        </div>
+      )}
 
       <EntitySelect
         options={[{ value: ALL_VALUE, label: "Todas as tags" }, ...referenceData.tags.map((tag) => ({ value: tag.id, label: tag.name }))]}

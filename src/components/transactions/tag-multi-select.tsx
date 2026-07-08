@@ -14,6 +14,8 @@ type TagMultiSelectProps = {
   onValueChange: (tagIds: string[]) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Repassado ao trigger — permite `<Label htmlFor>` apontar pra ele, igual `EntitySelect`. */
+  id?: string;
 };
 
 /**
@@ -23,7 +25,7 @@ type TagMultiSelectProps = {
  * campo N:N do módulo (`TransactionTag`, docs/03-DATABASE.md) — daqui vem a
  * necessidade de um componente próprio, colocado aqui (feature-specific).
  */
-export function TagMultiSelect({ tags, value, onValueChange, disabled, placeholder = "Selecionar tags…" }: TagMultiSelectProps) {
+export function TagMultiSelect({ tags, value, onValueChange, disabled, placeholder = "Selecionar tags…", id }: TagMultiSelectProps) {
   const [open, setOpen] = useState(false);
   const selected = tags.filter((tag) => value.includes(tag.id));
 
@@ -39,6 +41,7 @@ export function TagMultiSelect({ tags, value, onValueChange, disabled, placehold
           render={
             <button
               type="button"
+              id={id}
               className="flex h-10 w-full items-center justify-between gap-2 rounded-[10px] border border-border bg-input px-3 text-sm outline-none transition-colors focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/28 disabled:cursor-not-allowed disabled:opacity-50"
             />
           }

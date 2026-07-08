@@ -1,14 +1,24 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { Receipt } from "lucide-react";
 
-import type { RecentTransactionRowClient } from "@/modules/transactions/types";
+import type { ClientTransaction, RecentTransactionRowClient } from "@/modules/transactions/types";
+import { getTransactionAction } from "@/modules/transactions/actions";
 import { CategoryType, TransactionType } from "@/generated/prisma/enums";
 import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
 import { buttonVariants } from "@/components/ui/button";
 import { TruncatedText } from "@/components/tables/truncated-text";
 import { TransactionInlineBadges } from "@/components/shared/badges/transaction-type-badge";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { EditTransactionModal } from "@/components/transactions/edit-transaction-modal";
+import { TransactionDetailModal } from "@/components/transactions/transaction-detail-modal";
+import { TransactionRowActions } from "@/components/transactions/transaction-row-actions";
+import { useTransactionsReferenceData } from "@/components/transactions/use-transactions-reference-data";
+import { buildTransactionDraft, isTransferLeg, useTransactionMutations } from "@/components/transactions/use-transaction-mutations";
 import { useShell } from "@/components/providers/shell-provider";
 import { resolveCategoryDotColor } from "@/components/categories/category-config";
 import { formatBRL } from "@/lib/money/format";
@@ -114,13 +124,52 @@ type RecentTransactionsTableProps = {
   transactions: RecentTransactionRowClient[];
 };
 
+/** Detalhe aberto pelo olhinho — junto com o shape completo, carrega o total de parcelas da linha resumida (ver comentário de `fullTransactionsQuery` abaixo: `getTransactionAction` não traz essa contagem agregada). */
+type ViewingDetail = { transaction: ClientTransaction; installmentsCount: number | null };
+
 /**
  * Preview "Últimas Transações" do Dashboard (docs/11-DASHBOARD.md, "6.
  * Últimas Transações") — sem paginação, sem busca/filtro (isso vive em
  * `/transactions`). Link "Ver todas" leva pra lá.
+ *
+ * Editar/ver detalhes/duplicar (docs/50-AUDITORIA-BACKLOG.md F9) precisam do
+ * shape completo da transação (`ClientTransaction`: categoryId/accountId/
+ * cardId/notas/tags) — a listagem resumida do dashboard
+ * (`transactionService.listRecentForDashboard`) só traz nomes já resolvidos,
+ * sem esses ids (ela existe pra ESSE preview, não pra edição). Em vez de
+ * inflar a query do módulo só pra alimentar esta tabela pequena (5 linhas),
+ * busca sob demanda via `getTransactionAction` — mesmo padrão descrito no
+ * JSDoc de `transactionService.getTransaction` ("insumo do fluxo de edição a
+ * partir de listas que só carregam um subconjunto de campos").
  */
 export function RecentTransactionsTable({ transactions }: RecentTransactionsTableProps) {
-  const { openTransactionModal } = useShell();
+  const router = useRouter();
+  const { openTransactionModal, duplicateTransaction } = useShell();
+  const referenceData = useTransactionsReferenceData();
+
+  const ids = transactions.map((transaction) => transaction.id);
+  const fullTransactionsQuery = useQuery({
+    queryKey: ["recent-transactions-full", ids],
+    queryFn: async () => {
+      const results = await Promise.all(ids.map((id) => getTransactionAction(id)));
+      const byId = new Map<string, ClientTransaction>();
+      results.forEach((result, index) => {
+        if (result.success) byId.set(ids[index], result.data);
+      });
+      return byId;
+    },
+    enabled: ids.length > 0,
+  });
+
+  const [editing, setEditing] = useState<ClientTransaction | null>(null);
+  const [viewing, setViewing] = useState<ViewingDetail | null>(null);
+  const [deleting, setDeleting] = useState<ClientTransaction | null>(null);
+
+  /** Server Component (RSC) da página — editar/excluir/marcar como paga aqui precisam refletir nos KPIs/cards do resto do Dashboard, não só nesta tabela (mesmo padrão de `invoice-items-table.tsx`: `useTransactionMutations` já invalida o cache client-side, falta o `router.refresh()` do RSC). */
+  function reloadAll() {
+    router.refresh();
+  }
+  const mutations = useTransactionMutations(reloadAll);
 
   return (
     <div className="space-y-3">
@@ -141,6 +190,71 @@ export function RecentTransactionsTable({ transactions }: RecentTransactionsTabl
           description: "Registre sua primeira receita ou despesa para começar.",
           actionLabel: "Criar primeira transação",
           onAction: () => openTransactionModal(),
+        }}
+        rowActions={(row) => {
+          const full = fullTransactionsQuery.data?.get(row.id);
+          // Ainda buscando (ou o fetch desta linha falhou) — célula fica em
+          // branco por um instante em vez de travar o clique com dado
+          // incompleto; 5 leituras pontuais, sem spinner dedicado (mesmo
+          // "silencioso" do restante do preview, que não tem loading próprio).
+          if (!full) return null;
+
+          return (
+            <TransactionRowActions
+              row={full}
+              onView={() => setViewing({ transaction: full, installmentsCount: row.installmentsCount })}
+              onMarkPaid={() => void mutations.markPaid(full)}
+              onEdit={() => setEditing(full)}
+              onDuplicate={() => duplicateTransaction(buildTransactionDraft(full))}
+              onDelete={() => setDeleting(full)}
+            />
+          );
+        }}
+      />
+
+      <EditTransactionModal
+        transaction={editing}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+        referenceData={referenceData}
+        onSaved={() => {
+          setEditing(null);
+          reloadAll();
+        }}
+      />
+
+      <TransactionDetailModal
+        transaction={viewing?.transaction ?? null}
+        onOpenChange={(open) => {
+          if (!open) setViewing(null);
+        }}
+        referenceData={referenceData}
+        installmentTotals={
+          viewing?.transaction.installmentPurchaseId && viewing.installmentsCount != null
+            ? new Map([[viewing.transaction.installmentPurchaseId, viewing.installmentsCount]])
+            : new Map()
+        }
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+        title={
+          deleting && isTransferLeg(deleting)
+            ? `Excluir a transferência "${deleting.description}"?`
+            : `Excluir "${deleting?.description ?? ""}"?`
+        }
+        description={
+          deleting && isTransferLeg(deleting)
+            ? "As 2 pernas (saída e entrada) vão para a lixeira e o saldo das duas contas volta ao que era — o toast de confirmação traz um botão de desfazer."
+            : "A transação vai para a lixeira — o toast de confirmação traz um botão de desfazer."
+        }
+        onConfirm={async () => {
+          if (deleting) await mutations.deleteOne(deleting);
+          setDeleting(null);
         }}
       />
     </div>
