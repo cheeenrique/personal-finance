@@ -63,7 +63,7 @@ export function LoanCard({ loan }: LoanCardProps) {
         )}
       </div>
 
-      <Link href={`/loans/${loan.id}`} className={buttonVariants({ variant: "outline", className: "mt-1 w-full" })}>
+      <Link href={`/loans/${loan.id}`} className={buttonVariants({ variant: "neutral", className: "mt-1 w-full" })}>
         Detalhes
       </Link>
     </div>

@@ -72,7 +72,7 @@ export function FinancingCard({ financing }: FinancingCardProps) {
 
       <Link
         href={`/financings/${financing.id}`}
-        className={buttonVariants({ variant: "outline", className: "mt-1 w-full" })}
+        className={buttonVariants({ variant: "neutral", className: "mt-1 w-full" })}
       >
         Detalhes
       </Link>
