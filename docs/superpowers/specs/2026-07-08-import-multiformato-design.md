@@ -60,17 +60,27 @@ Arquivos novos prováveis: `imports/parsers/csv-parser.ts`,
   avaliar footprint e licença). Lê a 1ª aba → linhas → MESMO mapeamento de
   coluna do CSV (reuso, não duplicar).
 
-### PDF (via Gemini)
+### PDF (via Gemini) — REUSA o client que já existe
 
-- Extrai o conteúdo do PDF e manda pro **Gemini** com saída estruturada (schema
-  JSON de transações: data, valor, tipo, descrição) → normaliza pro
-  `ParsedTransaction[]`.
-- Acesso ao modelo: decisão de plano — Vercel AI Gateway (`"google/gemini-..."`
-  via AI SDK) vs `@google/generative-ai` direto. Preferir AI Gateway se já
-  fizer sentido no projeto. Modelo Gemini atual (definir no plano).
-- Config via env var (chave). Privacidade: conteúdo do extrato vai pro Google —
-  já aprovado pelo dono.
-- Sem `fitId` → cai no fallback de dedup (por isso depende do #3).
+- **Já temos Gemini no projeto** (decisão do dono confirmada): `src/modules/
+  telegram/ai-parser.ts` expõe `callGemini(contents, ...)` — REST pra
+  `generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash`, env var
+  `GEMINI_API_KEY` (já configurada), timeout + erro→null, aceita PDF via
+  `inlineData` (`mimeType: "application/pdf"`). `financing-parser.ts` já faz
+  extração estruturada de PDF de banco (prompt + zod schema + `responseSchema`)
+  — é o TEMPLATE direto pro `pdf-parser`. SEM dep nova, SEM AI SDK/Gateway.
+- Arquitetura: extrair o transporte genérico (`callGemini`, `GeminiContentPart`,
+  modelo/base/timeout) pra `src/lib/ai/gemini.ts` (infra, não domínio) e apontar
+  tanto `telegram/ai-parser.ts` quanto `imports/pdf-parser.ts` pra lá, SEM mudar
+  o comportamento do Telegram. Se a extração ficar invasiva demais no fluxo do
+  Telegram (crítico), fallback: `pdf-parser` importa `callGemini` do
+  `ai-parser` e deixa a extração pra depois — reportar o trade-off.
+- `pdf-parser`: monta prompt + schema zod de transações (data ISO, valor decimal
+  string, tipo EXPENSE/INCOME, descrição), manda o PDF como `inlineData`,
+  valida a saída, normaliza pro `ParsedTransaction[]` (data → meia-noite SP,
+  `fitId` null). Nunca loga conteúdo do extrato nem a key (mesmo racional do
+  `ai-parser`).
+- Sem `fitId` → cai no fallback de dedup (por isso depende do #3, já pronto).
 
 ## UI
 
