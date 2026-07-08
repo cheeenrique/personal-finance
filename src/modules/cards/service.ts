@@ -151,7 +151,9 @@ async function invoiceFor(userId: string, cardId: string, year: number, month: n
  *
  * Aceita `db` opcional (client padrão ou de uma `$transaction` interativa) —
  * `pay-invoice.ts` passa o `tx` da transação de pagamento pra ler o devedor
- * no mesmo snapshot em que o INSERT do pagamento acontece (evita TOCTOU).
+ * DEPOIS do `SELECT ... FOR UPDATE` na linha do cartão (é o lock que fecha o
+ * TOCTOU entre pagamentos concorrentes, não a transação em si — ver o JSDoc
+ * de `payInvoice`).
  */
 async function outstandingBalance(userId: string, cardId: string, db: Db = prisma): Promise<Money> {
   const card = await getCard(userId, cardId, db); // valida ownership/existência

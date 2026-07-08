@@ -25,16 +25,41 @@ import type { PayInvoiceResult } from "./types";
  * esta função só cria a linha.
  *
  * Guard (docs/22-CREDIT_CARDS.md, Regra 1: "Cartão nunca pode ter saldo
- * positivo"): `amount` não pode exceder o devedor atual do cartão. Ler o
- * devedor e gravar o pagamento fora de uma mesma transação abriria uma janela
- * de TOCTOU (duas requisições concorrentes de pagamento, ou uma compra nova
- * entrando entre a leitura e o INSERT, poderiam deixar o cartão credor) — por
- * isso todo o fluxo roda dentro de um `$transaction` interativo (mesmo padrão
- * de `modules/transactions/installments.ts`), com `outstandingBalance` lendo
- * no client `tx`, não no `prisma` padrão.
+ * positivo"): `amount` não pode exceder o devedor atual do cartão. Dois
+ * pagamentos concorrentes (duplo clique) abrem TOCTOU: ambos leem o mesmo
+ * devedor, ambos passam no guard, os dois INSERTs entram e o cartão fica
+ * credor. O `$transaction` interativo sozinho NÃO fecha essa janela — o
+ * Postgres roda em READ COMMITTED por padrão, então as duas transações
+ * enxergam o devedor pré-pagamento. A atomicidade real vem do lock pessimista
+ * de linha (`SELECT ... FOR UPDATE` no cartão), PRIMEIRO statement da
+ * transação: pagamentos do mesmo cartão serializam nesse lock; o perdedor
+ * bloqueia até o vencedor commitar e, ao prosseguir, relê o devedor JÁ com o
+ * pagamento commitado (READ COMMITTED tira snapshot novo por statement) e
+ * revalida o guard — o excedente falha com PAYMENT_EXCEEDS_BALANCE em vez de
+ * deixar o cartão credor. Por isso `outstandingBalance` lê no client `tx`
+ * (sob o lock), não no `prisma` padrão.
+ *
+ * Lock de linha em vez de `isolationLevel: Serializable`: desfecho
+ * determinístico (bloqueia → relê → erro de domínio) sem loop de retry pra
+ * 40001/P2034, e sem pressão extra no pool pequeno (`lib/db/client.ts`,
+ * `max: 5`). O lock atravessa o transaction pooler do Supabase sem problema —
+ * a `$transaction` interativa segura UMA sessão do BEGIN ao COMMIT. Compra
+ * nova concorrente não disputa o lock, mas só AUMENTA o devedor — não viola a
+ * Regra 1.
  */
 export async function payInvoice(userId: string, input: PayInvoiceInput): Promise<PayInvoiceResult> {
   return prisma.$transaction(async (tx) => {
+    // Lock pessimista na linha do cartão, PRIMEIRO statement da transação —
+    // pagamentos concorrentes do mesmo cartão serializam aqui (ver JSDoc).
+    // Escopado por userId + deletedAt como toda query do módulo
+    // (repository.ts); linha ausente = inexistente ou de outro usuário.
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "Card"
+      WHERE "id" = ${input.cardId} AND "userId" = ${userId} AND "deletedAt" IS NULL
+      FOR UPDATE
+    `;
+    if (locked.length === 0) throw new CardNotFoundError(input.cardId);
+
     const [card, accountExists] = await Promise.all([
       cardRepository.findById(userId, input.cardId, tx),
       cardOwnership.accountExists(userId, input.accountId, tx),

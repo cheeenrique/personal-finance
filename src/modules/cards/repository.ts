@@ -184,7 +184,8 @@ async function listExpensesForCards(userId: string, cardIds: string[]): Promise<
  *
  * Aceita `db` opcional (client padrão ou de uma `$transaction` interativa) —
  * usado por `pay-invoice.ts` pra ler o devedor dentro da MESMA transação que
- * grava o pagamento, evitando TOCTOU entre o cálculo do saldo e o INSERT.
+ * grava o pagamento, sob o `SELECT ... FOR UPDATE` da linha do cartão (é o
+ * lock que fecha o TOCTOU entre pagamentos concorrentes — ver `payInvoice`).
  */
 async function sumByCardAndType(userId: string, cardIds: string[], db: Db = prisma): Promise<CardTypeSum[]> {
   if (cardIds.length === 0) return [];
