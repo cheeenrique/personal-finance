@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { loanService } from "@/modules/loans/service";
+import { LoanKind } from "@/generated/prisma/enums";
 import { LoansBoard } from "@/components/loans/loans-board";
 import type { LoanCardView } from "@/components/loans/types";
 
@@ -11,13 +12,18 @@ import type { LoanCardView } from "@/components/loans/types";
  * padrão de `/accounts`/`/installments`). `Prisma.Decimal`/`Date` são
  * convertidos pra string na borda antes de descer pro Client Component (RSC
  * não serializa instância de classe).
+ *
+ * Filtra `kind=LOAN` — financiamento (`kind=FINANCING`) tem seção própria
+ * (`/financings`, ver `components/financings/*`); sem esse filtro, todo
+ * financiamento apareceria duplicado aqui (mesmo `loanService.listLoans` sem
+ * distinção de `kind`, docs/03-DATABASE.md).
  */
 export default async function LoansPage() {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return null;
 
-  const loans = await loanService.listLoans(userId);
+  const loans = (await loanService.listLoans(userId)).filter((loan) => loan.kind === LoanKind.LOAN);
 
   const loansView: LoanCardView[] = loans.map((loan) => ({
     id: loan.id,

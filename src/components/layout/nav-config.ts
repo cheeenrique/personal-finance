@@ -5,6 +5,7 @@ import {
   CreditCard,
   Layers3,
   HandCoins,
+  Building2,
   PiggyBank,
   Landmark,
   FolderTree,
@@ -63,6 +64,12 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/loans",
     icon: HandCoins,
     description: "Parcelas e saldo devedor dos seus empréstimos",
+  },
+  {
+    label: "Financiamentos",
+    href: "/financings",
+    icon: Building2,
+    description: "Parcelas e saldo devedor dos seus financiamentos",
   },
   {
     label: "Orçamentos",

@@ -2,6 +2,7 @@
 
 import { listAccountsAction } from "@/modules/accounts/actions";
 import { listCardsAction } from "@/modules/cards/actions";
+import { listAssetsAction } from "@/modules/assets/actions";
 import type { ActionResult } from "@/modules/accounts/types";
 
 /**
@@ -29,4 +30,11 @@ export async function listCardOptionsAction(): Promise<ActionResult<EntityOption
   const result = await listCardsAction();
   if (!result.success) return result;
   return { success: true, data: result.data.map((card) => ({ id: card.id, name: card.name })) };
+}
+
+/** `Asset.purchaseValue`/`currentValue` são `Prisma.Decimal` — mesmo motivo do JSDoc acima. Usado por `FinancingFormModal` pra linkar o bem financiado (opcional). */
+export async function listAssetOptionsAction(): Promise<ActionResult<EntityOption[]>> {
+  const result = await listAssetsAction();
+  if (!result.success) return result;
+  return { success: true, data: result.data.map((asset) => ({ id: asset.id, name: asset.name })) };
 }
