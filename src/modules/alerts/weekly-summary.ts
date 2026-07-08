@@ -1,10 +1,12 @@
 import { Prisma, type Alert } from "@/generated/prisma/client";
 import { AlertType, AlertSeverity, TransactionType } from "@/generated/prisma/enums";
 import { transactionRepository } from "@/modules/transactions/repository";
+import { reportService } from "@/modules/reports/service";
 import { alertRepository } from "./repository";
 import { getClosedWeekWindow, getPrecedingWeekWindows, weekKeyFor, weekEndDateKey, type WeekWindow } from "./week";
 
 const TOP_CATEGORIES_LIMIT = 3;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 type TopCategory = { categoryId: string; categoryName: string; total: string };
 
@@ -22,28 +24,29 @@ export type WeeklySummaryPayload = {
 };
 
 /**
- * Top N categorias de despesa na janela — mesma composição de
- * `modules/transactions/service.ts` `expensesByCategory`, para janela de
- * SEMANA em vez de mês. Não extraída pra lá: escopo desta task não toca em
- * `modules/transactions` (ver sugestão de melhoria no retorno da task).
+ * Top N categorias de despesa na janela — MESMA base de Fluxo de Caixa de
+ * `sumAmountByTypeInRange` abaixo (conta-only via `cardId IS NULL`,
+ * `COALESCE(paidAt, date)`, só paga, sem transfer): reusa a função canônica
+ * `reportService.categoryTotals` (a mesma que alimenta "/reports" e o
+ * Telegram) em vez de `transactionRepository.groupExpensesByCategoryInRange`
+ * (accrual por `date` + inclui cartão) — antes o resumo semanal misturava as
+ * 2 bases no mesmo alerta (L8): uma semana só com compra no cartão mostrava
+ * "Despesas: R$0" (caixa) com top categorias cheias (accrual+cartão), e
+ * GREEN/ANOMALY comparavam categoria (accrual) com saldo (caixa). `window` é
+ * `[gte, lt)`; `categoryTotals` espera `dateTo` como a meia-noite SP do
+ * ÚLTIMO dia incluso (estende o fim do dia por dentro,
+ * `reports/service.ts` `endOfDayInclusive`) — por isso subtraímos 1 dia de
+ * `window.lt` (que já é a meia-noite SP do dia SEGUINTE ao fim da janela).
+ * Sem risco de DST (Brasil não observa desde 2019), mesmo racional de
+ * `endOfDayInclusive`.
  */
 async function topCategoriesInWindow(userId: string, window: WeekWindow): Promise<TopCategory[]> {
-  const grouped = await transactionRepository.groupExpensesByCategoryInRange(userId, window);
+  const lastDayOfWindow = new Date(window.lt.getTime() - ONE_DAY_MS);
+  const totals = await reportService.categoryTotals(userId, window.gte, lastDayOfWindow);
 
-  const categoryIds = grouped
-    .filter((row): row is typeof row & { categoryId: string } => row.categoryId !== null)
-    .map((row) => row.categoryId);
-  const namesById = await transactionRepository.findCategoryNamesByIds(categoryIds);
-
-  return grouped
-    .filter((row): row is typeof row & { categoryId: string } => row.categoryId !== null)
-    .map((row) => ({
-      categoryId: row.categoryId,
-      categoryName: namesById.get(row.categoryId) ?? "—",
-      total: row.sum.toFixed(2),
-    }))
-    .sort((a, b) => Number(b.total) - Number(a.total))
-    .slice(0, TOP_CATEGORIES_LIMIT);
+  return totals
+    .slice(0, TOP_CATEGORIES_LIMIT)
+    .map((row) => ({ categoryId: row.categoryId, categoryName: row.categoryName, total: row.total.toFixed(2) }));
 }
 
 /** `null` quando a semana anterior não teve despesa — evita divisão por zero (Δ% fica sem sentido nesse caso). */
@@ -68,9 +71,10 @@ function buildMessage(payload: WeeklySummaryPayload): string {
  * `alertRepository.findByDedupKey` (`weekKey`).
  *
  * `TRANSFER` e `CARD_PAYMENT` nunca entram nos totais — naturalmente
- * excluídos por `transactionRepository.sumAmountByTypeInRange`/
- * `groupExpensesByCategoryInRange` (filtram `type` exato + `transferId:
- * null`, ver `modules/transactions/repository.ts`).
+ * excluídos por `transactionRepository.sumAmountByTypeInRange` (income/expense)
+ * e `reportService.categoryTotals` (topCategories), MESMA base de Fluxo de
+ * Caixa nos dois (`type` exato + `transferId IS NULL` + `cardId IS NULL`, ver
+ * `topCategoriesInWindow` acima).
  */
 export async function generateWeeklySummary(
   userId: string,

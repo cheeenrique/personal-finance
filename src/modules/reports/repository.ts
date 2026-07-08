@@ -190,13 +190,16 @@ async function groupCategoryTotalsInRange(
 /**
  * Nomes de categoria por id — mesmo padrão de `findAccountNamesByIds` abaixo
  * (módulos não cross-importam repository um do outro neste projeto, ver
- * `modules/budgets/repository.ts`).
+ * `modules/budgets/repository.ts`). `userId` no `where` é defesa em
+ * profundidade (L7): hoje os ids sempre vêm de uma agregação já escopada por
+ * `userId` (`groupCategoryTotalsInRange` acima), sem exploit atual, mas uma
+ * leitura de domínio nunca deveria ficar sem o escopo por padrão.
  */
-async function findCategoryNamesByIds(ids: string[]): Promise<Map<string, string>> {
+async function findCategoryNamesByIds(userId: string, ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
 
   const categories = await prisma.category.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: ids }, userId },
     select: { id: true, name: true },
   });
 
@@ -243,6 +246,20 @@ async function findAccountNamesByIds(userId: string, ids: string[]): Promise<Map
   return new Map(accounts.map((account) => [account.id, account.name]));
 }
 
+const CSV_ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Mesma extensão de `service.ts` `endOfDayInclusive` (duplicada aqui de
+ * propósito — este módulo não importa de `service.ts` pra dentro de
+ * `repository.ts`, evita ciclo): `date` nem sempre é meia-noite (lançamento
+ * rápido/Telegram), então um `lte` cru no filtro de CSV cortaria uma
+ * transação do ÚLTIMO dia do período lançada depois das 00h00 (L2). Sem risco
+ * de DST (Brasil não observa horário de verão desde 2019).
+ */
+function endOfDayInclusiveCsv(date: Date): Date {
+  return new Date(date.getTime() + CSV_ONE_DAY_MS - 1);
+}
+
 function buildCsvWhere(userId: string, filters: CsvFilterInput): Prisma.TransactionWhereInput {
   return {
     userId,
@@ -256,7 +273,7 @@ function buildCsvWhere(userId: string, filters: CsvFilterInput): Prisma.Transact
     ...((filters.dateFrom || filters.dateTo) && {
       date: {
         ...(filters.dateFrom && { gte: filters.dateFrom }),
-        ...(filters.dateTo && { lte: filters.dateTo }),
+        ...(filters.dateTo && { lte: endOfDayInclusiveCsv(filters.dateTo) }),
       },
     }),
   };

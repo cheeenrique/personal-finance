@@ -1,6 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
-import { parseInSaoPaulo } from "@/lib/date/timezone";
+import { calendarPartsSP, startOfDaySP } from "@/lib/date/calendar-sp";
 import type { OfxParseError, OfxParseResult, OfxTransactionType, ParsedOfxTransaction } from "./types";
 
 /**
@@ -26,9 +26,31 @@ function extractField(block: string, tag: string): string | null {
   return value.length > 0 ? value : null;
 }
 
-/** `YYYYMMDD` (com ou sem hora/timezone atrás, ex. `YYYYMMDDHHMMSS[-3:BRT]`) → meia-noite em America/Sao_Paulo. */
+// `YYYYMMDD` + hora opcional (`HHMMSS`, com fração opcional `.XXX`) + marcador
+// de timezone opcional `[N:TZ]` (N = offset em horas relativo a GMT, ex.
+// `[0:GMT]`, `[-3:BRT]`) — formato OFX de `DTPOSTED` (spec permite qualquer
+// combinação). Grupos: 1=ano 2=mês 3=dia 4=hora 5=min 6=seg 7=offset 8=nomeTZ.
+const OFX_DATETIME_REGEX =
+  /^(\d{4})(\d{2})(\d{2})(\d{2})?(\d{2})?(\d{2})?(?:\.\d+)?(?:\[([+-]?\d+(?:\.\d+)?):(\w+)\])?/;
+
+/**
+ * `YYYYMMDD` (com ou sem hora/timezone atrás, ex. `YYYYMMDDHHMMSS[-3:BRT]`) →
+ * meia-noite em America/Sao_Paulo.
+ *
+ * SEM o marcador `[N:TZ]`: `YYYYMMDD` já é tratado como o dia-calendário SP
+ * (comportamento histórico — é o que a maioria dos extratos de banco BR
+ * exporta, sem timezone explícito). Defensivo de propósito: não quebra OFX
+ * sem TZ (L5).
+ *
+ * COM o marcador: `N` é o offset (em horas) de GMT do horário informado no
+ * arquivo — convertemos pro instante UTC real e só então extraímos o
+ * dia-calendário SP. Sem isso, um extrato exportado em GMT (ex.
+ * `20260708023000[0:GMT]` = 07/07 23:30 em São Paulo) importava como 08/07
+ * (o dia cru do arquivo), desalinhando o dedup fallback por
+ * accountId+date+amount+description (L5).
+ */
 function parseOfxDate(raw: string): Date | null {
-  const match = raw.match(/^(\d{4})(\d{2})(\d{2})/);
+  const match = raw.match(OFX_DATETIME_REGEX);
   if (!match) return null;
 
   const year = Number(match[1]);
@@ -36,7 +58,18 @@ function parseOfxDate(raw: string): Date | null {
   const day = Number(match[3]);
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
 
-  return parseInSaoPaulo(new Date(year, month - 1, day, 0, 0, 0, 0));
+  const offsetHours = match[7] !== undefined ? Number(match[7]) : null;
+  if (offsetHours === null || Number.isNaN(offsetHours)) {
+    return startOfDaySP(year, month, day);
+  }
+
+  const hour = Number(match[4] ?? "0");
+  const minute = Number(match[5] ?? "0");
+  const second = Number(match[6] ?? "0");
+  const utcInstant = new Date(Date.UTC(year, month - 1, day, hour, minute, second) - offsetHours * 60 * 60 * 1000);
+  const { year: spYear, month: spMonth, day: spDay } = calendarPartsSP(utcInstant);
+
+  return startOfDaySP(spYear, spMonth, spDay);
 }
 
 /** Sempre positivo — o sinal do valor no arquivo é ignorado, o tipo (CREDIT/DEBIT) já carrega essa informação. */

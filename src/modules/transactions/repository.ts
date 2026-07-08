@@ -416,11 +416,20 @@ async function groupExpensesByCategoryInRange(
   return rows.map((row) => ({ categoryId: row.categoryId, sum: row._sum.amount ?? new Prisma.Decimal(0) }));
 }
 
-async function findCategoryNamesByIds(ids: string[]): Promise<Map<string, string>> {
+/**
+ * `userId` opcional (L7, defesa em profundidade): hoje os ids sempre vêm de
+ * uma agregação já escopada por `userId` (`groupExpensesByCategoryInRange`),
+ * sem exploit atual. Opcional em vez de obrigatório de propósito — outros
+ * callers deste repository (`transactions/service.ts`, `alerts/anomaly.ts`)
+ * ficam fora do escopo desta task; tornar `userId` obrigatório quebraria a
+ * assinatura sem atualizar esses call sites. Novo código deve sempre passar
+ * `userId`.
+ */
+async function findCategoryNamesByIds(ids: string[], userId?: string): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
 
   const categories = await prisma.category.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: ids }, ...(userId && { userId }) },
     select: { id: true, name: true },
   });
 

@@ -178,7 +178,10 @@ async function categoryTotals(
   );
   if (rows.length === 0) return [];
 
-  const namesById = await reportRepository.findCategoryNamesByIds(rows.map((row) => row.categoryId));
+  const namesById = await reportRepository.findCategoryNamesByIds(
+    userId,
+    rows.map((row) => row.categoryId),
+  );
 
   return rows
     .map((row) => ({ categoryId: row.categoryId, categoryName: namesById.get(row.categoryId) ?? "—", total: row.sum }))
