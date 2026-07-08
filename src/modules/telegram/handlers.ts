@@ -8,6 +8,7 @@ import { reportService } from "@/modules/reports/service";
 import { nowInSaoPaulo, parseInSaoPaulo } from "@/lib/date/timezone";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { parseTransactionFromImage, parseTransactionWithAI } from "./ai-parser";
+import { parseFinancingFromDocument } from "./financing-parser";
 import { draftFromAi, handlePendingReply, processDraft } from "./draft";
 import { telegramPendingRepository } from "./pending";
 import {
@@ -22,7 +23,10 @@ import { executeTelegramQuery, resolvePeriodRange } from "./query";
 import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildBalanceReply,
+  buildDocumentUnreadableReply,
+  buildDocumentUnsupportedReply,
   buildErrorReply,
+  buildFinancingSummaryReply,
   buildImageUnreadableReply,
   buildMonthExpensesReply,
   buildQueryReply,
@@ -202,6 +206,48 @@ export async function handleImageEntry(
   return processDraft(userId, draftFromAi(ai), 0);
 }
 
+/** MimeTypes que `parseFinancingFromDocument` (Gemini) sabe ler — PDF ou foto do contrato/CCB (docs/30-TELEGRAM.md, ingestão por documento). */
+const SUPPORTED_FINANCING_DOCUMENT_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+/**
+ * Ingestão de DOCUMENTO de financiamento (PDF ou foto do contrato/CCB,
+ * docs/30-TELEGRAM.md — extração por Gemini, `financing-parser.ts`). SÓ
+ * parse + resposta — NUNCA cria o `Loan` aqui: o cadastro real (conta, asset,
+ * link das parcelas existentes) acontece no app, onde há contexto pra revisar
+ * o que o Gemini leu antes de persistir.
+ *
+ * `mimeType` fora de PDF/imagem (`SUPPORTED_FINANCING_DOCUMENT_MIME_TYPES`)
+ * nunca chega no Gemini — resposta amigável direto. Parser retornando `null`
+ * (Gemini indisponível, timeout, shape não reconhecível) tem a MESMA garantia
+ * de `handleImageEntry`: nunca derruba o webhook, sempre uma resposta pra
+ * reenviar. `userId` recebido só por simetria com os demais handlers
+ * (`executeCommand`/`handleImageEntry`) — não é usado neste caminho (sem
+ * criação de registro), mas mantém a mesma assinatura do módulo.
+ */
+export async function handleDocumentEntry(
+  userId: string,
+  documentBytes: Buffer,
+  mimeType: string,
+): Promise<CommandResult> {
+  if (!SUPPORTED_FINANCING_DOCUMENT_MIME_TYPES.has(mimeType)) {
+    return { text: buildDocumentUnsupportedReply(), resultCode: "document_unsupported_type" };
+  }
+
+  const parsed = await parseFinancingFromDocument(documentBytes, mimeType);
+  const summary = parsed ? buildFinancingSummaryReply(parsed) : null;
+
+  if (summary === null) {
+    return { text: buildDocumentUnreadableReply(), resultCode: "document_unreadable" };
+  }
+
+  return { text: summary, resultCode: "financing_parsed" };
+}
+
 async function handleQueryBalance(userId: string): Promise<CommandResult> {
   const total = await accountService.totalBalance(userId);
   return { text: buildBalanceReply(total.toString()), resultCode: "balance_queried" };
@@ -283,4 +329,4 @@ async function executeCommand(userId: string, command: ParsedCommand, rawText: s
   }
 }
 
-export const telegramHandlers = { executeCommand, handleImageEntry };
+export const telegramHandlers = { executeCommand, handleImageEntry, handleDocumentEntry };

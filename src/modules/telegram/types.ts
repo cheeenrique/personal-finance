@@ -162,6 +162,16 @@ export type TelegramPhotoSize = { file_id: string; width: number; height: number
 export type TelegramPhotoInput = { fileId: string; caption: string | null };
 
 /**
+ * Documento já detectado/normalizado de um update (docs/30-TELEGRAM.md —
+ * ingestão de DOCUMENTO de financiamento por Gemini, ver `document.ts`):
+ * `fileId` do `message.document` + `mimeType` já resolvido (`mime_type` do
+ * Telegram quando presente, senão inferido pela extensão do `file_name` —
+ * `mime_type` é opcional na Bot API pra documentos). `null` quando a mensagem
+ * não tem documento ou quando não dá pra resolver nenhum mimeType.
+ */
+export type TelegramDocumentInput = { fileId: string; mimeType: string };
+
+/**
  * Rascunho de um lançamento em progresso — persistido em
  * `TelegramPendingEntry.draftJson` (Prisma `Json`) enquanto falta valor e/ou
  * origem (docs/30-TELEGRAM.md, "Fluxo conversacional"). Superset serializável

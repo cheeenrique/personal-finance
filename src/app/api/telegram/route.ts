@@ -6,7 +6,9 @@ import { telegramHandlers } from "@/modules/telegram/handlers";
 import { telegramApi } from "@/modules/telegram/telegram-api";
 import { looksLikeLinkCommand, tryLinkFromMessage } from "@/modules/telegram/link";
 import { extractLargestPhoto } from "@/modules/telegram/photo";
+import { extractDocument } from "@/modules/telegram/document";
 import {
+  buildDocumentUnreadableReply,
   buildImageUnreadableReply,
   buildTelegramLinkedReply,
   buildTelegramLinkFailedReply,
@@ -21,6 +23,7 @@ type TelegramUpdate = {
     text?: string;
     photo?: TelegramPhotoSize[];
     caption?: string;
+    document?: { file_id: string; file_name?: string; mime_type?: string };
   };
 };
 
@@ -71,8 +74,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // (função pura, `photo.ts`) já resolve a maior resolução + o `caption`
   // opcional. `null` quando a mensagem não tem foto nenhuma.
   const photoInput = update?.message ? extractLargestPhoto(update.message) : null;
+  // Documento (PDF ou foto do contrato/CCB de financiamento, docs/30-TELEGRAM.md
+  // — ingestão por documento, `financing-parser.ts`) — `extractDocument`
+  // (função pura, `document.ts`) resolve o mimeType (`mime_type` do Telegram ou
+  // fallback por extensão do `file_name`). `null` quando a mensagem não tem
+  // `document` ou quando nenhum mimeType dá pra resolver.
+  const documentInput = update?.message ? extractDocument(update.message) : null;
 
-  if (!text && !photoInput) {
+  if (!text && !photoInput && !documentInput) {
     return NextResponse.json({ ok: true });
   }
 
@@ -116,6 +125,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       downloaded.mimeType,
       photoInput.caption,
     );
+    await telegramApi.sendMessage(botToken, chatId, result.text);
+    console.log(`chat_id=${chatId} -> ${result.resultCode}`);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (documentInput) {
+    const downloaded = await telegramApi.downloadDocument(botToken, documentInput.fileId, documentInput.mimeType);
+
+    if (!downloaded) {
+      await telegramApi.sendMessage(botToken, chatId, buildDocumentUnreadableReply());
+      console.log(`chat_id=${chatId} -> document_download_failed`);
+      return NextResponse.json({ ok: true });
+    }
+
+    const result = await telegramHandlers.handleDocumentEntry(userId, downloaded.bytes, downloaded.mimeType);
     await telegramApi.sendMessage(botToken, chatId, result.text);
     console.log(`chat_id=${chatId} -> ${result.resultCode}`);
     return NextResponse.json({ ok: true });

@@ -1,6 +1,7 @@
 import { formatBRL } from "@/lib/money/format";
 import { formatDateSaoPaulo, formatDateShortSaoPaulo } from "@/lib/date/format";
-import type { TelegramQueryPeriod, TelegramQueryResult, TelegramTransactionType } from "./types";
+import { parseFlexibleDate } from "@/lib/date/schema";
+import type { ParsedFinancing, ParsedInterestPeriod, TelegramQueryPeriod, TelegramQueryResult, TelegramTransactionType } from "./types";
 
 /**
  * Ícones padronizados de toda resposta do bot (docs/30-TELEGRAM.md, "Ícones
@@ -216,4 +217,95 @@ export function buildTelegramLinkedReply(): string {
 /** Mesma mensagem pras 3 reasons de falha (`invalid_command`, `invalid_or_expired_code`, `chat_already_linked`) — o usuário só precisa saber que precisa gerar um código novo. */
 export function buildTelegramLinkFailedReply(): string {
   return `${ICON_ERROR} Código inválido ou expirado. Gere um novo em Configurações.`;
+}
+
+/** `"1.79"` (decimal com ponto, formato de saída do parser) → `"1,79"` (leitura pt-BR) — só troca o separador, mesma lógica de "não é cálculo, é apresentação" de `lib/money/format.ts`. */
+function formatPercentBR(value: string): string {
+  return value.replace(".", ",");
+}
+
+function interestPeriodLabel(period: ParsedInterestPeriod): string {
+  return period === "MONTHLY" ? "a.m." : "a.a.";
+}
+
+/** `installmentsCount`/`installmentAmount` podem vir isolados (documento com tabela de parcelas variáveis, ver `financing-parser.ts`) — cobre os 3 casos (ambos, só count, só amount) antes de omitir a linha. */
+function financingInstallmentsLine(parsed: ParsedFinancing): string | null {
+  if (parsed.installmentsCount && parsed.installmentAmount) {
+    return `${parsed.installmentsCount} parcelas de ${formatBRL(parsed.installmentAmount)}`;
+  }
+  if (parsed.installmentsCount) return `${parsed.installmentsCount} parcelas`;
+  if (parsed.installmentAmount) return `Parcela: ${formatBRL(parsed.installmentAmount)}`;
+  return null;
+}
+
+function financingInterestLine(parsed: ParsedFinancing): string | null {
+  if (!parsed.interestRate) return null;
+  const period = parsed.interestPeriod ? interestPeriodLabel(parsed.interestPeriod) : interestPeriodLabel("MONTHLY");
+  return `Juros: ${formatPercentBR(parsed.interestRate)}% ${period}`;
+}
+
+/**
+ * `firstDueDate` vem `YYYY-MM-DD` (sem hora) do parser — `parseFlexibleDate`
+ * (mesmo helper canônico de `lib/date/schema.ts` usado em todo o app) trata
+ * isso como meia-noite em America/Sao_Paulo antes de formatar, evitando a
+ * mesma pegadinha de timezone documentada em `buildTransactionConfirmationReply`.
+ */
+function financingFirstDueDateLine(parsed: ParsedFinancing): string | null {
+  if (!parsed.firstDueDate) return null;
+  return `1ª parcela: ${formatDateSaoPaulo(parseFlexibleDate(parsed.firstDueDate))}`;
+}
+
+/**
+ * Resumo do que o Gemini extraiu de um DOCUMENTO de financiamento
+ * (docs/30-TELEGRAM.md — ingestão por documento, `financing-parser.ts`).
+ * Campo nulo simplesmente não vira linha (o Gemini já é instruído a nunca
+ * inventar valor, `buildFinancingPrompt`). NÃO cria o `Loan` — só informa o
+ * usuário do que foi lido; o cadastro (conta/asset/link de parcelas) acontece
+ * no app. Usa `ICON_SUCCESS` (nunca um emoji solto novo) — mesma regra de
+ * "ícones padronizados" de todo o resto deste arquivo.
+ *
+ * `null` quando o Gemini validou o shape mas não achou NENHUM campo
+ * reconhecível (documento sem informação útil) — o caller (`handlers.ts`)
+ * trata isso como falha de leitura, mesma resposta de parser retornando
+ * `null` (`buildDocumentUnreadableReply`), nunca um resumo vazio.
+ */
+export function buildFinancingSummaryReply(parsed: ParsedFinancing): string | null {
+  const lines = [
+    parsed.lender ? `Credor: ${parsed.lender}` : null,
+    parsed.principal ? `Valor financiado: ${formatBRL(parsed.principal)}` : null,
+    parsed.assetValue ? `Valor do bem: ${formatBRL(parsed.assetValue)}` : null,
+    parsed.downPayment ? `Entrada: ${formatBRL(parsed.downPayment)}` : null,
+    financingInstallmentsLine(parsed),
+    parsed.totalToPay ? `Total a pagar: ${formatBRL(parsed.totalToPay)}` : null,
+    financingFirstDueDateLine(parsed),
+    financingInterestLine(parsed),
+    parsed.cet ? `CET: ${formatPercentBR(parsed.cet)}% a.m.` : null,
+    parsed.assetDescription ? `Bem: ${parsed.assetDescription}` : null,
+  ].filter((line): line is string => line !== null);
+
+  if (lines.length === 0) return null;
+
+  return [
+    `${ICON_SUCCESS} Financiamento identificado:`,
+    "",
+    ...lines.map((line) => `• ${line}`),
+    "",
+    "Abra o app em Financiamentos pra revisar e cadastrar.",
+  ].join("\n");
+}
+
+/** Parser retornou `null` (docs/30-TELEGRAM.md — Gemini indisponível, timeout, ou documento sem shape reconhecível) — pede o original ou uma foto mais nítida, mesmo tom de `buildImageUnreadableReply`. */
+export function buildDocumentUnreadableReply(): string {
+  return [
+    `${ICON_WARNING} Não consegui ler o documento.`,
+    "Tenta o PDF original ou uma foto mais nítida.",
+  ].join("\n");
+}
+
+/** `message.document` com mimeType fora de PDF/imagem (docs/30-TELEGRAM.md — ingestão por documento só aceita PDF/foto do contrato). */
+export function buildDocumentUnsupportedReply(): string {
+  return [
+    `${ICON_WARNING} Não consigo ler esse tipo de arquivo.`,
+    "Envie o contrato em PDF ou como foto.",
+  ].join("\n");
 }

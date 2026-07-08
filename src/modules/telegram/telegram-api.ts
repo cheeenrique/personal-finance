@@ -149,4 +149,29 @@ async function downloadPhoto(botToken: string, fileId: string): Promise<{ bytes:
   return { bytes: download.bytes, mimeType: PHOTO_MIME_TYPE };
 }
 
-export const telegramApi = { sendMessage, getMe, setWebhook, deleteWebhook, downloadPhoto };
+/**
+ * Orquestra `getFile` + download dos bytes de um DOCUMENTO do Telegram
+ * (docs/30-TELEGRAM.md — ingestão de contrato/CCB de financiamento por
+ * Gemini). Mesmo racional de `downloadPhoto`, mas o `mimeType` não é fixo
+ * (documento pode ser PDF ou imagem) — o caller (`route.ts`, via
+ * `extractDocument`, `document.ts`) já resolveu o mimeType do `message.document`
+ * e só passa pra cá pra manter o shape de retorno simétrico ao de
+ * `downloadPhoto` (`{ bytes, mimeType }`). `null` em qualquer falha (arquivo
+ * expirado, rede, timeout) — mesma garantia de nunca derrubar o webhook.
+ * Nunca loga bytes nem o token.
+ */
+async function downloadDocument(
+  botToken: string,
+  fileId: string,
+  mimeType: string,
+): Promise<{ bytes: Buffer; mimeType: string } | null> {
+  const file = await getFile(botToken, fileId);
+  if (!file.ok) return null;
+
+  const download = await downloadFileBytes(botToken, file.filePath);
+  if (!download.ok) return null;
+
+  return { bytes: download.bytes, mimeType };
+}
+
+export const telegramApi = { sendMessage, getMe, setWebhook, deleteWebhook, downloadPhoto, downloadDocument };
