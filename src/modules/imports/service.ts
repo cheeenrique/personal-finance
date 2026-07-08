@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/client";
 import { accountRepository } from "@/modules/accounts/repository";
 import { transactionService } from "@/modules/transactions/service";
+import { calendarPartsSP } from "@/lib/date/calendar-sp";
 import { parseOfx } from "./ofx-parser";
 import { importRepository, type FallbackRow } from "./repository";
 import { AccountNotFoundError } from "./errors";
@@ -19,27 +20,66 @@ function hasFitId<T extends { fitId: string | null }>(item: T): item is T & { fi
 /**
  * Chave de dedup do fallback sem `fitId` (docs/03-DATABASE.md, "Importação de
  * Extrato OFX") — mesma regra dos dois lados (linha existente no banco vs.
- * item recém-parseado). CONTRATO: `amount` sempre normalizado como
- * `Decimal.toFixed(2)` ("50.00", nunca "50" ou "50.1") — o parser garante em
- * `parseOfxAmount`, o repository em `findFallbackRows`. Formato divergente
- * entre os lados quebra a chave e duplica tudo sem fitId no reimport.
+ * item recém-parseado). Dia-calendário em America/Sao_Paulo (`calendarPartsSP`,
+ * não `date.toISOString()`): a mesma transação pode existir no banco com hora
+ * diferente do que o parser OFX produz (que sempre nasce à meia-noite SP, ver
+ * `ofx-parser.ts`) — comparar o instante exato deixava passar duplicata real
+ * (bug: extrato Nubank conta/Pix sem `<FITID>`). CONTRATO: `amount` sempre
+ * normalizado como `Decimal.toFixed(2)` ("50.00", nunca "50" ou "50.1") — o
+ * parser garante em `parseOfxAmount`, o repository em `findFallbackRows`.
+ * Formato divergente entre os lados quebra a chave e duplica tudo sem fitId
+ * no reimport.
  */
 function fallbackKey(date: Date, amount: string, description: string): string {
-  return `${date.toISOString()}|${amount}|${description.trim().toLowerCase()}`;
+  const { year, month, day } = calendarPartsSP(date);
+  return `${year}-${month}-${day}|${amount}|${description.trim().toLowerCase()}`;
 }
 
-function buildFallbackKeySet(rows: FallbackRow[]): Set<string> {
-  return new Set(rows.map((row) => fallbackKey(row.date, row.amount, row.description)));
+/**
+ * Contagem por chave (multiset), não presença booleana — o banco pode já ter
+ * N cópias da mesma chave (ex.: 2 lançamentos de "Pix" no mesmo dia, mesmo
+ * valor, sem fitId). Um `Set` só saberia dizer "existe ao menos 1"; aqui cada
+ * duplicata real do arquivo consome 1 ocorrência da contagem, então N cópias
+ * no banco + M no arquivo importam só `max(0, M-N)` (nunca engole item novo
+ * como se fosse duplicata da mesma chave, nem duplica além do que o banco já
+ * tem).
+ */
+function buildFallbackKeyCounts(rows: FallbackRow[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key = fallbackKey(row.date, row.amount, row.description);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }
 
-function isDuplicate(
-  item: ParsedOfxTransaction,
-  existingFitIds: Set<string>,
-  existingFallbackKeys: Set<string>,
-): boolean {
-  return item.fitId
-    ? existingFitIds.has(item.fitId)
-    : existingFallbackKeys.has(fallbackKey(item.date, item.amount, item.description));
+/** Estado de dedup mutável do batch — MESMA instância usada do 1º ao último item do loop (preview ou commit), nunca dois estados separados. */
+type DedupState = { fitIds: Set<string>; fallbackCounts: Map<string, number> };
+
+function buildDedupState(existingFitIds: Set<string>, fallbackRows: FallbackRow[]): DedupState {
+  return { fitIds: existingFitIds, fallbackCounts: buildFallbackKeyCounts(fallbackRows) };
+}
+
+/**
+ * Único ponto de decisão "é duplicata?" — usado IDÊNTICO por `previewOfxImport`
+ * e `commitOfxImport` (nunca podem divergir). Muta `state`: fitId novo entra
+ * no Set (pega duplicata do mesmo fitId dentro do MESMO arquivo); chave de
+ * fallback duplicada decrementa a contagem (consome 1 ocorrência do banco por
+ * item do arquivo que bateu nela — dedup in-batch natural, sem Set à parte).
+ */
+function isDuplicate(item: ParsedOfxTransaction, state: DedupState): boolean {
+  if (item.fitId) {
+    if (state.fitIds.has(item.fitId)) return true;
+    state.fitIds.add(item.fitId);
+    return false;
+  }
+
+  const key = fallbackKey(item.date, item.amount, item.description);
+  const remaining = state.fallbackCounts.get(key) ?? 0;
+  if (remaining <= 0) return false;
+
+  state.fallbackCounts.set(key, remaining - 1);
+  return true;
 }
 
 /**
@@ -79,21 +119,17 @@ async function previewOfxImport(userId: string, accountId: string, fileContent: 
     ),
     withoutFitId.length > 0 ? importRepository.findFallbackRows(userId, accountId) : Promise.resolve([]),
   ]);
-  const existingFallbackKeys = buildFallbackKeySet(fallbackRows);
+  const state = buildDedupState(existingFitIds, fallbackRows);
 
   let duplicados = 0;
   const novosParsed: ParsedOfxTransaction[] = [];
 
   for (const item of transactions) {
-    if (isDuplicate(item, existingFitIds, existingFallbackKeys)) {
+    if (isDuplicate(item, state)) {
       duplicados += 1;
       continue;
     }
     novosParsed.push(item);
-    // Dedup in-batch: alimenta o Set durante o loop pra dois `<STMTTRN>` com o
-    // mesmo `<FITID>` no MESMO arquivo contarem como 1 novo + 1 duplicado
-    // (mesma regra do commit — preview e commit nunca podem divergir).
-    if (item.fitId) existingFitIds.add(item.fitId);
   }
 
   const novos: OfxPreviewItem[] = await Promise.all(
@@ -151,16 +187,13 @@ async function commitOfxImport(userId: string, accountId: string, fileContent: s
       ),
       withoutFitId.length > 0 ? importRepository.findFallbackRows(userId, accountId, tx) : Promise.resolve([]),
     ]);
-    const existingFallbackKeys = buildFallbackKeySet(fallbackRows);
+    const state = buildDedupState(existingFitIds, fallbackRows);
 
-    // Dedup in-batch: alimenta o Set durante o filter pra dois `<STMTTRN>` com
-    // o mesmo `<FITID>` no MESMO arquivo inserirem só o 1º — o snapshot do
-    // banco não enxerga o que ainda está no próprio batch.
-    const toInsert = withCategory.filter((item) => {
-      if (isDuplicate(item, existingFitIds, existingFallbackKeys)) return false;
-      if (item.fitId) existingFitIds.add(item.fitId);
-      return true;
-    });
+    // Dedup in-batch: `isDuplicate` muta `state` a cada item — dois
+    // `<STMTTRN>` com o mesmo `<FITID>` (ou a mesma chave de fallback, até o
+    // limite do que o banco já tem) no MESMO arquivo inserem só o necessário.
+    // O snapshot do banco não enxerga o que ainda está no próprio batch.
+    const toInsert = withCategory.filter((item) => !isDuplicate(item, state));
     const insertedCount = await importRepository.insertMany(userId, accountId, toInsert, tx);
 
     // `insertedCount < toInsert.length` acontece sob commit concorrente: o
