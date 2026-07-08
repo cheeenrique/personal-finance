@@ -26,21 +26,59 @@ type MergedLoanFields = {
 };
 
 /**
+ * `totalToPay` = pagas (valor REAL já pago) + parcelas futuras × novo
+ * `installmentAmount` — usado só quando o patch muda `installmentAmount`
+ * SEM informar `totalToPay` junto (ex.: botão "Atualizar valor da parcela"
+ * do financiamento, `update-installment-amount-dialog.tsx`, que manda só
+ * `{ installmentAmount }`). Os 2 modais de edição completa
+ * (`LoanFormModal`/`FinancingFormModal`) sempre mandam os dois campos
+ * juntos (`totalToPay` calculado/editado no form), então nunca caem aqui —
+ * sem isso, `regenerateUnpaidInstallments` rodaria o rateio sobre o
+ * `totalToPay` ANTIGO (incompatível com o `installmentAmount` novo) e a
+ * ÚLTIMA parcela sairia com um resíduo estranho em vez do valor novo exato
+ * (ver `installments.ts` `splitLoanInstallmentAmounts`).
+ */
+function recomputeTotalToPayForInstallmentAmount(
+  paid: { amount: Prisma.Decimal }[],
+  installmentsCount: number,
+  installmentAmount: Prisma.Decimal,
+): Prisma.Decimal {
+  const paidTotal = paid.reduce((sum, installment) => sum.plus(installment.amount), new Prisma.Decimal(0));
+  const remainingCount = Math.max(installmentsCount - paid.length, 0);
+  return paidTotal.plus(installmentAmount.times(remainingCount));
+}
+
+/**
  * Mescla `existing` (estado atual do `Loan`) com `input` (patch parcial) —
  * mesmo padrão de `transactions/service.ts` `updateTransaction` (`input.x
  * !== undefined ? input.x : existing.x`, nunca `input.x ?? existing.x` pra
  * campo nullable, senão um `null` explícito no patch cairia pro valor
  * antigo em vez de limpar o campo).
+ *
+ * `paid` (parcelas EXPENSE já pagas) só alimenta o recálculo automático de
+ * `totalToPay` acima — ver `recomputeTotalToPayForInstallmentAmount`.
  */
-function mergeLoanFields(existing: Loan, input: UpdateLoanInput): MergedLoanFields {
+function mergeLoanFields(existing: Loan, input: UpdateLoanInput, paid: { amount: Prisma.Decimal }[]): MergedLoanFields {
+  const installmentsCount = input.installmentsCount ?? existing.installmentsCount;
+  const installmentAmount =
+    input.installmentAmount !== undefined ? new Prisma.Decimal(input.installmentAmount) : existing.installmentAmount;
+  const installmentAmountChanged =
+    input.installmentAmount !== undefined && !installmentAmount.equals(existing.installmentAmount);
+
+  const totalToPay =
+    input.totalToPay !== undefined
+      ? new Prisma.Decimal(input.totalToPay)
+      : installmentAmountChanged
+        ? recomputeTotalToPayForInstallmentAmount(paid, installmentsCount, installmentAmount)
+        : existing.totalToPay;
+
   return {
     description: input.description ?? existing.description,
     lender: input.lender !== undefined ? input.lender : existing.lender,
     principal: input.principal !== undefined ? new Prisma.Decimal(input.principal) : existing.principal,
-    totalToPay: input.totalToPay !== undefined ? new Prisma.Decimal(input.totalToPay) : existing.totalToPay,
-    installmentsCount: input.installmentsCount ?? existing.installmentsCount,
-    installmentAmount:
-      input.installmentAmount !== undefined ? new Prisma.Decimal(input.installmentAmount) : existing.installmentAmount,
+    totalToPay,
+    installmentsCount,
+    installmentAmount,
     firstDueDate: input.firstDueDate ?? existing.firstDueDate,
     accountId: input.accountId ?? existing.accountId,
     categoryId: input.categoryId !== undefined ? input.categoryId : existing.categoryId,
@@ -97,16 +135,16 @@ export async function updateLoan(userId: string, id: string, input: UpdateLoanIn
   const existing = await loanRepository.findByIdWithTransactions(userId, id);
   if (!existing) throw new LoanNotFoundError(id);
 
-  const merged = mergeLoanFields(existing, input);
+  const paid = existing.transactions.filter(
+    (transaction) => transaction.type === TransactionType.EXPENSE && transaction.isPaid,
+  );
+
+  const merged = mergeLoanFields(existing, input, paid);
   assertInterestInvariant(merged.interestRate, merged.interestPeriod);
   assertTotalToPayInvariant(merged.principal, merged.totalToPay);
 
   if (input.accountId) await assertAccountOwnership(userId, input.accountId);
   if (input.categoryId) await assertCategoryOwnership(userId, input.categoryId);
-
-  const paid = existing.transactions.filter(
-    (transaction) => transaction.type === TransactionType.EXPENSE && transaction.isPaid,
-  );
 
   const needsRegeneration =
     (input.installmentsCount !== undefined && input.installmentsCount !== existing.installmentsCount) ||

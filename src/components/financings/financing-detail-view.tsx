@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Banknote,
-  Check,
+  Coins,
   Landmark,
   MoreVertical,
   Pencil,
@@ -18,9 +18,7 @@ import {
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { ProgressBar } from "@/components/dashboard/progress-bar";
-import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { IconActionButton } from "@/components/shared/icon-action-button";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -28,23 +26,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { deleteLoanAction } from "@/modules/loans/actions";
 import { updateTransactionAction } from "@/modules/transactions/actions";
 import { EarlyPaymentDialog, type EarlyPaymentInstallment } from "@/components/loans/early-payment-dialog";
 import { SettleLoanDialog } from "@/components/loans/settle-loan-dialog";
+import { LoanInstallmentsTable, type LoanInstallmentRow } from "@/components/loans/loan-installments-table";
 import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
 import { formatBRL } from "@/lib/money/format";
-import { formatDateSaoPaulo, toDateInputValueSaoPaulo } from "@/lib/date/format";
+import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { notifyError, notifySuccess } from "@/lib/toast";
-import { cn } from "@/lib/utils";
 import { FinancingFormModal } from "./financing-form-modal";
 import { FinancingSimulateModal } from "./financing-simulate-modal";
 import { FinancingContractSummary } from "./financing-contract-summary";
-import type { FinancingDetailData, LoanInstallmentView } from "./types";
+import { UpdateInstallmentAmountDialog } from "./update-installment-amount-dialog";
+import type { FinancingDetailData } from "./types";
 
 type FinancingDetailViewProps = { financing: FinancingDetailData };
-
-type InstallmentRow = LoanInstallmentView & { number: number };
 
 /** `YYYY-MM-DD` ordena lexicograficamente como data — mesma técnica de `loan-detail-view.tsx`. */
 function isFutureInSaoPaulo(dateIso: string): boolean {
@@ -76,6 +74,7 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
   const [settleOpen, setSettleOpen] = useState(false);
   const [simulateOpen, setSimulateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [updateInstallmentOpen, setUpdateInstallmentOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [earlyPaymentInstallment, setEarlyPaymentInstallment] = useState<EarlyPaymentInstallment | null>(null);
 
@@ -83,11 +82,7 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
   const isSettled = Number(financing.remainingAmount) <= 0;
   const hasInterest = Boolean(financing.interestRate);
 
-  const rows: InstallmentRow[] = financing.installments.map((installment, index) => ({
-    ...installment,
-    number: index + 1,
-  }));
-  const unpaidRows = rows.filter((row) => !row.isPaid);
+  const unpaidRows = financing.installments.filter((row) => !row.isPaid);
   const nextDueDate = unpaidRows[0]?.date ?? null;
 
   const settleDiscount =
@@ -114,7 +109,7 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
     refresh();
   }
 
-  function handleMarkPaid(row: InstallmentRow) {
+  function handleMarkPaid(row: LoanInstallmentRow) {
     if (hasInterest && isFutureInSaoPaulo(row.date)) {
       setEarlyPaymentInstallment({ id: row.id, amount: row.amount, date: row.date });
       return;
@@ -128,31 +123,6 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
     notifySuccess("Financiamento excluído");
     router.push("/financings");
   }
-
-  const columns: DataTableColumn<InstallmentRow>[] = [
-    { key: "number", header: "Parcela", render: (row) => `${row.number}/${financing.installmentsCount}` },
-    { key: "date", header: "Vencimento", render: (row) => formatDateSaoPaulo(row.date) },
-    {
-      key: "amount",
-      header: "Valor",
-      align: "right",
-      render: (row) => <span className="font-mono font-semibold text-foreground">{formatBRL(row.amount)}</span>,
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => (
-        <span
-          className={cn(
-            "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap",
-            row.isPaid ? "bg-success/16 text-on-success" : "bg-warning/16 text-on-warning",
-          )}
-        >
-          {row.isPaid ? "Paga" : "Pendente"}
-        </span>
-      ),
-    },
-  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -168,11 +138,22 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {/*
+            Desabilitado a pedido do dono: o simulador atual só cobre o modelo
+            C6 (por quantidade de parcelas), que não serve pro financiamento
+            por valor/prazo (Caixa etc.) — ver docs/52-FINANCING-ANTECIPACAO.md.
+            Código do modal/simulador mantido intacto (`FinancingSimulateModal`
+            abaixo) pra reabilitar quando o 2º modelo estiver pronto — só o
+            gatilho fica bloqueado.
+          */}
           {unpaidRows.length > 0 && (
-            <Button type="button" variant="default" size="lg" onClick={() => setSimulateOpen(true)}>
-              <Sparkles className="size-4" aria-hidden="true" />
-              Simular antecipação
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={<Button type="button" variant="default" size="lg" disabled />}>
+                <Sparkles className="size-4" aria-hidden="true" />
+                Simular antecipação
+              </TooltipTrigger>
+              <TooltipContent>Em breve — simulação em revisão para este tipo de financiamento.</TooltipContent>
+            </Tooltip>
           )}
 
           <DropdownMenu>
@@ -199,6 +180,12 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
                 <Pencil className="size-4" aria-hidden="true" />
                 Editar
               </DropdownMenuItem>
+              {unpaidRows.length > 0 && (
+                <DropdownMenuItem onClick={() => setUpdateInstallmentOpen(true)}>
+                  <Coins className="size-4" aria-hidden="true" />
+                  Atualizar valor da parcela
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
                 <Trash2 className="size-4" aria-hidden="true" />
                 Excluir
@@ -262,25 +249,24 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
 
       <div className="flex flex-col gap-3">
         <h3 className="text-sm font-extrabold text-foreground">Parcelas</h3>
-        <DataTable
-          data={rows}
-          columns={columns}
-          getRowId={(row) => row.id}
-          emptyState={{ icon: Landmark, title: "Nenhuma parcela encontrada" }}
-          rowActions={(row) =>
-            row.isPaid ? null : (
-              <IconActionButton
-                icon={Check}
-                label="Marcar como paga"
-                onClick={() => handleMarkPaid(row)}
-                disabled={pendingId === row.id}
-              />
-            )
-          }
+        <LoanInstallmentsTable
+          installments={financing.installments}
+          installmentsCount={financing.installmentsCount}
+          pendingId={pendingId}
+          onMarkPaid={handleMarkPaid}
+          emptyIcon={Landmark}
         />
       </div>
 
       <FinancingFormModal open={editOpen} onOpenChange={setEditOpen} financing={financing} onSaved={refresh} />
+
+      <UpdateInstallmentAmountDialog
+        open={updateInstallmentOpen}
+        onOpenChange={setUpdateInstallmentOpen}
+        loanId={financing.id}
+        currentAmount={financing.installmentAmount}
+        onUpdated={refresh}
+      />
 
       <EarlyPaymentDialog
         loanId={financing.id}

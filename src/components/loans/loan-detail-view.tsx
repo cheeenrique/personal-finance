@@ -6,7 +6,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownToLine,
   Banknote,
-  Check,
   HandCoins,
   MoreVertical,
   Pencil,
@@ -18,9 +17,7 @@ import {
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { ProgressBar } from "@/components/dashboard/progress-bar";
-import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { IconActionButton } from "@/components/shared/icon-action-button";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -34,15 +31,13 @@ import { invalidateAllTransactionLists } from "@/components/transactions/transac
 import { formatBRL } from "@/lib/money/format";
 import { formatDateSaoPaulo, toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { notifyError, notifySuccess } from "@/lib/toast";
-import { cn } from "@/lib/utils";
 import { LoanFormModal } from "./loan-form-modal";
 import { EarlyPaymentDialog, type EarlyPaymentInstallment } from "./early-payment-dialog";
 import { SettleLoanDialog } from "./settle-loan-dialog";
-import type { LoanDetailData, LoanInstallmentView } from "./types";
+import { LoanInstallmentsTable, type LoanInstallmentRow } from "./loan-installments-table";
+import type { LoanDetailData } from "./types";
 
 type LoanDetailViewProps = { loan: LoanDetailData };
-
-type InstallmentRow = LoanInstallmentView & { number: number };
 
 /** `YYYY-MM-DD` (mesmo formato de `toDateInputValueSaoPaulo`) ordena lexicograficamente como data — comparação de string basta, sem precisar de `date-fns`. */
 function isFutureInSaoPaulo(dateIso: string): boolean {
@@ -51,10 +46,11 @@ function isFutureInSaoPaulo(dateIso: string): boolean {
 
 /**
  * Detalhe de `/loans/[id]`: KPIs (principal/total/juros/saldo devedor),
- * progresso e a lista completa das parcelas (sem paginação — mesmo racional
- * de `InstallmentDetailsModal`: lista de tamanho fixo definido na criação,
- * não cresce sem limite como Transactions, docs/04-DESIGN_SYSTEM.md,
- * "Tabelas"). Editar reaproveita `LoanFormModal` em modo edição
+ * progresso e a lista de parcelas (`LoanInstallmentsTable`, paginação
+ * CLIENT-SIDE de 20/página — a lista inteira já vem carregada do Server
+ * Component, tamanho FIXO definido na criação, não cresce sem limite como
+ * Transactions, ver JSDoc do componente). Editar reaproveita `LoanFormModal`
+ * em modo edição
  * (`updateLoanAction`). "Marcar como paga" reaproveita `updateTransactionAction`
  * do módulo de transações — a parcela do empréstimo É uma Transaction
  * (`modules/loans/installments.ts` `createLoan`) — exceto quando o
@@ -79,11 +75,7 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
   const isSettled = Number(loan.remainingAmount) <= 0;
   const hasInterest = Boolean(loan.interestRate);
 
-  const rows: InstallmentRow[] = loan.installments.map((installment, index) => ({
-    ...installment,
-    number: index + 1,
-  }));
-  const unpaidRows = rows.filter((row) => !row.isPaid);
+  const unpaidRows = loan.installments.filter((row) => !row.isPaid);
 
   async function markPaidInFull(installmentId: string) {
     setPendingId(installmentId);
@@ -110,7 +102,7 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
    * vencimento futuro → abre `EarlyPaymentDialog` (sugestão de desconto
    * editável) em vez de gravar direto (docs da tarefa, "Antecipação").
    */
-  function handleMarkPaid(row: InstallmentRow) {
+  function handleMarkPaid(row: LoanInstallmentRow) {
     if (hasInterest && isFutureInSaoPaulo(row.date)) {
       setEarlyPaymentInstallment({ id: row.id, amount: row.amount, date: row.date });
       return;
@@ -124,31 +116,6 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
     notifySuccess("Empréstimo excluído");
     router.push("/loans");
   }
-
-  const columns: DataTableColumn<InstallmentRow>[] = [
-    { key: "number", header: "Parcela", render: (row) => `${row.number}/${loan.installmentsCount}` },
-    { key: "date", header: "Vencimento", render: (row) => formatDateSaoPaulo(row.date) },
-    {
-      key: "amount",
-      header: "Valor",
-      align: "right",
-      render: (row) => <span className="font-mono font-semibold text-foreground">{formatBRL(row.amount)}</span>,
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => (
-        <span
-          className={cn(
-            "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap",
-            row.isPaid ? "bg-success/16 text-on-success" : "bg-warning/16 text-on-warning",
-          )}
-        >
-          {row.isPaid ? "Paga" : "Pendente"}
-        </span>
-      ),
-    },
-  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -239,21 +206,12 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
 
       <div className="flex flex-col gap-3">
         <h3 className="text-sm font-extrabold text-foreground">Parcelas</h3>
-        <DataTable
-          data={rows}
-          columns={columns}
-          getRowId={(row) => row.id}
-          emptyState={{ icon: HandCoins, title: "Nenhuma parcela encontrada" }}
-          rowActions={(row) =>
-            row.isPaid ? null : (
-              <IconActionButton
-                icon={Check}
-                label="Marcar como paga"
-                onClick={() => handleMarkPaid(row)}
-                disabled={pendingId === row.id}
-              />
-            )
-          }
+        <LoanInstallmentsTable
+          installments={loan.installments}
+          installmentsCount={loan.installmentsCount}
+          pendingId={pendingId}
+          onMarkPaid={handleMarkPaid}
+          emptyIcon={HandCoins}
         />
       </div>
 
