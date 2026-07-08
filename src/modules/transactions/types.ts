@@ -1,14 +1,20 @@
 import type { Transaction, Category, Prisma } from "@/generated/prisma/client";
-import type { TransactionType } from "@/generated/prisma/enums";
+import type { TransactionType, LoanKind } from "@/generated/prisma/enums";
 
-export type { Transaction, Category, TransactionType };
+export type { Transaction, Category, TransactionType, LoanKind };
 
 /** Dinheiro nunca é float no domínio — sempre Decimal (decimal.js via Prisma). */
 export type Money = Prisma.Decimal;
 
-/** Transação + tags associadas via junction (ver docs/03-DATABASE.md, TransactionTag). */
+/**
+ * Transação + tags associadas via junction (ver docs/03-DATABASE.md,
+ * TransactionTag) + `kind` do `Loan` linkado (quando `loanId` não-nulo) — o
+ * front usa `loan.kind` pra escolher a badge "Empréstimo" (LOAN) vs.
+ * "Financiamento" (FINANCING), ver `TransactionInlineBadges`.
+ */
 export type TransactionWithTags = Transaction & {
   transactionTags: { tagId: string }[];
+  loan: { kind: LoanKind } | null;
 };
 
 export type TransactionSort = "date_desc" | "date_asc" | "amount_desc" | "amount_asc";

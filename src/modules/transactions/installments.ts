@@ -106,7 +106,7 @@ export async function createInstallmentPurchase(
           installmentPurchaseId: purchase.id,
           installmentNumber,
         },
-        include: { transactionTags: true },
+        include: { transactionTags: true, loan: { select: { kind: true } } },
       });
       transactions.push(transaction);
     }

@@ -1,6 +1,6 @@
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Receipt } from "lucide-react";
 
-import { TransactionType } from "@/generated/prisma/enums";
+import { TransactionType, LoanKind } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 
 const TYPE_CONFIG: Record<
@@ -58,6 +58,8 @@ type TransactionInlineBadgesRow = {
   installmentsCount: number | null;
   /** Não-nulo ⇒ transação linkada a um empréstimo (parcela OU desembolso, ver `modules/loans`) — opcional pra não quebrar consumidores que ainda não carregam esse campo (ex.: preview do Dashboard). */
   loanId?: string | null;
+  /** `Loan.kind` do empréstimo linkado — decide o texto da badge (LOAN ⇒ "Empréstimo", FINANCING ⇒ "Financiamento"). Opcional pelo mesmo motivo de `loanId`; `undefined`/`null` cai no default "Empréstimo". */
+  loanKind?: LoanKind | null;
 };
 
 /**
@@ -91,7 +93,7 @@ export function TransactionInlineBadges({ row }: { row: TransactionInlineBadgesR
       )}
       {row.loanId && (
         <span className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-primary/16 px-1.5 text-[10px] font-extrabold whitespace-nowrap text-on-primary">
-          Empréstimo
+          {row.loanKind === LoanKind.FINANCING ? "Financiamento" : "Empréstimo"}
         </span>
       )}
       {!row.isPaid && (

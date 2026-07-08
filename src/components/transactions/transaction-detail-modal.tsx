@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarCheck2, CalendarClock, CalendarPlus, CircleDashed, Receipt, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowUpRight,
+  CalendarCheck2,
+  CalendarClock,
+  CalendarPlus,
+  CircleDashed,
+  Receipt,
+  type LucideIcon,
+} from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
 import { TransactionTypeBadge, TransactionInlineBadges } from "@/components/shared/badges/transaction-type-badge";
@@ -11,7 +20,7 @@ import { isCardTransaction } from "./use-transaction-mutations";
 import { formatBRL } from "@/lib/money/format";
 import { formatDateSaoPaulo } from "@/lib/date/format";
 import { calendarPartsSP, startOfDaySP } from "@/lib/date/calendar-sp";
-import { TransactionType, CategoryType } from "@/generated/prisma/enums";
+import { TransactionType, CategoryType, LoanKind } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 import type { ClientTransaction } from "@/modules/transactions/types";
 import type { TransactionsReferenceData } from "./use-transactions-reference-data";
@@ -134,6 +143,22 @@ function displayType(transaction: ClientTransaction): TransactionType {
   return transaction.transferId ? TransactionType.TRANSFER : transaction.type;
 }
 
+/**
+ * Rota + rótulo do link "Ver empréstimo/financiamento" — LOAN e FINANCING são
+ * o mesmo model `Loan` (docs/50-AUDITORIA-BACKLOG.md, `Loan.kind`), mas cada
+ * um tem sua própria tela (`/loans/[id]` vs. `/financings/[id]`). `null`
+ * quando a transação não é parcela/desembolso de empréstimo (`loanId` nulo).
+ */
+function resolveLoanLink(transaction: ClientTransaction): { href: string; label: string } | null {
+  if (!transaction.loanId) return null;
+
+  const isFinancing = transaction.loan?.kind === LoanKind.FINANCING;
+  return {
+    href: isFinancing ? `/financings/${transaction.loanId}` : `/loans/${transaction.loanId}`,
+    label: isFinancing ? "Ver financiamento" : "Ver empréstimo",
+  };
+}
+
 type DetailContentProps = {
   transaction: ClientTransaction;
   referenceData: TransactionsReferenceData;
@@ -150,6 +175,7 @@ function DetailContent({ transaction, referenceData, installmentTotals }: Detail
   const tags = referenceData.tags.filter((tag) =>
     transaction.transactionTags.some((link) => link.tagId === tag.id),
   );
+  const loanLink = resolveLoanLink(transaction);
 
   const steps: TimelineStep[] = [
     { icon: CalendarPlus, label: "Criado em", value: formatDateSaoPaulo(transaction.createdAt), tone: "neutral" },
@@ -171,8 +197,18 @@ function DetailContent({ transaction, referenceData, installmentTotals }: Detail
               ? (installmentTotals.get(transaction.installmentPurchaseId) ?? transaction.installmentNumber)
               : null,
             loanId: transaction.loanId,
+            loanKind: transaction.loan?.kind,
           }}
         />
+        {loanLink && (
+          <Link
+            href={loanLink.href}
+            className="inline-flex h-[18px] shrink-0 items-center gap-1 rounded-full border border-border px-1.5 text-[10px] font-extrabold whitespace-nowrap text-muted-foreground transition-colors hover:border-muted-foreground hover:text-foreground"
+          >
+            {loanLink.label}
+            <ArrowUpRight className="size-2.5" aria-hidden="true" />
+          </Link>
+        )}
       </div>
 
       <div>
@@ -208,9 +244,9 @@ function DetailContent({ transaction, referenceData, installmentTotals }: Detail
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] font-bold text-muted-foreground uppercase">Tags</span>
-        {tags.length > 0 ? (
+      {tags.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-bold text-muted-foreground uppercase">Tags</span>
           <div className="flex flex-wrap gap-1.5">
             {tags.map((tag) => (
               <span
@@ -222,10 +258,8 @@ function DetailContent({ transaction, referenceData, installmentTotals }: Detail
               </span>
             ))}
           </div>
-        ) : (
-          <span className="text-sm font-medium text-muted-foreground">Nenhuma tag</span>
-        )}
-      </div>
+        </div>
+      )}
 
       {transaction.notes && (
         <div className="flex flex-col gap-0.5">

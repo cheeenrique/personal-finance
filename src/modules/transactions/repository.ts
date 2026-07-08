@@ -56,7 +56,13 @@ export type TransactionListPage = {
 
 export type ExpenseCategoryGroup = { categoryId: string | null; sum: Prisma.Decimal };
 
-const TAG_INCLUDE = { transactionTags: true } as const;
+/**
+ * Include padrão de leitura/escrita de `Transaction` — tags + `loan.kind`
+ * (só o `kind`, sem o resto do `Loan`) pro front distinguir badge
+ * "Empréstimo" (LOAN) de "Financiamento" (FINANCING) sem 2ª query por linha
+ * (join único, sem N+1 mesmo em `list`).
+ */
+const TAG_INCLUDE = { transactionTags: true, loan: { select: { kind: true } } } as const;
 
 /** Client Prisma padrão ou escopado a uma `$transaction` interativa (mesmo padrão de `modules/loans/repository.ts`). */
 type Db = Prisma.TransactionClient;

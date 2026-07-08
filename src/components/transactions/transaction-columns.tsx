@@ -71,6 +71,7 @@ export function buildTransactionColumns({
                 ? (installmentTotals.get(row.installmentPurchaseId) ?? row.installmentNumber)
                 : null,
               loanId: row.loanId,
+              loanKind: row.loan?.kind,
             }}
           />
         </div>
