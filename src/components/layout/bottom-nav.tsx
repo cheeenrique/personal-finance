@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Menu, Plus } from "lucide-react";
 
-import { BOTTOM_NAV_ITEMS, DRAWER_NAV_ITEMS } from "./nav-config";
+import { BOTTOM_NAV_ITEMS, DRAWER_NAV_SECTIONS } from "./nav-config";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useShell } from "@/components/providers/shell-provider";
 import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
@@ -67,27 +67,42 @@ export function BottomNav() {
           <SheetHeader>
             <SheetTitle>Navegação</SheetTitle>
           </SheetHeader>
-          <nav className="flex flex-col gap-1 overflow-y-auto px-4 pb-4">
-            {DRAWER_NAV_ITEMS.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMenuOpen(false)}
+          <nav className="flex flex-col overflow-y-auto px-4 pb-4">
+            {DRAWER_NAV_SECTIONS.map((section, index) => (
+              <div key={section.id} className="flex flex-col gap-1">
+                <p
+                  id={`drawer-section-${section.id}`}
                   className={cn(
-                    "flex h-10 items-center gap-3 rounded-[10px] border-l-[3px] border-transparent px-3 text-sm",
-                    isActive
-                      ? "border-l-primary bg-primary/14 font-extrabold text-foreground"
-                      : "font-semibold text-muted-foreground",
-                    FOCUS_RING_CLASS,
+                    "px-3 pb-1 text-[11px] font-extrabold tracking-[0.05em] text-muted-foreground uppercase",
+                    index > 0 ? "pt-4" : "pt-0",
                   )}
                 >
-                  <item.icon className="size-[19px]" aria-hidden="true" />
-                  {item.label}
-                </Link>
-              );
-            })}
+                  {section.title}
+                </p>
+                <div role="group" aria-labelledby={`drawer-section-${section.id}`} className="flex flex-col gap-1">
+                  {section.items.map((item) => {
+                    const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMenuOpen(false)}
+                        className={cn(
+                          "flex h-10 items-center gap-3 rounded-[10px] border-l-[3px] border-transparent px-3 text-sm",
+                          isActive
+                            ? "border-l-primary bg-primary/14 font-extrabold text-foreground"
+                            : "font-semibold text-muted-foreground",
+                          FOCUS_RING_CLASS,
+                        )}
+                      >
+                        <item.icon className="size-[19px]" aria-hidden="true" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
         </SheetContent>
       </Sheet>
