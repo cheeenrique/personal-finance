@@ -13,16 +13,18 @@ import type { CreateLoanResult } from "./types";
  * Converte "123.45" em 12345 (centavos), sem passar por float — evita erro de
  * arredondamento. Duplicado de `transactions/installments.ts` (2ª ocorrência,
  * aceitável — rule 02-dry-kiss-yagni, "3 ocorrências = extrair"); extrair pra
- * `lib/money/` se um 3º consumidor aparecer.
+ * `lib/money/` se um 3º consumidor aparecer. Exportado pra reuso por
+ * `financing.ts` (mesmo módulo, arquivo próprio por tamanho — rule
+ * 05-naming-size.md).
  */
-function decimalToCents(amount: string): number {
+export function decimalToCents(amount: string): number {
   const [integerPart, decimalPart = ""] = amount.split(".");
   const cents = (decimalPart + "00").slice(0, 2);
   const sign = integerPart.startsWith("-") ? -1 : 1;
   return sign * (Number(integerPart.replace("-", "")) * 100 + Number(cents));
 }
 
-function centsToDecimal(cents: number): string {
+export function centsToDecimal(cents: number): string {
   const sign = cents < 0 ? "-" : "";
   const absoluteCents = Math.abs(cents);
   const integerPart = Math.floor(absoluteCents / 100);
@@ -39,8 +41,11 @@ function centsToDecimal(cents: number): string {
  * soma bater exatamente com `totalToPay`. Resíduo <= 0 indica
  * `installmentAmount` incompatível com `totalToPay`/`installmentsCount`
  * informados — dados de contrato inconsistentes.
+ *
+ * Exportada pra reuso por `financing.ts` (PRICE do financiamento é o MESMO
+ * rateio — parcela fixa dada pelo contrato, resíduo na última).
  */
-function splitLoanInstallmentAmounts(
+export function splitLoanInstallmentAmounts(
   totalToPay: string,
   installmentAmount: string,
   installmentsCount: number,
@@ -63,11 +68,47 @@ function splitLoanInstallmentAmounts(
  * calendário de America/Sao_Paulo — mesma lógica de
  * `transactions/installments.ts` `installmentDueDate` (ver JSDoc lá para o
  * detalhe de por que `toZonedTime`/`parseInSaoPaulo` em vez de UTC puro).
+ * Exportada pra reuso por `financing.ts` (mesma cadência mensal em PRICE/SAC).
  */
-function installmentDueDate(firstDueDate: Date, installmentNumber: number): Date {
+export function installmentDueDate(firstDueDate: Date, installmentNumber: number): Date {
   const zonedFirstDueDate = toZonedTime(firstDueDate, TIMEZONE);
   const zonedDueDate = addMonths(zonedFirstDueDate, installmentNumber - 1);
   return parseInSaoPaulo(zonedDueDate);
+}
+
+/** Insumo de `insertInstallmentTransaction` — uma parcela pronta pra virar `Transaction`. */
+export type InstallmentTransactionInput = {
+  userId: string;
+  loanId: string;
+  accountId: string;
+  categoryId: string | null;
+  description: string;
+  amount: string;
+  date: Date;
+};
+
+/**
+ * Grava UMA parcela (`Transaction` EXPENSE, `isPaid=false`) — shape comum a
+ * `createLoan`, `regenerateUnpaidInstallments` e `financing.ts`
+ * `createFinancing` (3ª ocorrência do mesmo literal de `create`, rule
+ * 02-dry-kiss-yagni: "3 ocorrências = extrair pra helper"). Recebe o client
+ * de dentro da `$transaction` do caller — nunca abre transação própria.
+ * Exportada pra reuso por `financing.ts`.
+ */
+export function insertInstallmentTransaction(tx: Prisma.TransactionClient, input: InstallmentTransactionInput) {
+  return tx.transaction.create({
+    data: {
+      userId: input.userId,
+      description: input.description,
+      type: TransactionType.EXPENSE,
+      amount: input.amount,
+      accountId: input.accountId,
+      categoryId: input.categoryId,
+      date: input.date,
+      isPaid: false,
+      loanId: input.loanId,
+    },
+  });
 }
 
 /**
@@ -111,18 +152,14 @@ export async function createLoan(userId: string, input: CreateLoanInput): Promis
       const installmentNumber = index + 1;
       const description = `${input.description} - parcela ${installmentNumber}/${input.installmentsCount}`;
       // sequencial de propósito, ver JSDoc acima (regra no-await-in-loop não configurada neste projeto)
-      const transaction = await tx.transaction.create({
-        data: {
-          userId,
-          description,
-          type: TransactionType.EXPENSE,
-          amount: amounts[index],
-          accountId: input.accountId,
-          categoryId,
-          date: installmentDueDate(input.firstDueDate, installmentNumber),
-          isPaid: false,
-          loanId: loan.id,
-        },
+      const transaction = await insertInstallmentTransaction(tx, {
+        userId,
+        loanId: loan.id,
+        accountId: input.accountId,
+        categoryId,
+        description,
+        amount: amounts[index],
+        date: installmentDueDate(input.firstDueDate, installmentNumber),
       });
       transactions.push(transaction);
     }
@@ -196,18 +233,14 @@ export async function regenerateUnpaidInstallments(
     const installmentNumber = paidCount + index + 1;
     const description = `${params.description} - parcela ${installmentNumber}/${params.installmentsCount}`;
     // sequencial de propósito, ver JSDoc de `createLoan` (regra no-await-in-loop não configurada neste projeto)
-    await tx.transaction.create({
-      data: {
-        userId: params.userId,
-        description,
-        type: TransactionType.EXPENSE,
-        amount: amounts[index],
-        accountId: params.accountId,
-        categoryId: params.categoryId,
-        date: installmentDueDate(params.firstDueDate, installmentNumber),
-        isPaid: false,
-        loanId: params.loanId,
-      },
+    await insertInstallmentTransaction(tx, {
+      userId: params.userId,
+      loanId: params.loanId,
+      accountId: params.accountId,
+      categoryId: params.categoryId,
+      description,
+      amount: amounts[index],
+      date: installmentDueDate(params.firstDueDate, installmentNumber),
     });
   }
 }

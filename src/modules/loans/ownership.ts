@@ -30,4 +30,13 @@ async function categoryExists(userId: string, categoryId: string, db: Db = prism
   return found !== null;
 }
 
-export const loanOwnership = { accountExists, categoryExists };
+/** Ownership do `Asset` linkado a um financiamento (`Loan.assetId`, opcional) — mesma regra das outras entidades cross deste arquivo. */
+async function assetExists(userId: string, assetId: string, db: Db = prisma): Promise<boolean> {
+  const found = await db.asset.findFirst({
+    where: { id: assetId, userId, deletedAt: null },
+    select: { id: true },
+  });
+  return found !== null;
+}
+
+export const loanOwnership = { accountExists, categoryExists, assetExists };

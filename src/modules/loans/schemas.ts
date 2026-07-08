@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { positiveDecimalSchema } from "@/lib/money/schema";
 import { dateInputSchema } from "@/lib/date/schema";
-import { InterestPeriod } from "@/generated/prisma/enums";
+import { InterestPeriod, AmortizationSystem } from "@/generated/prisma/enums";
 
 const INTEREST_PERIOD_VALUES = [InterestPeriod.ANNUAL, InterestPeriod.MONTHLY] as const;
 
@@ -92,3 +92,89 @@ export const settleLoanSchema = z.object({
 });
 
 export type SettleLoanInput = z.infer<typeof settleLoanSchema>;
+
+/**
+ * Financiamento (`Loan.kind=FINANCING`, ver docs/50-AUDITORIA-BACKLOG.md) —
+ * Stage 1 (fundação de dados + geração de parcelas). Campos comuns aos 3
+ * sistemas de amortização; cada sistema exige um subconjunto diferente do
+ * "contrato" (ver `amortizationSystemFields` abaixo), por isso um
+ * `z.discriminatedUnion` em vez de um objeto único com tudo opcional —
+ * `installmentAmount`/`totalToPay` fixos fazem sentido pra PRICE, não fazem
+ * sentido pra SAC/CUSTOM (ver `modules/loans/installments.ts`
+ * `buildFinancingSchedule`, onde cada sistema deriva o que precisa).
+ */
+const financingCommonFields = {
+  description: z.string().trim().min(1, "Descrição é obrigatória").max(255),
+  lender: z.string().trim().max(120).optional(),
+  accountId: z.string().trim().min(1, "Conta é obrigatória"),
+  categoryId: z.string().trim().min(1).optional(),
+  principal: positiveDecimalSchema,
+  /** `Asset` já cadastrado (ex.: o carro) — opcional, validado por ownership em `installments.ts` `createFinancing`. */
+  assetId: z.string().trim().min(1).optional(),
+  downPayment: positiveDecimalSchema.optional(),
+  assetValue: positiveDecimalSchema.optional(),
+  /** CET (% a.m.) — informativo, mesma precisão de schema de `interestRate` (coluna `Decimal(9,6)`, schema restringe a 2 casas por consistência com o resto do módulo). */
+  cet: positiveDecimalSchema.optional(),
+  operationRef: z.string().trim().max(120).optional(),
+  financedTaxes: positiveDecimalSchema.optional(),
+  financedInsurance: positiveDecimalSchema.optional(),
+  financedFees: positiveDecimalSchema.optional(),
+};
+
+/** PRICE — parcelas fixas, mesmo shape de `createLoanSchema` (reusa `installments.ts` `splitLoanInstallmentAmounts`) + juros obrigatório (diferente de LOAN, onde juros é opcional). */
+const priceFinancingSchema = z.object({
+  ...financingCommonFields,
+  amortizationSystem: z.literal(AmortizationSystem.PRICE),
+  totalToPay: positiveDecimalSchema,
+  installmentsCount: z.coerce.number().int().min(1, "Mínimo de 1 parcela").max(360, "Máximo de 360 parcelas"),
+  installmentAmount: positiveDecimalSchema,
+  firstDueDate: dateInputSchema,
+  interestRate: positiveDecimalSchema,
+  interestPeriod: z.enum(INTEREST_PERIOD_VALUES),
+});
+
+/** SAC — amortização constante, parcela decrescente. `totalToPay`/`installmentAmount` NÃO vêm do usuário — derivados do cronograma calculado (`installments.ts` `generateSacInstallmentAmounts`). */
+const sacFinancingSchema = z.object({
+  ...financingCommonFields,
+  amortizationSystem: z.literal(AmortizationSystem.SAC),
+  installmentsCount: z.coerce.number().int().min(1, "Mínimo de 1 parcela").max(360, "Máximo de 360 parcelas"),
+  firstDueDate: dateInputSchema,
+  interestRate: positiveDecimalSchema,
+  interestPeriod: z.enum(INTEREST_PERIOD_VALUES),
+});
+
+/** Uma linha do cronograma CUSTOM (tabela extraída de um documento do banco — Stage 3/Gemini). Usada como veio, nunca recalculada. */
+const customFinancingScheduleItemSchema = z.object({
+  amount: positiveDecimalSchema,
+  dueDate: dateInputSchema,
+});
+
+/** CUSTOM — cronograma explícito. `totalToPay` opcional: se informado, valida contra a soma do `schedule` (tolerância de centavos, ver `installments.ts`); se ausente, é derivado da soma. Juros opcional (o cronograma já traz os valores prontos; sem juros configurado, antecipação cai pro valor cheio, mesma regra de LOAN). */
+const customFinancingSchema = z.object({
+  ...financingCommonFields,
+  amortizationSystem: z.literal(AmortizationSystem.CUSTOM),
+  totalToPay: positiveDecimalSchema.optional(),
+  interestRate: positiveDecimalSchema.optional(),
+  interestPeriod: z.enum(INTEREST_PERIOD_VALUES).optional(),
+  schedule: z.array(customFinancingScheduleItemSchema).min(1, "Informe ao menos 1 parcela"),
+});
+
+export const createFinancingSchema = z
+  .discriminatedUnion("amortizationSystem", [priceFinancingSchema, sacFinancingSchema, customFinancingSchema])
+  .superRefine((data, ctx) => {
+    if (data.amortizationSystem === AmortizationSystem.PRICE && Number(data.totalToPay) < Number(data.principal)) {
+      ctx.addIssue({ code: "custom", message: "Total a pagar não pode ser menor que o principal", path: ["totalToPay"] });
+    }
+    if (
+      data.amortizationSystem === AmortizationSystem.CUSTOM &&
+      Boolean(data.interestRate) !== Boolean(data.interestPeriod)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Informe taxa de juros e período juntos, ou nenhum dos dois",
+        path: ["interestRate"],
+      });
+    }
+  });
+
+export type CreateFinancingInput = z.infer<typeof createFinancingSchema>;

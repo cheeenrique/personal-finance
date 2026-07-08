@@ -37,6 +37,13 @@ export class LoanCategoryNotFoundError extends LoanDomainError {
   }
 }
 
+/** Bem (`Asset`) referenciado não existe ou não pertence ao usuário. `assetId` é opcional no financiamento — só validado quando informado. */
+export class LoanAssetNotFoundError extends LoanDomainError {
+  constructor(assetId: string) {
+    super("Bem não encontrado", "LOAN_ASSET_NOT_FOUND", undefined, { assetId });
+  }
+}
+
 /**
  * A última parcela (resíduo = `totalToPay - installmentAmount * (N-1)`)
  * ficaria zero ou negativa — dados de contrato inconsistentes

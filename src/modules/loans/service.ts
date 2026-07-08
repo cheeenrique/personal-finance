@@ -4,7 +4,7 @@ import { TransactionType } from "@/generated/prisma/enums";
 import { loanRepository } from "./repository";
 import { loanOwnership } from "./ownership";
 import { monthlyRate, monthsEarly, presentValue, earlyPaymentSuggestion, distributeProportionally } from "./interest";
-import { LoanNotFoundError, LoanAccountNotFoundError, LoanCategoryNotFoundError, LoanInstallmentNotFoundError, LoanAlreadySettledError } from "./errors";
+import { LoanNotFoundError, LoanAccountNotFoundError, LoanCategoryNotFoundError, LoanAssetNotFoundError, LoanInstallmentNotFoundError, LoanAlreadySettledError } from "./errors";
 import type { LoanWithProgress, LoanWithTransactions, LoanWithInstallments, LoanDisbursement, Money } from "./types";
 import type { EarlyPaymentSuggestion } from "./interest";
 
@@ -17,6 +17,12 @@ export async function assertAccountOwnership(userId: string, accountId: string):
 export async function assertCategoryOwnership(userId: string, categoryId: string): Promise<void> {
   const exists = await loanOwnership.categoryExists(userId, categoryId);
   if (!exists) throw new LoanCategoryNotFoundError(categoryId);
+}
+
+/** `assetId` do financiamento (`Loan.assetId`, opcional) — mesmo padrão de `assertAccountOwnership`, reuso por `installments.ts` `createFinancing`. */
+export async function assertAssetOwnership(userId: string, assetId: string): Promise<void> {
+  const exists = await loanOwnership.assetExists(userId, assetId);
+  if (!exists) throw new LoanAssetNotFoundError(assetId);
 }
 
 /**
