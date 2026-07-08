@@ -13,6 +13,19 @@ type AppSankeyChartProps = {
 };
 
 /**
+ * Nome completo de categoria atravessava o ribbon em telas estreitas (375px,
+ * docs/50-AUDITORIA-BACKLOG.md, D7) — trunca com reticências; nome completo
+ * continua acessível via `<title>` (tooltip nativo) + o `<Tooltip>` do recharts
+ * já mostrado no hover do nó/link.
+ */
+const MAX_NODE_LABEL_LENGTH = 16;
+
+function truncateNodeName(name: string): string {
+  if (name.length <= MAX_NODE_LABEL_LENGTH) return name;
+  return `${name.slice(0, MAX_NODE_LABEL_LENGTH - 1)}…`;
+}
+
+/**
  * Rótulo posicionado pelo LADO do nó, decidido pela topologia (não por
  * profundidade fixa — funciona pra qualquer Sankey origem→hub→destino):
  * nó sem link de ENTRADA (`sourceLinks` vazio) é ponta de origem → rótulo cai
@@ -39,7 +52,8 @@ function renderFlowNode({ x, y, width, height, payload }: SankeyNodeProps) {
         fontSize={11}
         fontWeight={600}
       >
-        {node.name}
+        <title>{node.name}</title>
+        {truncateNodeName(node.name)}
       </text>
     </Layer>
   );

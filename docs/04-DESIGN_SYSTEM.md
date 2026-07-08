@@ -362,7 +362,7 @@ Azul — **atenção:** como azul virou a cor primária da marca (`#1E40AF`), us
 
 Parcelamento
 
-Laranja — **atenção:** como laranja virou `--accent` (cor de ação), Parcelamento pode visualmente colidir com botões de CTA. Se a badge de Parcelamento ficar perto de um botão accent na mesma tela, escolher um tom de laranja próprio (mais escuro/dessaturado) pra diferenciar "isto é uma categoria" de "isto é uma ação".
+Laranja — **atenção:** como laranja virou `--accent` (cor de ação), Parcelamento pode visualmente colidir com botões de CTA. Resolvido com token próprio `--installment` / `--installment-foreground` (`#9A3412` / `#FFF7ED`, fixo nos 2 temas) — laranja mais escuro/dessaturado que `--accent`, usado na pill de parcela (`bg-installment text-installment-foreground`) pra diferenciar "isto é uma categoria" de "isto é uma ação".
 
 Patrimônio
 

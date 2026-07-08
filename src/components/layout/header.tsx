@@ -65,7 +65,9 @@ export function Header({ name, email }: HeaderProps) {
         type="button"
         onClick={() => openTransactionModal()}
         className={cn(
-          "inline-flex h-[38px] shrink-0 items-center gap-2 rounded-[10px] bg-accent px-4 text-[13.5px] font-extrabold text-white shadow-[0_6px_16px_rgba(234,88,12,0.38)] transition-[filter] duration-150 ease-pf-out hover:brightness-[1.06]",
+          // Texto navy (`accent-foreground`), não branco: branco sobre `--accent`
+          // falha AA nos 2 temas (docs/50-AUDITORIA-BACKLOG.md, D1).
+          "inline-flex h-[38px] shrink-0 items-center gap-2 rounded-[10px] bg-accent px-4 text-[13.5px] font-extrabold text-accent-foreground shadow-[0_6px_16px_rgba(234,88,12,0.38)] transition-[filter] duration-150 ease-pf-out hover:brightness-[1.06]",
           FOCUS_RING_CLASS,
         )}
       >

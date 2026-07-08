@@ -116,7 +116,7 @@ export function buildTransactionColumns({
       render: (row) => {
         const { className, sign } = amountAppearance(row);
         return (
-          <span className={cn("font-mono font-bold whitespace-nowrap", className)}>
+          <span className={cn("font-mono font-semibold whitespace-nowrap", className)}>
             {sign}
             {formatBRL(row.amount)}
           </span>

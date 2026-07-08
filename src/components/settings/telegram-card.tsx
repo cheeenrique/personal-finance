@@ -285,7 +285,7 @@ export function TelegramCard({ hasBot, botUsername, webhookRegistered, chatId, p
             {!isLinked && code && (
               <div className="flex flex-col gap-3 rounded-lg bg-secondary/60 p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-2xl font-bold tracking-[0.3em] text-foreground">{code.code}</span>
+                  <span className="font-mono text-2xl font-semibold tracking-[0.3em] text-foreground">{code.code}</span>
                   <Button type="button" variant="ghost" size="icon" onClick={handleCopyCode} aria-label="Copiar código">
                     <Copy className="size-4" aria-hidden="true" />
                   </Button>

@@ -36,6 +36,8 @@
   --color-on-warning: var(--on-warning);
   --color-on-primary: var(--on-primary);
   --color-on-accent: var(--on-accent);
+  --color-installment: var(--installment);
+  --color-installment-foreground: var(--installment-foreground);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -80,15 +82,27 @@
   --accent: #ea580c;
   --accent-foreground: #0b1223;
   --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
+  /* Branco sobre #EF4444 ≈3.77:1 — falha AA (4.5:1) pra texto normal. Navy
+   * (mesmo valor já usado no tema claro) sobre essa cor ≈4.96:1 — passa nos 2
+   * temas sem precisar escurecer o vermelho semântico
+   * (docs/50-AUDITORIA-BACKLOG.md, D1). */
+  --destructive-foreground: #0b1223;
   --success: #16a34a;
-  --success-foreground: #ffffff;
+  /* Idem destructive-foreground: branco sobre #16A34A ≈3.3:1 falha AA; navy
+   * ≈5.66:1 passa (D1). */
+  --success-foreground: #0b1223;
   --warning: #f59e0b;
   --warning-foreground: #0b1223;
   --border: #28344c;
   --input: rgba(255, 255, 255, 0.03);
   --ring: #1e40af;
   --radius: 0.625rem;
+  /* Laranja dessaturado, distinto de `--accent` (ação/CTA) — indicador de
+   * parcelamento (docs/04-DESIGN_SYSTEM.md, "Parcelamento"; D6). Pill sólida,
+   * fixa nos 2 temas (não depende de fundo/superfície). Texto claro sobre
+   * `--installment` ≈6.9:1 — AA em ambos os temas. */
+  --installment: #9a3412;
+  --installment-foreground: #fff7ed;
 
   /* Cores financeiras (design/PERSONAL_FINANCE_DS_HANDOFF.md, "Accents &
    * Semantic (ambos os temas)") — transferência (ciano) e patrimônio (roxo).
@@ -137,11 +151,10 @@
   --transfer: #06b6d4;
   --asset: #d946ef;
 
-  /* Texto sobre superfície sólida success/destructive — no claro elas são
-   * pastéis (#22C55E/#F87171) e branco cai pra ~2.3:1; foreground escuro
-   * passa AA com folga (8.2:1 / 6.8:1). No escuro seguem brancas (`:root`). */
-  --success-foreground: #0b1223;
-  --destructive-foreground: #0b1223;
+  /* success-foreground/destructive-foreground: navy (#0B1223) é AA nos 2
+   * temas (claro: pastéis #22C55E/#F87171 com branco ≈2.3:1; escuro:
+   * #16A34A/#EF4444 com branco ≈3.3–3.77:1) — valor já herdado de
+   * `:root`/`.dark`, sem override aqui (docs/50-AUDITORIA-BACKLOG.md, D1). */
 
   /* `on-*` do tema claro — docs/04-DESIGN_SYSTEM.md, "Tokens (dark + light)".
    * on-success/on-warning/on-accent estão um passo mais escuros que a tabela

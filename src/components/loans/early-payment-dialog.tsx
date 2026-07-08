@@ -121,11 +121,11 @@ export function EarlyPaymentDialog({ loanId, installment, onOpenChange, onConfir
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between rounded-[10px] border border-border px-3 py-2.5 text-sm">
               <span className="font-semibold text-muted-foreground">Valor cheio</span>
-              <span className="font-mono font-bold text-foreground">{fullAmount ? formatBRL(fullAmount) : "—"}</span>
+              <span className="font-mono font-semibold text-foreground">{fullAmount ? formatBRL(fullAmount) : "—"}</span>
             </div>
             <div className="flex items-center justify-between rounded-[10px] border border-border px-3 py-2.5 text-sm">
               <span className="font-semibold text-muted-foreground">Desconto</span>
-              <span className="font-mono font-bold text-on-success">{discount ? formatBRL(discount) : "—"}</span>
+              <span className="font-mono font-semibold text-on-success">{discount ? formatBRL(discount) : "—"}</span>
             </div>
 
             <FormField label="Valor a pagar" htmlFor="early-payment-amount" required error={formError}>

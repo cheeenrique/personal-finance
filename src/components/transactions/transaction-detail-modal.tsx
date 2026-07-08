@@ -122,7 +122,7 @@ function TimelineRow({ step, isLast }: { step: TimelineStep; isLast: boolean }) 
         <span className="text-[11px] font-extrabold tracking-wide text-muted-foreground uppercase">
           {step.label}
         </span>
-        <span className="font-mono text-sm font-bold text-foreground">{step.value}</span>
+        <span className="font-mono text-sm font-semibold text-foreground">{step.value}</span>
         {step.hint && <span className="text-[12px] font-medium text-muted-foreground">{step.hint}</span>}
       </div>
     </div>
@@ -176,7 +176,7 @@ function DetailContent({ transaction, referenceData, installmentTotals }: Detail
       </div>
 
       <div>
-        <p className={cn("font-mono text-2xl font-extrabold", amountClassName)}>
+        <p className={cn("font-mono text-2xl font-semibold", amountClassName)}>
           {sign}
           {formatBRL(transaction.amount)}
         </p>

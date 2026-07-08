@@ -50,28 +50,6 @@ export function TransactionTypeBadge({ type }: { type: TransactionType }) {
   );
 }
 
-/**
- * Indicador de parcelamento ("4/10") — tom de laranja próprio, dessaturado,
- * para não colidir visualmente com botões `--accent` na mesma tela
- * (docs/04-DESIGN_SYSTEM.md, "Cores Financeiras", nota sobre Parcelamento).
- */
-export function InstallmentBadge({
-  current,
-  total,
-}: {
-  current: number;
-  total: number;
-}) {
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full bg-orange-800/85 px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap text-orange-50"
-      aria-label={`Parcela ${current} de ${total}`}
-    >
-      {current}/{total}
-    </span>
-  );
-}
-
 type TransactionInlineBadgesRow = {
   type: TransactionType;
   transferId: string | null;
@@ -94,7 +72,10 @@ export function TransactionInlineBadges({ row }: { row: TransactionInlineBadgesR
   return (
     <>
       {row.installmentNumber && row.installmentsCount && (
-        <span className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-accent/15 px-1.5 font-mono text-[10px] font-semibold whitespace-nowrap text-on-accent">
+        // Laranja dessaturado próprio (`--installment`), não `--accent`: evita
+        // colidir com CTAs de ação na mesma tela (docs/04-DESIGN_SYSTEM.md,
+        // "Cores Financeiras" > "Parcelamento"; docs/50-AUDITORIA-BACKLOG.md, D6).
+        <span className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-installment px-1.5 font-mono text-[10px] font-semibold whitespace-nowrap text-installment-foreground">
           {row.installmentNumber}/{row.installmentsCount}
         </span>
       )}

@@ -35,7 +35,7 @@ export function WeeklySummaryBox({ summary }: WeeklySummaryBoxProps) {
           <CalendarDays className="size-4 text-primary" aria-hidden="true" />
           Resumo da semana
         </h3>
-        <span className="font-mono text-[12.5px] font-bold text-muted-foreground">
+        <span className="font-mono text-[12.5px] font-semibold text-muted-foreground">
           {formatDayMonth(summary.weekStart)} a {formatDayMonth(summary.weekEnd)}
         </span>
       </div>

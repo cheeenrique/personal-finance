@@ -40,7 +40,7 @@ export function InstallmentPurchaseCard({ purchase, onShowDetails }: Installment
       <div className="flex items-center justify-between border-t border-border pt-3 text-xs">
         <div>
           <p className="font-semibold text-muted-foreground">Valor total</p>
-          <p className="font-mono font-bold text-foreground">{formatBRL(purchase.totalAmount)}</p>
+          <p className="font-mono font-semibold text-foreground">{formatBRL(purchase.totalAmount)}</p>
         </div>
         <p className="truncate text-[11.5px] font-semibold text-muted-foreground">{purchase.cardName}</p>
       </div>

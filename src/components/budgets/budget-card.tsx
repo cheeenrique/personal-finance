@@ -46,13 +46,13 @@ export function BudgetCard({ budget, onEdit, onDelete }: BudgetCardProps) {
 
       <div className="space-y-1.5">
         <div className="flex items-baseline justify-between">
-          <p className="font-mono text-sm font-bold text-foreground">
+          <p className="font-mono text-sm font-semibold text-foreground">
             {formatBRL(budget.spentAmount)}{" "}
             <span className="font-sans text-xs font-medium text-muted-foreground">
               / {formatBRL(budget.plannedAmount)}
             </span>
           </p>
-          <p className={cn("font-mono text-xs font-bold", budgetStatusTextClass(budget.status))}>
+          <p className={cn("font-mono text-xs font-semibold", budgetStatusTextClass(budget.status))}>
             {Math.round(budget.progress)}%
           </p>
         </div>
@@ -61,7 +61,7 @@ export function BudgetCard({ budget, onEdit, onDelete }: BudgetCardProps) {
 
       <p className="text-xs font-semibold text-muted-foreground">
         {isOver ? "Estourou em " : "Restante: "}
-        <span className={cn("font-mono font-bold", isOver ? "text-destructive" : "text-foreground")}>
+        <span className={cn("font-mono font-semibold", isOver ? "text-destructive" : "text-foreground")}>
           {formatBRL(isOver ? String(Math.abs(Number(budget.remainingAmount))) : budget.remainingAmount)}
         </span>
       </p>

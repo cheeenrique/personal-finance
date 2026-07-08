@@ -30,7 +30,7 @@ const COLUMNS: DataTableColumn<InstallmentLineItemView>[] = [
     key: "amount",
     header: "Valor",
     align: "right",
-    render: (item) => <span className="font-mono font-bold text-foreground">{formatBRL(item.amount)}</span>,
+    render: (item) => <span className="font-mono font-semibold text-foreground">{formatBRL(item.amount)}</span>,
   },
   {
     key: "status",

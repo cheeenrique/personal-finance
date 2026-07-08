@@ -113,7 +113,7 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
       key: "amount",
       header: "Valor",
       align: "right",
-      render: (row) => <span className="font-mono font-bold text-foreground">{formatBRL(row.amount)}</span>,
+      render: (row) => <span className="font-mono font-semibold text-foreground">{formatBRL(row.amount)}</span>,
     },
     {
       key: "status",
@@ -196,7 +196,7 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
             </span>
             <div>
               <p className="text-[13px] font-semibold text-muted-foreground">Entrada recebida</p>
-              <p className="font-mono text-lg font-extrabold text-foreground">
+              <p className="font-mono text-lg font-semibold text-foreground">
                 {formatBRL(loan.disbursement.amount)}
               </p>
             </div>

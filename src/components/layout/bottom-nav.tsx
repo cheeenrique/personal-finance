@@ -24,7 +24,10 @@ export function BottomNav() {
 
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-center justify-between border-t border-border bg-card lg:hidden">
+      {/* `pb-[env(...)]` cobre a home indicator do iOS (safe-area-inset-bottom);
+          `pb-28` do `<main>` do shell já compensa a altura extra
+          (docs/50-AUDITORIA-BACKLOG.md, D4). */}
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-center justify-between border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
         <BottomNavLink item={dashboardItem} pathname={pathname} />
         <BottomNavLink item={transactionsItem} pathname={pathname} />
 
@@ -34,7 +37,9 @@ export function BottomNav() {
             onClick={() => openTransactionModal()}
             aria-label="Nova transação"
             className={cn(
-              "absolute bottom-8 flex size-12 items-center justify-center rounded-full bg-accent text-white shadow-[0_6px_16px_rgba(234,88,12,0.45)]",
+              // Ícone navy (`accent-foreground`), não branco: mesma correção AA do
+              // CTA "Nova transação" do Header (docs/50-AUDITORIA-BACKLOG.md, D1).
+              "absolute bottom-8 flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-[0_6px_16px_rgba(234,88,12,0.45)]",
               FOCUS_RING_CLASS,
             )}
           >
@@ -104,7 +109,10 @@ function BottomNavLink({
       aria-current={isActive ? "page" : undefined}
       className={cn(
         "flex h-16 flex-1 flex-col items-center justify-center gap-1",
-        isActive ? "text-accent" : "text-muted-foreground",
+        // Nav ativa = primary em toda a app (docs/04-DESIGN_SYSTEM.md, "Paleta";
+        // sidebar/drawer já usam `--primary`). `--accent` é reservado pra ações
+        // que movem dinheiro (docs/50-AUDITORIA-BACKLOG.md, D2).
+        isActive ? "text-primary" : "text-muted-foreground",
         FOCUS_RING_CLASS,
       )}
     >

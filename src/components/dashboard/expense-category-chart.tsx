@@ -52,7 +52,7 @@ export function ExpenseCategoryChart({ categories }: ExpenseCategoryChartProps) 
                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   Total
                 </span>
-                <span className="font-mono text-[15px] font-bold text-foreground">
+                <span className="font-mono text-[15px] font-semibold text-foreground">
                   {formatBRL(total)}
                 </span>
               </>

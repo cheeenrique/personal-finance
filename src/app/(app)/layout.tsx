@@ -33,7 +33,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <Header name={name} email={email} />
-          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 pb-28 sm:px-7 lg:pb-6">{children}</main>
+          {/* `pb-28` reserva espaço pra BottomNav (mobile/tablet); soma
+              `env(safe-area-inset-bottom)` porque o nav agora inclui esse
+              padding extra no iOS (docs/50-AUDITORIA-BACKLOG.md, D4). Desktop
+              (`lg:`) não tem BottomNav — volta pro padding padrão. */}
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-7 lg:pb-6">
+            {children}
+          </main>
         </div>
       </div>
 

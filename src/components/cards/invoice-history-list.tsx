@@ -46,7 +46,7 @@ export function InvoiceHistoryList({ invoices }: { invoices: PastInvoiceView[] }
             <span className="text-xs font-medium text-muted-foreground">
               vence {formatDateSaoPaulo(invoice.dueDate)}
             </span>
-            <span className="font-mono font-bold text-foreground">{formatBRL(invoice.total)}</span>
+            <span className="font-mono font-semibold text-foreground">{formatBRL(invoice.total)}</span>
           </span>
         </li>
       ))}

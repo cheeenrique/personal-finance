@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Pencil } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InitialsAvatar } from "@/components/shared/initials-avatar";
 import { formatYearSaoPaulo } from "@/lib/date/format";
 import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
 import { ProfileEditModal } from "./profile-edit-modal";
@@ -15,15 +15,6 @@ type ProfileCardProps = {
   email: string;
   memberSince: Date;
 };
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-
-  const first = parts[0]?.[0] ?? "";
-  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
-  return `${first}${last}`.toUpperCase();
-}
 
 /**
  * Perfil (docs/12-SETTINGS.md, item 1). Nome/email vêm da sessão (`auth()`,
@@ -49,15 +40,7 @@ export function ProfileCard({ name, email, memberSince }: ProfileCardProps) {
       <CardContent className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
-            {/* `size="lg"` do Avatar mapeia só pra 40px (ui/avatar.tsx) — sem
-                size prop pra evitar conflito de especificidade CSS entre a
-                classe base (`size-8`) e o override `data-[size=lg]:size-10`;
-                aqui setamos 56px direto via className. */}
-            <Avatar className="size-14">
-              <AvatarFallback className="bg-gradient-to-br from-accent to-orange-700 text-base font-bold text-white">
-                {getInitials(name)}
-              </AvatarFallback>
-            </Avatar>
+            <InitialsAvatar name={name} size="lg" />
 
             <div className="min-w-0">
               <p className="truncate text-base font-extrabold text-foreground">{name}</p>

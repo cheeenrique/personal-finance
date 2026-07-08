@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronLeft, TrendingUp } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 import { NAV_ITEMS } from "./nav-config";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
+import { BrandMark } from "@/components/shared/brand";
+import { InitialsAvatar } from "@/components/shared/initials-avatar";
 import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
 
 type SidebarProps = {
@@ -23,8 +25,6 @@ export function Sidebar({ name, email }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
 
-  const initials = (name?.trim() || email?.trim() || "?").slice(0, 2).toUpperCase();
-
   return (
     <aside
       className={cn(
@@ -33,9 +33,7 @@ export function Sidebar({ name, email }: SidebarProps) {
       )}
     >
       <div className="flex h-14 items-center gap-2.5 border-b border-border px-3">
-        <span className="flex size-[38px] shrink-0 items-center justify-center rounded-[9px] bg-[linear-gradient(135deg,#1E40AF_0%,#0F2A5F_100%)]">
-          <TrendingUp className="size-5 text-accent" aria-hidden="true" />
-        </span>
+        <BrandMark />
         {!collapsed && (
           <span className="flex min-w-0 flex-col leading-none">
             <span className="truncate text-base font-black tracking-[-0.02em] text-foreground">
@@ -87,9 +85,7 @@ export function Sidebar({ name, email }: SidebarProps) {
           collapsed && "flex-col gap-2",
         )}
       >
-        <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-orange-700 text-xs font-bold text-white">
-          {initials}
-        </span>
+        <InitialsAvatar name={name} email={email} size="sm" />
         {!collapsed && (
           <span className="min-w-0 flex-1 leading-tight">
             <span className="block truncate text-[13px] font-extrabold text-foreground">

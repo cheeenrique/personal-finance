@@ -100,24 +100,24 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
           <div className="relative z-10 space-y-1.5">
             <CardLimitProgress percent={mealPercent} />
             <div className="flex items-baseline justify-between">
-              <p className="font-mono text-sm font-bold text-foreground">
+              <p className="font-mono text-sm font-semibold text-foreground">
                 {formatBRL(card.mealSpent ?? "0")}{" "}
                 <span className="font-sans text-xs font-medium text-muted-foreground">
                   / {formatBRL(card.mealRecharged ?? "0")}
                 </span>
               </p>
-              <p className="font-mono text-xs font-bold text-muted-foreground">{Math.round(mealPercent)}%</p>
+              <p className="font-mono text-xs font-semibold text-muted-foreground">{Math.round(mealPercent)}%</p>
             </div>
           </div>
 
           <div className="relative z-10 flex items-center justify-between border-t border-border pt-3 text-xs">
             <div>
               <p className="font-semibold text-muted-foreground">Recarregado</p>
-              <p className="font-mono font-bold text-foreground">{formatBRL(card.mealRecharged ?? "0")}</p>
+              <p className="font-mono font-semibold text-foreground">{formatBRL(card.mealRecharged ?? "0")}</p>
             </div>
             <div className="text-right">
               <p className="font-semibold text-muted-foreground">Saldo</p>
-              <p className="font-mono font-bold text-success">{formatBRL(card.mealBalance ?? "0")}</p>
+              <p className="font-mono font-semibold text-success">{formatBRL(card.mealBalance ?? "0")}</p>
             </div>
           </div>
 
@@ -130,13 +130,13 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
           <div className="relative z-10 space-y-1.5">
             <CardLimitProgress percent={percent} />
             <div className="flex items-baseline justify-between">
-              <p className="font-mono text-sm font-bold text-foreground">
+              <p className="font-mono text-sm font-semibold text-foreground">
                 {formatBRL(card.outstandingBalance)}{" "}
                 <span className="font-sans text-xs font-medium text-muted-foreground">
                   / {formatBRL(card.limit)}
                 </span>
               </p>
-              <p className={cn("font-mono text-xs font-bold", usageToneTextClass(percent))}>
+              <p className={cn("font-mono text-xs font-semibold", usageToneTextClass(percent))}>
                 {Math.round(percent)}%
               </p>
             </div>
@@ -145,11 +145,11 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
           <div className="relative z-10 flex items-center justify-between border-t border-border pt-3 text-xs">
             <div>
               <p className="font-semibold text-muted-foreground">Fatura atual</p>
-              <p className="font-mono font-bold text-foreground">{formatBRL(card.currentInvoiceTotal)}</p>
+              <p className="font-mono font-semibold text-foreground">{formatBRL(card.currentInvoiceTotal)}</p>
             </div>
             <div className="text-right">
               <p className="font-semibold text-muted-foreground">Disponível</p>
-              <p className="font-mono font-bold text-success">{formatBRL(card.availableLimit)}</p>
+              <p className="font-mono font-semibold text-success">{formatBRL(card.availableLimit)}</p>
             </div>
           </div>
 

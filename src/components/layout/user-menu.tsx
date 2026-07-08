@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { LogOut, Settings } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,14 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { InitialsAvatar } from "@/components/shared/initials-avatar";
 import { logoutAction } from "@/modules/auth/actions";
-
-function getInitials(name: string | null | undefined, email: string | null | undefined): string {
-  const source = name?.trim() || email?.trim() || "?";
-  const parts = source.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return source.slice(0, 2).toUpperCase();
-}
 
 type UserMenuProps = {
   name: string | null | undefined;
@@ -30,8 +23,6 @@ type UserMenuProps = {
  * item 5: "Perfil (avatar) — dropdown com 'Configurações' e 'Sair'").
  */
 export function UserMenu({ name, email }: UserMenuProps) {
-  const initials = getInitials(name, email);
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -43,11 +34,12 @@ export function UserMenu({ name, email }: UserMenuProps) {
           />
         }
       >
-        <Avatar className="size-[38px] transition-shadow duration-150 ease-pf-out hover:shadow-[0_4px_12px_rgba(234,88,12,0.3)]">
-          <AvatarFallback className="bg-[linear-gradient(135deg,#EA580C_0%,#D97316_100%)] text-[12px] font-black text-white">
-            {initials}
-          </AvatarFallback>
-        </Avatar>
+        <InitialsAvatar
+          name={name}
+          email={email}
+          size="md"
+          className="transition-shadow duration-150 ease-pf-out hover:shadow-[0_4px_12px_rgba(234,88,12,0.3)]"
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <div className="px-2 py-1.5">

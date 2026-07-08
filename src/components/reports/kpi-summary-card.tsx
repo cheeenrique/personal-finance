@@ -61,7 +61,7 @@ export function KpiSummaryCard({ income, expense, net }: KpiSummaryCardProps) {
               <span className={cn("text-[11px] font-bold", TONE_VALUE_CLASSES[netTone])}>{netLabel} no período</span>
             </span>
           </span>
-          <span className={cn("font-mono text-[19px] font-extrabold", TONE_VALUE_CLASSES[netTone])}>
+          <span className={cn("font-mono text-[19px] font-semibold", TONE_VALUE_CLASSES[netTone])}>
             {formatBRL(Math.abs(net))}
           </span>
         </div>

@@ -40,7 +40,7 @@ export function InsufficientBalanceAlert({ deficitTotal, items }: InsufficientBa
           </div>
         </div>
 
-        <span className="shrink-0 font-mono text-[13px] font-bold text-destructive">
+        <span className="shrink-0 font-mono text-[13px] font-semibold text-destructive">
           Déficit total: {formatBRL(deficitTotal)}
         </span>
       </div>
