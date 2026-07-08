@@ -99,7 +99,7 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     installmentPurchases,
     activeLoansRaw,
     expenseByCategory,
-    incomeVsExpenseByMonth,
+    monthlyCashflow,
     moneyFlow,
     recentTransactions,
   ] = await Promise.all([
@@ -129,7 +129,12 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     // ⇒ default EXPENSE (mesma leitura de sempre). Extensão de fim de dia agora é
     // interna a `categoryTotals` (`endOfDayInclusive`), sem precisar do wrap aqui.
     reportService.categoryTotals(userId, parsedDateFrom, parsedDateTo),
-    reportService.incomeVsExpenseByMonth(userId, year),
+    // "Evolução mensal" na MESMA base de caixa dos KPIs acima (conta-only +
+    // COALESCE(paidAt, date), ver `cashflowByMonth`) — o ponto do mês corrente
+    // bate exato com os cards "Receitas/Despesas do mês". NÃO usa
+    // `incomeVsExpenseByMonth` (accrual por competência, inclui cartão): mesma
+    // tela mostrando dois números pro mesmo mês confundia (parecia bug).
+    reportService.cashflowByMonth(userId, year),
     // "Fluxo de dinheiro" (Sankey) do período selecionado — MESMA base de
     // caixa de `categoryTotals` acima (reusada nos dois sentidos, ver
     // `modules/reports/service.ts` `sankeyFlow` pro detalhe de quando essa
@@ -159,13 +164,13 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
 
   // Só os meses já decorridos do ANO CORRENTE — série zero-preenchida evita
   // meses futuros "achatados" em zero na linha do tempo. Anos passados (ex.:
-  // período "Este ano" olhando pra trás não existe hoje, mas `incomeVsExpenseByMonth`
+  // período "Este ano" olhando pra trás não existe hoje, mas `cashflowByMonth`
   // é sempre o ano do período, que pode divergir do ano corrente em casos de borda
   // como "Mês passado" em janeiro) mostram os 12 meses cheios — mesmo tratamento
   // de `/reports` (`cashflowPoints`).
   const nowMonth = nowInSaoPaulo();
   const monthlyEvolutionPoints =
-    year === nowMonth.getFullYear() ? incomeVsExpenseByMonth.slice(0, nowMonth.getMonth() + 1) : incomeVsExpenseByMonth;
+    year === nowMonth.getFullYear() ? monthlyCashflow.slice(0, nowMonth.getMonth() + 1) : monthlyCashflow;
 
   return (
     <div className="flex flex-col gap-5">

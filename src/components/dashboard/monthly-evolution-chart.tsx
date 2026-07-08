@@ -21,8 +21,8 @@ type MonthlyEvolutionChartProps = {
  * "Evolução mensal" — receita vs. despesa dos meses já decorridos do ano
  * atual (docs/11-DASHBOARD.md, "5. Gráficos e Análises"). `empty` é decidido
  * por MOVIMENTAÇÃO real, não por tamanho do array — a série vem sempre
- * zero-preenchida (`reportService.incomeVsExpenseByMonth`), então
- * `points.length` nunca é 0.
+ * zero-preenchida (`reportService.cashflowByMonth`, base de caixa que bate
+ * com os KPIs do Dashboard), então `points.length` nunca é 0.
  */
 export function MonthlyEvolutionChart({ points }: MonthlyEvolutionChartProps) {
   const hasMovement = points.some((point) => !point.income.isZero() || !point.expense.isZero());
