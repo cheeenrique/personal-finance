@@ -26,13 +26,26 @@ async function list(userId: string): Promise<Asset[]> {
   return assetRepository.list(userId);
 }
 
-/** Série de `AssetSnapshot` de UM asset — base do gráfico de evolução individual (docs/27-ASSETS.md). */
+/**
+ * Série de evolução de UM asset — combina a COMPRA (`purchaseDate` +
+ * `purchaseValue`, âncora inicial) com os `AssetSnapshot`s, igual
+ * `evolutionTotal` faz por usuário (docs/27-ASSETS.md, "Evolução"). Sem essa
+ * âncora, um asset com um único snapshot (o valor atual) "nasce" no gráfico
+ * já nesse valor e esconde a valorização real desde a compra (ex.: imóvel
+ * comprado em 2020 por R$186k, hoje valendo R$320k, mas só com o snapshot do
+ * valor atual — vira 1 ponto em vez de uma linha 2020→hoje).
+ */
 async function evolution(userId: string, assetId: string): Promise<AssetEvolutionPoint[]> {
   const asset = await assetRepository.findById(userId, assetId);
   if (!asset) throw new AssetNotFoundError(assetId);
 
   const snapshots = await assetRepository.listSnapshots(assetId);
-  return snapshots.map((snapshot) => ({ date: snapshot.date, value: snapshot.value }));
+  const events: AssetEvolutionEvent[] = [
+    { value: asset.purchaseValue, date: asset.purchaseDate },
+    ...snapshots.map((snapshot) => ({ value: snapshot.value, date: snapshot.date })),
+  ];
+
+  return buildAssetEvolution(events);
 }
 
 /** Soma de `currentValue` de todos os assets ativos — patrimônio total (docs/27-ASSETS.md). */
@@ -54,6 +67,30 @@ function startOfDaySP(date: Date): Date {
 
 /** Um evento de valor de UM asset numa data — compra (âncora inicial) ou snapshot. */
 type EvolutionEvent = { assetId: string; value: Prisma.Decimal; date: Date };
+
+/** Um evento de valor do asset numa data — mesma ideia de `EvolutionEvent`, sem `assetId` (série de 1 asset só). */
+type AssetEvolutionEvent = { value: Prisma.Decimal; date: Date };
+
+/**
+ * Dedupe por dia-calendário SP de eventos de UM asset (compra + snapshots) —
+ * mesma regra de `buildTotalEvolution`: >1 evento no mesmo dia, o último
+ * processado vence (`events` chega com a compra antes do snapshot em caso de
+ * empate, então o snapshot, mais preciso, grava por cima).
+ */
+function buildAssetEvolution(events: AssetEvolutionEvent[]): AssetEvolutionPoint[] {
+  const lastValueByDay = new Map<string, Prisma.Decimal>();
+  const dayDateByKey = new Map<string, Date>();
+
+  for (const event of [...events].sort((a, b) => a.date.getTime() - b.date.getTime())) {
+    const key = dayKeySP(event.date);
+    if (!dayDateByKey.has(key)) dayDateByKey.set(key, startOfDaySP(event.date));
+    lastValueByDay.set(key, event.value);
+  }
+
+  return Array.from(dayDateByKey.keys())
+    .sort()
+    .map((key) => ({ date: dayDateByKey.get(key)!, value: lastValueByDay.get(key)! }));
+}
 
 /**
  * Constrói a série de evolução do patrimônio TOTAL a partir de dois tipos de
