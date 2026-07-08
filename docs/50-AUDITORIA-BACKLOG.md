@@ -17,10 +17,13 @@ Severidade: **crítico** (dinheiro/dados) · **alto** · **médio** · **baixo**
 | Orçamento soft-deletado travava recriação | `createBudget` reativa a linha soft-deletada (compare-and-set) em vez de P2002 | `450aea6` |
 | Transferência errada sem conserto | `deleteTransaction` propaga pras 2 pernas (`updateMany` por `transferId`) + botão/confirm na UI + revalida `/accounts` | `7c55d3e` |
 | Tema claro ilegível (tokens `on-*` sem override) | 9 overrides no `.light` + tint INFO `text-on-*` + botão destructive tokenizado; AA nos 2 temas | `7e342e0` |
+| **Timezone** double-shift (T1/T2/T3) | AssetSnapshot/fatura atual/alerta saldo gravam-comparam `new Date()` real; `nowInSaoPaulo()` só p/ calendário | `83c635c` |
+| **Telegram** consultas de gasto (TG1/TG2) | "hoje"/"quanto gastei"/"gastos mês"/"top categorias" via `reportService.cashflow`/`categoryTotals` (cash-flow, sem transfer/cartão) | `36dedfc` |
+| **Design** (D1–D7) | contraste AA no dark, nav primary, mono sem faux-bold, safe-area iOS, dedup BrandMark/InitialsAvatar, badge parcela tokenizado, Sankey truncado | `24c01c7` |
 
 ---
 
-## 🕐 P1 — Timezone (double-shift do `nowInSaoPaulo()`)
+## ✅ P1 — Timezone (double-shift do `nowInSaoPaulo()`) — RESOLVIDO `83c635c`
 
 **Contexto:** `nowInSaoPaulo()` (`src/lib/date/timezone.ts`) retorna um `Date` com epoch
 DESLOCADO (-3h em host UTC) — é helper de **calendário** (extrair year/month/day), NÃO
@@ -38,7 +41,7 @@ calendário/bucket → manter `nowInSaoPaulo()`.
 
 ---
 
-## 💬 P1 — Telegram (consultas de gasto)
+## ✅ P1 — Telegram (consultas de gasto) — RESOLVIDO `36dedfc`
 
 **Contexto:** a base canônica de "gasto" é **fluxo de caixa** — só conta (`cardId IS NULL`),
 `COALESCE(paidAt, date)`, `isPaid=true`, `transferId IS NULL`. Dashboard/KPIs/`categoryTotals`/
@@ -51,7 +54,7 @@ calendário/bucket → manter `nowInSaoPaulo()`.
 
 ---
 
-## 🎨 P1 — Design
+## ✅ P1 — Design — RESOLVIDO `24c01c7`
 
 - **D1 · alto · `ui/button.tsx` + `transaction-type-badge.tsx:13-19`** — botão `accent` (`bg-accent text-white` ≈3.3:1) e badges sólidas Despesa/Receita + botão destructive no **dark** (branco sobre cor ≈3.3–3.76:1) falham AA. **Fix:** escurecer `--accent` (ex.: light `#C2410C` ~4.9:1 com branco) OU usar `text-accent-foreground`/foreground escuro. AA nos 2 temas, sem regredir o tema claro (on-* já corrigidos).
 - **D2 · alto · `layout/bottom-nav.tsx:107`** — nav ativa usa `text-accent` (laranja = ação que move dinheiro) no mobile, mas sidebar/drawer usam `--primary`. **Fix:** BottomNav ativo → `primary`.
@@ -106,6 +109,6 @@ calendário/bucket → manter `nowInSaoPaulo()`.
 
 ## Notas de execução
 
-- Auditoria feita com **Fable 5** (3 agents em paralelo). Os fixes P0 + tema saíram com Fable 5; o batch P1 (timezone/telegram/design) foi disparado mas **caiu no limite de sessão do Fable** (reset 2am SP) — retomar com Fable após o reset ou com Sonnet.
+- Auditoria feita com **Fable 5** (3 agents em paralelo). Os fixes P0 + tema saíram com Fable 5; o batch P1 (timezone/telegram/design) começou com Fable mas **caiu no limite de sessão** — timezone/telegram já estavam prontos (verificados + commitados), design foi refeito com Sonnet. **Todos os P1 desta rodada estão resolvidos.** Restam os itens de Lógica/Fluxo/Layout abaixo.
 - Padrão de trabalho: agent por área (sem conflito de arquivo), `tsc`/`eslint` limpos, teste tsx contra Docker local, **sem commit** pelo agent — coordenador commita + aplica migration de prod via **MCP do Supabase**.
 - Pontos verificados e **OK** (não são bug): rateio de centavos exato (parcela/empréstimo), juros compostos anual→mensal, transferência cria 2 pernas atômico, soft-delete + `userId` consistentes nos repositories, `parseFlexibleDate` trata `YYYY-MM-DD` como meia-noite SP, clamp de dia 29-31 em meses curtos.
