@@ -158,10 +158,19 @@ async function updateTransaction(
   const resultCategoryId = input.categoryId !== undefined ? input.categoryId : existing.categoryId;
   const resultAccountId = input.accountId !== undefined ? input.accountId : existing.accountId;
   const resultCardId = input.cardId !== undefined ? input.cardId : existing.cardId;
+  const typeChanged = input.type !== undefined && input.type !== existing.type;
 
   assertSourceAndCategoryInvariant(resultType, resultCategoryId, resultAccountId, resultCardId);
 
-  if (input.categoryId) await assertCategoryOwnership(userId, input.categoryId, resultType);
+  if (input.categoryId) {
+    await assertCategoryOwnership(userId, input.categoryId, resultType);
+  } else if (typeChanged && resultCategoryId) {
+    // `input.type` mudou sem reenviar `categoryId` — a categoria MESCLADA
+    // (mantida do registro existente) precisa bater com o tipo NOVO, senão
+    // persiste ex.: INCOME com categoria de EXPENSE (categoryTotals(INCOME)
+    // mostraria "Alimentação" como receita).
+    await assertCategoryOwnership(userId, resultCategoryId, resultType);
+  }
   if (input.accountId) await assertAccountOwnership(userId, input.accountId);
   if (input.cardId) await assertCardOwnership(userId, input.cardId);
   if (input.tagIds && input.tagIds.length > 0) await assertTagsOwnership(userId, input.tagIds);

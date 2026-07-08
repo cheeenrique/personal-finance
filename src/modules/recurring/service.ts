@@ -90,8 +90,16 @@ async function updateRecurringTransaction(
   const resultFrequency = input.frequency ?? existing.frequency;
   const resultDayOfMonth = input.dayOfMonth !== undefined ? input.dayOfMonth : existing.dayOfMonth;
   const resultDayOfWeek = input.dayOfWeek !== undefined ? input.dayOfWeek : existing.dayOfWeek;
+  const typeChanged = input.type !== undefined && input.type !== existing.type;
 
-  if (input.categoryId) await assertCategoryOwnership(userId, input.categoryId, resultType);
+  if (input.categoryId) {
+    await assertCategoryOwnership(userId, input.categoryId, resultType);
+  } else if (typeChanged) {
+    // Mesma regra de `modules/transactions/service.ts` `updateTransaction`
+    // (L1) — `type` mudou sem reenviar `categoryId`: revalida a categoria
+    // MESCLADA (mantida do registro existente) contra o tipo novo.
+    await assertCategoryOwnership(userId, existing.categoryId, resultType);
+  }
   if (input.accountId) await assertAccountOwnership(userId, input.accountId);
 
   const normalizedDayOfMonth = resultFrequency === RecurringFrequency.MONTHLY ? resultDayOfMonth : null;

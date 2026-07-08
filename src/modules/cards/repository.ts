@@ -75,26 +75,85 @@ async function create(userId: string, data: CreateCardData): Promise<Card> {
 }
 
 /**
+ * Semeia o `CardCycle` que representa a regra vigente ANTES da troca — só
+ * quando o cartão nunca teve nenhum `CardCycle` registrado (senão a regra
+ * anterior já está capturada por uma troca prévia). `effectiveFrom =
+ * card.createdAt` cobre TODO o histórico existente do cartão com a regra
+ * ORIGINAL (`closingDay`/`dueDay` com que ele foi criado) — sem esse seed,
+ * `cycleContaining`/`cycleForClosingMonth` (`cycle.ts`) cairiam no
+ * `fallback` pra qualquer data antes da troca, e o fallback é construído a
+ * partir de `Card.closingDay`/`dueDay` ATUAL (a regra NOVA, gravada logo em
+ * seguida por esta mesma função) — reescrevendo TODA fatura histórica com a
+ * regra nova.
+ */
+async function seedCycleIfMissing(
+  cardId: string,
+  card: Pick<Card, "closingDay" | "dueDay" | "createdAt">,
+  hasExistingCycles: boolean,
+  db: Db,
+): Promise<void> {
+  if (hasExistingCycles) return;
+
+  await db.cardCycle.create({
+    data: {
+      cardId,
+      closingDay: card.closingDay,
+      dueDay: card.dueDay,
+      effectiveFrom: card.createdAt,
+    },
+  });
+}
+
+/**
  * Verifica ownership (findById escopado) antes de atualizar — evita editar
  * cartão de outro usuário mesmo sabendo o `id` (cuid não é enumerável, mas o
  * isolamento por userId é a regra de ouro do projeto, não opcional).
+ *
+ * Mudar `closingDay`/`dueDay` NUNCA sobrescreve o passado (docs/22-CREDIT_CARDS.md,
+ * "Lógica de Fatura"): quando um dos dois muda, grava um novo `CardCycle` com
+ * `effectiveFrom = agora` (a regra NOVA passa a valer só a partir deste
+ * instante) — semeando antes, se preciso (`seedCycleIfMissing`), a regra
+ * ANTIGA pra cobrir tudo que já existia. `Card.closingDay`/`dueDay` continua
+ * sendo atualizado (é o valor "atual" exibido no form de edição), mas
+ * `cycle.ts` só usa esses campos como `fallback` quando NENHUM `CardCycle`
+ * se aplica à data — depois desta função, sempre existe um. Atômico
+ * (`$transaction`): nunca existe janela com o `Card` já na regra nova e o
+ * `CardCycle` correspondente ainda não gravado.
  */
 async function update(userId: string, id: string, data: UpdateCardData): Promise<Card | null> {
   const existing = await findById(userId, id);
   if (!existing) return null;
 
-  return prisma.card.update({
-    where: { id },
-    data: {
-      ...(data.name !== undefined && { name: data.name }),
-      ...(data.brand !== undefined && { brand: data.brand }),
-      ...(data.limit !== undefined && { limit: data.limit }),
-      ...(data.closingDay !== undefined && { closingDay: data.closingDay }),
-      ...(data.dueDay !== undefined && { dueDay: data.dueDay }),
-      ...(data.color !== undefined && { color: data.color }),
-      ...(data.icon !== undefined && { icon: data.icon }),
-      ...(data.isActive !== undefined && { isActive: data.isActive }),
-    },
+  const closingDayChanged = data.closingDay !== undefined && data.closingDay !== existing.closingDay;
+  const dueDayChanged = data.dueDay !== undefined && data.dueDay !== existing.dueDay;
+  const cycleRuleChanged = closingDayChanged || dueDayChanged;
+
+  return prisma.$transaction(async (tx) => {
+    if (cycleRuleChanged) {
+      await seedCycleIfMissing(id, existing, existing.cycles.length > 0, tx);
+      await tx.cardCycle.create({
+        data: {
+          cardId: id,
+          closingDay: data.closingDay ?? existing.closingDay,
+          dueDay: data.dueDay ?? existing.dueDay,
+          effectiveFrom: new Date(),
+        },
+      });
+    }
+
+    return tx.card.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.brand !== undefined && { brand: data.brand }),
+        ...(data.limit !== undefined && { limit: data.limit }),
+        ...(data.closingDay !== undefined && { closingDay: data.closingDay }),
+        ...(data.dueDay !== undefined && { dueDay: data.dueDay }),
+        ...(data.color !== undefined && { color: data.color }),
+        ...(data.icon !== undefined && { icon: data.icon }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
+      },
+    });
   });
 }
 

@@ -102,3 +102,17 @@ export class LoanAlreadySettledError extends LoanDomainError {
     super("Empréstimo já está totalmente pago", "LOAN_ALREADY_SETTLED", undefined, { loanId });
   }
 }
+
+/**
+ * `markInstallmentPaid` perdeu a corrida: a parcela já não está mais
+ * `isPaid=false` no instante do `UPDATE` (foi paga individualmente — ex.:
+ * `updateTransactionAction` — entre a leitura de "não pagas" no início de
+ * `settleLoan` e a escrita desta parcela específica dentro da mesma
+ * `$transaction`). Sem essa recheck, a quitação em lote sobrescreveria o
+ * `amount` real já pago com o valor rateado (docs backlog L4).
+ */
+export class LoanInstallmentAlreadyPaidError extends LoanDomainError {
+  constructor(installmentId: string) {
+    super("Parcela já foi paga", "LOAN_INSTALLMENT_ALREADY_PAID", undefined, { installmentId });
+  }
+}

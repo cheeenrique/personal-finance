@@ -188,32 +188,41 @@ async function suggestEarlyPayment(
  * quando há desconto de antecipação — ver `deriveLoanProgress` acima:
  * `totalToPay` continua CONTRATUAL, o `paidAmount` derivado é que reflete
  * o efetivo, exatamente como já acontece no empréstimo real do dono).
+ *
+ * Lê as parcelas (`findByIdWithTransactions`) DENTRO da MESMA `$transaction`
+ * que grava a quitação — não antes dela — pra reduzir a janela de corrida
+ * contra uma parcela sendo marcada paga individualmente nesse meio-tempo
+ * (`updateTransactionAction`, fora desta transação). O fechamento definitivo
+ * do TOCTOU é o `updateMany` com recheck de `isPaid=false` em
+ * `loanRepository.markInstallmentPaid` (docs backlog L4) — a leitura aqui só
+ * encurta a janela, ela sozinha não é suficiente (leitura e escrita não são
+ * atômicas entre si).
  */
 async function settleLoan(userId: string, loanId: string, settleDate: Date, totalPaid?: string): Promise<Money> {
-  const loan = await loanRepository.findByIdWithTransactions(userId, loanId);
-  if (!loan) throw new LoanNotFoundError(loanId);
+  return prisma.$transaction(async (tx) => {
+    const loan = await loanRepository.findByIdWithTransactions(userId, loanId, tx);
+    if (!loan) throw new LoanNotFoundError(loanId);
 
-  const installments = loan.transactions.filter((transaction) => transaction.type === TransactionType.EXPENSE);
-  const unpaid = installments.filter((transaction) => !transaction.isPaid);
-  if (unpaid.length === 0) throw new LoanAlreadySettledError(loanId);
+    const installments = loan.transactions.filter((transaction) => transaction.type === TransactionType.EXPENSE);
+    const unpaid = installments.filter((transaction) => !transaction.isPaid);
+    if (unpaid.length === 0) throw new LoanAlreadySettledError(loanId);
 
-  const rate = monthlyRate(loan);
-  const presentValues = unpaid.map((installment) =>
-    presentValue(installment.amount, rate, monthsEarly(settleDate, installment.date)),
-  );
-  const suggestedTotal = presentValues.reduce((sum, pv) => sum.plus(pv), new Prisma.Decimal(0));
-  const finalTotal = totalPaid !== undefined ? new Prisma.Decimal(totalPaid) : suggestedTotal;
+    const rate = monthlyRate(loan);
+    const presentValues = unpaid.map((installment) =>
+      presentValue(installment.amount, rate, monthsEarly(settleDate, installment.date)),
+    );
+    const suggestedTotal = presentValues.reduce((sum, pv) => sum.plus(pv), new Prisma.Decimal(0));
+    const finalTotal = totalPaid !== undefined ? new Prisma.Decimal(totalPaid) : suggestedTotal;
 
-  const amounts = distributeProportionally(finalTotal, presentValues);
+    const amounts = distributeProportionally(finalTotal, presentValues);
 
-  await prisma.$transaction(async (tx) => {
     for (let index = 0; index < unpaid.length; index += 1) {
       // sequencial de propósito, mesmo padrão de installments.ts createLoan (regra no-await-in-loop não configurada neste projeto)
       await loanRepository.markInstallmentPaid(unpaid[index].id, amounts[index], settleDate, tx);
     }
-  });
 
-  return finalTotal;
+    return finalTotal;
+  });
 }
 
 export const loanService = {

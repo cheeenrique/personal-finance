@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/client";
 import type { Loan, Prisma } from "@/generated/prisma/client";
 import { TransactionType } from "@/generated/prisma/enums";
+import { LoanInstallmentAlreadyPaidError } from "./errors";
 import type { LoanWithTransactions, LoanInstallmentRow } from "./types";
 
 /** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `installments.ts`, `service.ts` `deleteLoan`). */
@@ -107,9 +108,21 @@ async function findInstallment(
  * MESMA `$transaction` atômica). Marcar uma parcela avulsa fora da quitação
  * já é coberto por `updateTransactionAction` (ver service.ts, JSDoc de
  * `settleLoan` — decisão de não duplicar essa função pro caso avulso).
+ *
+ * `updateMany` com `isPaid: false` no `WHERE` (em vez de `update` por `id`
+ * cru) recheca a condição no MESMO instante da escrita, dentro da
+ * `$transaction` — fecha o TOCTOU entre a leitura de "parcelas não pagas"
+ * no início de `settleLoan` e esta escrita (a parcela pode ter sido marcada
+ * paga individualmente nesse meio-tempo). `count === 0` ⇒ perdeu a corrida:
+ * lança em vez de sobrescrever o `amount` real já pago com o valor rateado
+ * (docs backlog L4).
  */
 async function markInstallmentPaid(installmentId: string, amount: Prisma.Decimal, paidAt: Date, db: Db = prisma): Promise<void> {
-  await db.transaction.update({ where: { id: installmentId }, data: { amount, isPaid: true, paidAt } });
+  const result = await db.transaction.updateMany({
+    where: { id: installmentId, isPaid: false },
+    data: { amount, isPaid: true, paidAt },
+  });
+  if (result.count === 0) throw new LoanInstallmentAlreadyPaidError(installmentId);
 }
 
 /**
