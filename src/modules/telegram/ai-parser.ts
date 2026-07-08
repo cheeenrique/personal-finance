@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { KnownMerchant } from "@/modules/transactions/types";
+import { callGemini, type GeminiContentPart } from "@/lib/ai/gemini";
 import type { AiParsedTransaction } from "./types";
 
 /**
@@ -9,14 +10,15 @@ import type { AiParsedTransaction } from "./types";
  * determinísticos como "saldo"/"hoje"/"gastos mes" continuam 100% regex,
  * nunca chamam a IA).
  *
- * REST API via `fetch` nativo — sem SDK (Vercel serverless já tem fetch,
- * ver guard-rail da task). Structured output (`responseSchema`) garante JSON
- * bem-formado; ainda assim validamos com zod (nunca confiar cegamente em
+ * O transporte genérico (REST via `fetch` nativo, sem SDK; timeout;
+ * tratamento de erro→null) vive em `@/lib/ai/gemini.ts` (infra compartilhada
+ * com `financing-parser.ts` e `modules/imports/parsers/pdf-parser.ts`) —
+ * reexportado abaixo pra não quebrar quem importa `callGemini`/
+ * `GeminiContentPart` daqui. Structured output (`responseSchema`) garante
+ * JSON bem-formado; ainda assim validamos com zod (nunca confiar cegamente em
  * saída de LLM, é input externo como qualquer outro).
  */
-const GEMINI_MODEL = "gemini-2.5-flash";
-const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const REQUEST_TIMEOUT_MS = 8000;
+export { callGemini, type GeminiContentPart };
 
 /** `queryType`s reconhecidos (docs/30-TELEGRAM.md, "Consulta por IA") — mesmos valores de `TelegramQueryType` (types.ts). */
 const QUERY_TYPE_VALUES = [
@@ -218,75 +220,6 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
   }
 
   return lines.join("\n");
-}
-
-/** Parte de um `content` da API Gemini — texto puro ou bytes inline (imagem/PDF) em base64. Exportado pra `financing-parser.ts` montar seu próprio `contents` (mesmo formato, documento em vez de foto de lançamento). */
-export type GeminiContentPart = { text: string } | { inlineData: { mimeType: string; data: string } };
-
-/**
- * Chamada Gemini genérica — compartilhada por transação (texto
- * `parseTransactionWithAI`, imagem `parseTransactionFromImage`) e documento
- * de financiamento (`financing-parser.ts`, `parseFinancingFromDocument`).
- * `responseSchema` (formato Gemini/OpenAPI) e `parseResponse` (valida com zod
- * + mapeia pro tipo final do caller) são parametrizados pra reuso — só o
- * `contents` e o shape esperado mudam entre os casos de uso; a chamada
- * HTTP/timeout/tratamento de erro é idêntico (rule 02-dry-kiss-yagni, DRY a
- * partir do 2º caso concreto real). `source` só rotula os logs pra
- * diferenciar qual caminho falhou. `null` em qualquer falha (sem
- * `GEMINI_API_KEY`, erro de rede, timeout, resposta não-2xx, JSON
- * inválido/fora do shape esperado — `parseResponse` decide isso) — NUNCA
- * lança, webhook do Telegram não pode quebrar por causa de uma dependência
- * externa opcional. NUNCA loga o conteúdo de `contents` (texto do
- * usuário/bytes de imagem/documento) nem a API key (docs/30-TELEGRAM.md,
- * "Segurança").
- */
-export async function callGemini<T>(
-  contents: Array<{ parts: GeminiContentPart[] }>,
-  source: string,
-  responseSchema: object,
-  parseResponse: (rawJson: unknown) => T | null,
-): Promise<T | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(`${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      console.error(`[modules/telegram] gemini ${source} request failed`, { status: response.status });
-      return null;
-    }
-
-    const body = (await response.json().catch(() => null)) as
-      | { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
-      | null;
-    const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof text !== "string") return null;
-
-    const rawJson: unknown = JSON.parse(text);
-    return parseResponse(rawJson);
-  } catch (error) {
-    console.error(`[modules/telegram] gemini ${source} parse failed`, {
-      reason: error instanceof Error ? error.name : "unknown",
-    });
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 /**

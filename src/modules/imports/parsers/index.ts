@@ -2,14 +2,13 @@ import type { ImportParseResult } from "../types";
 import { parseOfx } from "./ofx-parser";
 import { parseCsv } from "./csv-parser";
 import { parseXlsx } from "./xlsx-parser";
+import { parsePdfStatement } from "./pdf-parser";
 
 /**
  * Registry de parsers por formato de arquivo
  * (docs/superpowers/specs/2026-07-08-import-multiformato-design.md).
  * Detecção por EXTENSÃO do nome do arquivo (não conteúdo/MIME) — simples e
- * suficiente pros formatos suportados hoje (OFX, CSV, XLSX). Fase futura
- * (PDF) adiciona entrada aqui, sem mexer no pipeline de preview/commit
- * (`service.ts`).
+ * suficiente pros formatos suportados hoje (OFX, CSV, XLSX, PDF).
  */
 function detectExtension(fileName: string): string {
   const trimmed = fileName.trim().toLowerCase();
@@ -27,6 +26,10 @@ function detectExtension(fileName: string): string {
  * moderno Open XML (`.xlsx`). Reportado como erro claro em vez de tentar e
  * falhar sem explicação (instrução do dono: nada de puxar outra lib só pra
  * cobrir esse caso raro).
+ *
+ * `.pdf` também chega em base64 (binário) — extração via Gemini
+ * (`pdf-parser.ts`), mesmo racional do `financing-parser.ts` de
+ * `modules/telegram`.
  */
 export async function parseImportFile(fileName: string, content: string): Promise<ImportParseResult> {
   const extension = detectExtension(fileName);
@@ -34,6 +37,7 @@ export async function parseImportFile(fileName: string, content: string): Promis
   if (extension === "ofx") return parseOfx(content);
   if (extension === "csv") return parseCsv(content);
   if (extension === "xlsx") return parseXlsx(content);
+  if (extension === "pdf") return parsePdfStatement(content);
   if (extension === "xls") {
     return {
       transactions: [],

@@ -26,12 +26,17 @@ type ImportModalProps = {
 
 type Step = "select" | "preview" | "result";
 
-/** Extensões binárias — lidas via `file.arrayBuffer()` + base64 em vez de `file.text()` (XLSX não é texto; `parsers/index.ts` espera base64 pra esses formatos, ver `xlsx-parser.ts`). */
-const BINARY_EXTENSIONS = [".xls", ".xlsx"];
+/** Extensões binárias — lidas via `file.arrayBuffer()` + base64 em vez de `file.text()` (XLSX/PDF não são texto; `parsers/index.ts` espera base64 pra esses formatos, ver `xlsx-parser.ts`/`pdf-parser.ts`). */
+const BINARY_EXTENSIONS = [".xls", ".xlsx", ".pdf"];
 
 function isBinaryImportFile(fileName: string): boolean {
   const lower = fileName.trim().toLowerCase();
   return BINARY_EXTENSIONS.some((extension) => lower.endsWith(extension));
+}
+
+/** PDF passa por extração via Gemini no backend (`pdf-parser.ts`) — bem mais lento que os parsers determinísticos (CSV/XLSX/OFX), merece um texto de espera próprio em vez do genérico "Lendo e analisando". */
+function isPdfImportFile(fileName: string): boolean {
+  return fileName.trim().toLowerCase().endsWith(".pdf");
 }
 
 /** `ArrayBuffer` → base64 sem passar por `FileReader` (mesma técnica de `FinancingImportButton.fileToBase64` — a `data:` URL do `FileReader` traria o prefixo `data:<mime>;base64,` junto). */
@@ -142,25 +147,27 @@ export function ImportModal({ open, onOpenChange, accountId }: ImportModalProps)
       open={open}
       onOpenChange={handleOpenChange}
       title="Importar extrato"
-      description="Sobe o extrato do banco (.ofx, .csv ou .xlsx), confere uma prévia e só grava depois de confirmar."
+      description="Sobe o extrato do banco (.ofx, .csv, .xlsx ou .pdf), confere uma prévia e só grava depois de confirmar."
       size="wide"
     >
       <div className="flex flex-col gap-4">
         {step === "select" && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="statement-file">Arquivo (OFX, CSV ou XLSX)</Label>
+            <Label htmlFor="statement-file">Arquivo (OFX, CSV, XLSX ou PDF)</Label>
             <Input
               key={fileInputKey}
               id="statement-file"
               type="file"
-              accept=".ofx,.csv,.xls,.xlsx"
+              accept=".ofx,.csv,.xls,.xlsx,.pdf"
               onChange={handleFileChange}
               disabled={isPending}
             />
             {isPending && (
               <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                Lendo e analisando o arquivo…
+                {fileName && isPdfImportFile(fileName)
+                  ? "Extraindo lançamentos do PDF (pode levar alguns segundos)…"
+                  : "Lendo e analisando o arquivo…"}
               </p>
             )}
           </div>
