@@ -11,7 +11,12 @@ import type { ClientTransaction } from "@/modules/transactions/types";
 import { notifyError, notifySuccess } from "@/lib/toast";
 import { invalidateAllTransactionLists } from "./transaction-query-keys";
 
-/** Pernas de TRANSFER nunca são editadas/excluídas por aqui — `accounts/transfer.ts` não implementa propagação pro par ainda. */
+/**
+ * Perna de TRANSFER: EDITAR segue bloqueado (`accounts/transfer.ts` não
+ * propaga edição pro par ainda), mas EXCLUIR é permitido — o backend
+ * (`transactionService.deleteTransaction`) soft-deleta as 2 pernas juntas
+ * pelo `transferId`, revertendo o saldo das 2 contas de uma vez.
+ */
 export function isTransferLeg(row: { transferId: string | null }): boolean {
   return Boolean(row.transferId);
 }
@@ -49,7 +54,9 @@ export function isCardTransaction(row: { cardId: string | null }): boolean {
 export function useTransactionMutations(onMutated: () => void) {
   const queryClient = useQueryClient();
 
-  async function deleteOne(row: { id: string }): Promise<void> {
+  async function deleteOne(row: { id: string; transferId?: string | null }): Promise<void> {
+    const isTransfer = Boolean(row.transferId);
+
     const result = await deleteTransactionAction(row.id);
     if (!result.success) {
       notifyError(result.error.message);
@@ -57,13 +64,13 @@ export function useTransactionMutations(onMutated: () => void) {
     }
 
     invalidateAllTransactionLists(queryClient);
-    notifySuccess("Transação excluída", {
-      action: { label: "Desfazer", onClick: () => void undoDelete(row.id) },
+    notifySuccess(isTransfer ? "Transferência excluída (as 2 pernas)" : "Transação excluída", {
+      action: { label: "Desfazer", onClick: () => void undoDelete(row.id, isTransfer) },
     });
     onMutated();
   }
 
-  async function undoDelete(id: string): Promise<void> {
+  async function undoDelete(id: string, isTransfer = false): Promise<void> {
     const result = await undoDeleteTransactionAction(id);
     if (!result.success) {
       notifyError(result.error.message);
@@ -71,7 +78,7 @@ export function useTransactionMutations(onMutated: () => void) {
     }
 
     invalidateAllTransactionLists(queryClient);
-    notifySuccess("Transação restaurada");
+    notifySuccess(isTransfer ? "Transferência restaurada (as 2 pernas)" : "Transação restaurada");
     onMutated();
   }
 

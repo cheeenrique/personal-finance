@@ -186,12 +186,44 @@ async function updateTransaction(
   return updated;
 }
 
+/**
+ * Transferência é uma UNIDADE lógica de 2 pernas (EXPENSE origem + INCOME
+ * destino, mesmo `transferId` — docs/20-TRANSACTIONS.md, "Transferência":
+ * "excluir uma perna deve propagar para a outra"). Deletar por QUALQUER perna
+ * soft-deleta AS DUAS via `softDeleteByTransferId` — deletar só uma deixaria
+ * a outra valendo como receita/despesa real e desbalancearia o saldo das 2
+ * contas (patrimônio infla/deflaciona pelo valor transferido).
+ */
 async function deleteTransaction(userId: string, id: string): Promise<void> {
+  const existing = await transactionRepository.findById(userId, id);
+  if (!existing) throw new TransactionNotFoundError(id);
+
+  if (existing.transferId) {
+    await transactionRepository.softDeleteByTransferId(userId, existing.transferId);
+    return;
+  }
+
   const deleted = await transactionRepository.softDelete(userId, id);
   if (!deleted) throw new TransactionNotFoundError(id);
 }
 
+/**
+ * Espelho de `deleteTransaction` pro undo do toast — se a transação deletada
+ * era perna de transferência, restaura AS DUAS pernas (mesma regra de unidade
+ * lógica acima), senão o undo recriaria o desbalanceamento que o delete em
+ * par evita. Retorna a perna pedida (contrato original do undo).
+ */
 async function undoDeleteTransaction(userId: string, id: string): Promise<TransactionWithTags> {
+  const deleted = await transactionRepository.findDeletedById(userId, id);
+  if (!deleted) throw new TransactionNotFoundError(id);
+
+  if (deleted.transferId) {
+    await transactionRepository.restoreByTransferId(userId, deleted.transferId);
+    const restored = await transactionRepository.findById(userId, id);
+    if (!restored) throw new TransactionNotFoundError(id);
+    return restored;
+  }
+
   const restored = await transactionRepository.restore(userId, id);
   if (!restored) throw new TransactionNotFoundError(id);
   return restored;

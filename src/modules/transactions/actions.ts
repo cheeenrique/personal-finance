@@ -23,6 +23,7 @@ import type {
 const TRANSACTIONS_PATH = "/transactions";
 const DASHBOARD_PATH = "/dashboard";
 const INSTALLMENTS_PATH = "/installments";
+const ACCOUNTS_PATH = "/accounts";
 
 /** Server Actions só delegam para o module (docs/99-CLAUDE.md, "Regra de Ouro"). */
 
@@ -48,6 +49,9 @@ function toActionError(error: unknown): { success: false; error: { code: string;
 function revalidateTransactionRoutes(): void {
   revalidatePath(TRANSACTIONS_PATH);
   revalidatePath(DASHBOARD_PATH);
+  // Toda mutação de transação mexe no saldo da conta (transferência mexe em 2)
+  // — revalida o grid de contas junto, senão os saldos ficam desatualizados.
+  revalidatePath(ACCOUNTS_PATH);
 }
 
 /** `Prisma.Decimal` → `string` na borda (ver types.ts `ClientTransaction`). */

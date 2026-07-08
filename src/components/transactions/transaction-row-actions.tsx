@@ -21,13 +21,15 @@ type TransactionRowActionsProps = {
  * "Marcar como paga" só aparece em linha PENDENTE (`!row.isPaid`) de CONTA
  * (`!isCardTransaction`) — transação de cartão não tem esse controle por
  * linha (cobrança é confirmada na compra; quem paga é a fatura, ver JSDoc de
- * `isCardTransaction`). Editar/excluir seguem desabilitados pra pernas de
- * TRANSFER (mesma regra de antes da extração — `isTransferLeg` sempre
- * `false` pra transações de cartão, que nunca têm `transferId`, então o
- * guard não muda comportamento lá).
+ * `isCardTransaction`). Perna de TRANSFER: editar segue desabilitado (sem
+ * propagação de edição pro par, ver `isTransferLeg`), mas EXCLUIR é
+ * permitido — o backend soft-deleta as 2 pernas juntas; o label vira
+ * "Excluir transferência" e o ConfirmDialog do caller explica o efeito nas
+ * 2 contas. `isTransferLeg` é sempre `false` pra transações de cartão (nunca
+ * têm `transferId`), então nada muda nas tabelas de cartão.
  */
 export function TransactionRowActions({ row, onView, onMarkPaid, onEdit, onDelete }: TransactionRowActionsProps) {
-  const disabled = isTransferLeg(row);
+  const isTransfer = isTransferLeg(row);
 
   return (
     <>
@@ -39,16 +41,14 @@ export function TransactionRowActions({ row, onView, onMarkPaid, onEdit, onDelet
         icon={Pencil}
         label="Editar"
         onClick={onEdit}
-        disabled={disabled}
+        disabled={isTransfer}
         disabledReason="Transferências não são editáveis aqui"
       />
       <IconActionButton
         icon={Trash2}
         tone="danger"
-        label="Excluir"
+        label={isTransfer ? "Excluir transferência" : "Excluir"}
         onClick={onDelete}
-        disabled={disabled}
-        disabledReason="Transferências não são excluídas aqui"
       />
     </>
   );

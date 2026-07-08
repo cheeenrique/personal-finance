@@ -12,7 +12,7 @@ import { EditTransactionModal } from "@/components/transactions/edit-transaction
 import { TransactionDetailModal } from "@/components/transactions/transaction-detail-modal";
 import { TransactionRowActions } from "@/components/transactions/transaction-row-actions";
 import { useTransactionsReferenceData } from "@/components/transactions/use-transactions-reference-data";
-import { useTransactionMutations } from "@/components/transactions/use-transaction-mutations";
+import { isTransferLeg, useTransactionMutations } from "@/components/transactions/use-transaction-mutations";
 import type { ClientTransaction, TransactionSort } from "@/modules/transactions/types";
 import type { TransactionType } from "@/generated/prisma/enums";
 
@@ -192,8 +192,16 @@ export function AccountTransactionsHistory({ accountId }: AccountTransactionsHis
         onOpenChange={(open) => {
           if (!open) setDeleting(null);
         }}
-        title={`Excluir "${deleting?.description ?? ""}"?`}
-        description="A transação vai para a lixeira — o toast de confirmação traz um botão de desfazer."
+        title={
+          deleting && isTransferLeg(deleting)
+            ? `Excluir a transferência "${deleting.description}"?`
+            : `Excluir "${deleting?.description ?? ""}"?`
+        }
+        description={
+          deleting && isTransferLeg(deleting)
+            ? "As 2 pernas (saída e entrada) vão para a lixeira e o saldo das duas contas volta ao que era — o toast de confirmação traz um botão de desfazer."
+            : "A transação vai para a lixeira — o toast de confirmação traz um botão de desfazer."
+        }
         onConfirm={async () => {
           if (deleting) await mutations.deleteOne(deleting);
           setDeleting(null);

@@ -149,6 +149,25 @@ async function softDelete(userId: string, id: string): Promise<TransactionWithTa
   });
 }
 
+/**
+ * Soft-delete das DUAS pernas de uma transferência de uma vez (docs/
+ * 20-TRANSACTIONS.md, "Transferência": excluir uma perna propaga pra outra —
+ * as 2 formam uma unidade lógica). Um único `updateMany` = um único UPDATE no
+ * Postgres, atômico por construção: nunca existe janela com só uma perna
+ * deletada (que desbalancearia o saldo das 2 contas). Idempotente — pernas já
+ * deletadas ficam fora do `where` (`deletedAt: null`) e não são re-carimbadas.
+ * Escopado por `userId` (docs/10-AUTH.md) — as 2 pernas nascem do MESMO
+ * usuário (`accounts/transfer.ts` `createTransfer`), então o escopo cobre
+ * ambas.
+ */
+async function softDeleteByTransferId(userId: string, transferId: string): Promise<number> {
+  const result = await prisma.transaction.updateMany({
+    where: { userId, transferId, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+  return result.count;
+}
+
 /** Undo do soft delete — limpa `deletedAt` (docs/20-TRANSACTIONS.md, "permitir undo"). */
 async function restore(userId: string, id: string): Promise<TransactionWithTags | null> {
   const existing = await findDeletedById(userId, id);
@@ -159,6 +178,19 @@ async function restore(userId: string, id: string): Promise<TransactionWithTags 
     data: { deletedAt: null },
     include: TAG_INCLUDE,
   });
+}
+
+/**
+ * Espelho de `softDeleteByTransferId` pro undo — restaura as DUAS pernas
+ * soft-deletadas da transferência num único UPDATE (mesma garantia de
+ * atomicidade/idempotência; pernas já vivas ficam fora do `where`).
+ */
+async function restoreByTransferId(userId: string, transferId: string): Promise<number> {
+  const result = await prisma.transaction.updateMany({
+    where: { userId, transferId, NOT: { deletedAt: null } },
+    data: { deletedAt: null },
+  });
+  return result.count;
 }
 
 function buildWhere(userId: string, filters: TransactionListFilter): Prisma.TransactionWhereInput {
@@ -530,7 +562,9 @@ export const transactionRepository = {
   create,
   update,
   softDelete,
+  softDeleteByTransferId,
   restore,
+  restoreByTransferId,
   list,
   findMostRecentByType,
   findDescriptionSuggestions,

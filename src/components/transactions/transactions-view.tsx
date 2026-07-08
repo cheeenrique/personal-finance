@@ -19,7 +19,7 @@ import { NewInstallmentModal } from "./new-installment-modal";
 import { useTransactionFilters } from "./use-transaction-filters";
 import { useTransactionsReferenceData } from "./use-transactions-reference-data";
 import { useTransactionsList } from "./use-transactions-list";
-import { useTransactionMutations } from "./use-transaction-mutations";
+import { isTransferLeg, useTransactionMutations } from "./use-transaction-mutations";
 import type { ClientTransaction } from "@/modules/transactions/types";
 
 /**
@@ -190,8 +190,16 @@ export function TransactionsView() {
         onOpenChange={(open) => {
           if (!open) setDeleting(null);
         }}
-        title={`Excluir "${deleting?.description ?? ""}"?`}
-        description="A transação vai para a lixeira — o toast de confirmação traz um botão de desfazer."
+        title={
+          deleting && isTransferLeg(deleting)
+            ? `Excluir a transferência "${deleting.description}"?`
+            : `Excluir "${deleting?.description ?? ""}"?`
+        }
+        description={
+          deleting && isTransferLeg(deleting)
+            ? "As 2 pernas (saída e entrada) vão para a lixeira e o saldo das duas contas volta ao que era — o toast de confirmação traz um botão de desfazer."
+            : "A transação vai para a lixeira — o toast de confirmação traz um botão de desfazer."
+        }
         onConfirm={async () => {
           if (deleting) await mutations.deleteOne(deleting);
           setDeleting(null);
