@@ -3,7 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowDownToLine, Check, HandCoins, PiggyBank, Pencil, ShieldCheck, Trash2, TrendingDown, Wallet } from "lucide-react";
+import {
+  ArrowDownToLine,
+  Banknote,
+  Check,
+  HandCoins,
+  MoreVertical,
+  Pencil,
+  ShieldCheck,
+  Trash2,
+  TrendingDown,
+  Wallet,
+} from "lucide-react";
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { ProgressBar } from "@/components/dashboard/progress-bar";
@@ -11,6 +22,12 @@ import { DataTable, type DataTableColumn } from "@/components/tables/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { IconActionButton } from "@/components/shared/icon-action-button";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { deleteLoanAction } from "@/modules/loans/actions";
 import { updateTransactionAction } from "@/modules/transactions/actions";
 import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
@@ -148,32 +165,42 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {unpaidRows.length > 0 && (
-            <Button type="button" variant="accent" size="lg" onClick={() => setSettleOpen(true)}>
+            <Button type="button" variant="default" size="lg" onClick={() => setSettleOpen(true)}>
               <ShieldCheck className="size-4" aria-hidden="true" />
               Quitar empréstimo
             </Button>
           )}
 
-          <Button
-            type="button"
-            variant="neutral"
-            size="icon-md"
-            onClick={() => setEditOpen(true)}
-            aria-label={`Editar ${loan.description}`}
-          >
-            <Pencil className="size-4" aria-hidden="true" />
-          </Button>
-
-          <Button type="button" variant="destructive" size="lg" onClick={() => setDeleteOpen(true)}>
-            <Trash2 className="size-4" aria-hidden="true" />
-            Excluir empréstimo
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="neutral"
+                  size="icon-md"
+                  aria-label={`Mais ações para ${loan.description}`}
+                />
+              }
+            >
+              <MoreVertical className="size-4" aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <Pencil className="size-4" aria-hidden="true" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="size-4" aria-hidden="true" />
+                Excluir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard icon={Wallet} title="Valor emprestado" value={formatBRL(loan.principal)} tone="neutral" />
-        <KPICard icon={PiggyBank} title="Total a pagar" value={formatBRL(loan.totalToPay)} tone="neutral" />
+        <KPICard icon={Banknote} title="Total a pagar" value={formatBRL(loan.totalToPay)} tone="neutral" />
         <KPICard icon={TrendingDown} title="Juros" value={formatBRL(loan.interest)} tone="warning" />
         <KPICard
           icon={HandCoins}

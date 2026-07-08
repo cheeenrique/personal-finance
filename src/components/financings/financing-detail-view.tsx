@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  Banknote,
   Check,
   Landmark,
+  MoreVertical,
   Pencil,
-  PiggyBank,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -21,6 +22,12 @@ import { DataTable, type DataTableColumn } from "@/components/tables/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { IconActionButton } from "@/components/shared/icon-action-button";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { deleteLoanAction } from "@/modules/loans/actions";
 import { updateTransactionAction } from "@/modules/transactions/actions";
 import { EarlyPaymentDialog, type EarlyPaymentInstallment } from "@/components/loans/early-payment-dialog";
@@ -162,39 +169,48 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {unpaidRows.length > 0 && (
-            <Button type="button" variant="accent" size="lg" onClick={() => setSimulateOpen(true)}>
+            <Button type="button" variant="default" size="lg" onClick={() => setSimulateOpen(true)}>
               <Sparkles className="size-4" aria-hidden="true" />
               Simular antecipação
             </Button>
           )}
 
-          {unpaidRows.length > 0 && (
-            <Button type="button" variant="outline" size="lg" onClick={() => setSettleOpen(true)}>
-              <ShieldCheck className="size-4" aria-hidden="true" />
-              Quitar
-            </Button>
-          )}
-
-          <Button
-            type="button"
-            variant="neutral"
-            size="icon-md"
-            onClick={() => setEditOpen(true)}
-            aria-label={`Editar ${financing.description}`}
-          >
-            <Pencil className="size-4" aria-hidden="true" />
-          </Button>
-
-          <Button type="button" variant="destructive" size="lg" onClick={() => setDeleteOpen(true)}>
-            <Trash2 className="size-4" aria-hidden="true" />
-            Excluir
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="neutral"
+                  size="icon-md"
+                  aria-label={`Mais ações para ${financing.description}`}
+                />
+              }
+            >
+              <MoreVertical className="size-4" aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {unpaidRows.length > 0 && (
+                <DropdownMenuItem onClick={() => setSettleOpen(true)}>
+                  <ShieldCheck className="size-4" aria-hidden="true" />
+                  Quitar
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <Pencil className="size-4" aria-hidden="true" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="size-4" aria-hidden="true" />
+                Excluir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard icon={Wallet} title="Valor financiado" value={formatBRL(financing.principal)} tone="neutral" />
-        <KPICard icon={PiggyBank} title="Total a pagar" value={formatBRL(financing.totalToPay)} tone="neutral" />
+        <KPICard icon={Banknote} title="Total a pagar" value={formatBRL(financing.totalToPay)} tone="neutral" />
         <KPICard icon={TrendingDown} title="Juros" value={formatBRL(financing.interest)} tone="warning" />
         <KPICard
           icon={Landmark}
