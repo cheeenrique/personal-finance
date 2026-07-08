@@ -21,6 +21,8 @@ export type DateRange = { gte: Date; lt: Date };
  * Acesso a dados do módulo budgets. SEMPRE escopado por `userId` +
  * `deletedAt: null` — nunca query sem essas duas condições (ver
  * docs/03-DATABASE.md, "Princípio Principal": isolamento total por usuário).
+ * Exceção documentada: `findAnyByPeriod`/`reactivate` enxergam soft-deletados
+ * de propósito, pra permitir recriar orçamento excluído (ver docblocks).
  */
 
 async function findById(userId: string, id: string): Promise<Budget | null> {
@@ -33,6 +35,33 @@ async function listByPeriod(userId: string, year: number, month: number, categor
     where: { userId, year, month, deletedAt: null, ...(categoryId && { categoryId }) },
     orderBy: { createdAt: "asc" },
   });
+}
+
+/**
+ * Busca budget do período INCLUINDO soft-deletados — o unique
+ * (userId, categoryId, month, year) não diferencia `deletedAt`, então a linha
+ * soft-deletada continua ocupando o slot e o create precisa distinguir
+ * conflito real (ativo → erro) de reativação (ver service.ts `createBudget`).
+ * Isolamento por `userId` garantido pelo próprio unique composto.
+ */
+async function findAnyByPeriod(userId: string, categoryId: string, month: number, year: number): Promise<Budget | null> {
+  return prisma.budget.findUnique({
+    where: { userId_categoryId_month_year: { userId, categoryId, month, year } },
+  });
+}
+
+/**
+ * Reativa um budget soft-deletado (undelete + novo `plannedAmount`) num único
+ * UPDATE guardado por `deletedAt != null` (compare-and-set atômico): se outra
+ * request reativou entre o find e este update, não sobrescreve o budget ativo
+ * — retorna `null` e o service converte em `BudgetAlreadyExistsError`.
+ */
+async function reactivate(userId: string, id: string, plannedAmount: string): Promise<Budget | null> {
+  const rows = await prisma.budget.updateManyAndReturn({
+    where: { id, userId, deletedAt: { not: null } },
+    data: { deletedAt: null, plannedAmount },
+  });
+  return rows[0] ?? null;
 }
 
 async function create(userId: string, data: CreateBudgetData): Promise<Budget> {
@@ -161,6 +190,8 @@ async function groupExpensesByCategoryInRange(
 export const budgetRepository = {
   findById,
   listByPeriod,
+  findAnyByPeriod,
+  reactivate,
   create,
   update,
   softDelete,

@@ -123,8 +123,26 @@ async function spentAmount(userId: string, budget: Budget): Promise<Money> {
   return budgetRepository.sumExpensesByCategoryIds(userId, categoryIds, range);
 }
 
+/**
+ * Excluir orçamento é soft delete: a linha permanece ocupando o unique
+ * (userId, categoryId, month, year). Sem reativação, recriar o orçamento do
+ * mesmo período seria impossível pra sempre — P2002 com zero budgets visíveis
+ * na tela. Por isso: ativo no período → erro; soft-deletado → reativa
+ * (undelete + novo plannedAmount, mesma linha); ausente → insere.
+ */
 async function createBudget(userId: string, input: CreateBudgetData): Promise<Budget> {
   await assertBudgetableCategory(userId, input.categoryId);
+
+  const existing = await budgetRepository.findAnyByPeriod(userId, input.categoryId, input.month, input.year);
+  if (existing) {
+    if (existing.deletedAt === null) {
+      throw new BudgetAlreadyExistsError(input.categoryId, input.month, input.year);
+    }
+    const reactivated = await budgetRepository.reactivate(userId, existing.id, input.plannedAmount);
+    // null = outra request reativou entre o find e o update guardado → duplicado ativo.
+    if (!reactivated) throw new BudgetAlreadyExistsError(input.categoryId, input.month, input.year);
+    return reactivated;
+  }
 
   try {
     return await budgetRepository.create(userId, input);
