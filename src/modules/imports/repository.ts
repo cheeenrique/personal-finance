@@ -51,14 +51,28 @@ async function findFallbackRows(userId: string, accountId: string, db: Db = pris
     select: { date: true, amount: true, description: true },
   });
 
-  return rows.map((row) => ({ date: row.date, amount: row.amount.toString(), description: row.description }));
+  // `toFixed(2)` (nunca `toString()`, que emite "50"/"50.1") — a chave de
+  // fallback exige o MESMO formato do lado parseado (`parseOfxAmount`, também
+  // `Decimal.toFixed(2)`); formato divergente duplica tudo sem fitId no reimport.
+  return rows.map((row) => ({ date: row.date, amount: row.amount.toFixed(2), description: row.description }));
 }
 
-/** Insere as N Transactions já filtradas (sem duplicatas) — `isPaid` sempre `true` (docs/20-TRANSACTIONS.md: compra normal nasce paga). */
+/**
+ * Insere as N Transactions já filtradas (sem duplicatas) — `isPaid` sempre
+ * `true` (docs/20-TRANSACTIONS.md: compra normal nasce paga).
+ *
+ * `skipDuplicates`: rede de segurança contra commit concorrente (duplo clique
+ * no Confirmar) — o índice único parcial `Transaction_accountId_fitId_key`
+ * (migration `transaction_fitid_unique`) derruba o segundo insert do mesmo
+ * (accountId, fitId) vivo, e `skipDuplicates` transforma a violação em no-op
+ * em vez de estourar a importação inteira. O `count` retornado reflete só o
+ * que entrou de fato.
+ */
 async function insertMany(userId: string, accountId: string, items: CommitItem[], db: Db = prisma): Promise<number> {
   if (items.length === 0) return 0;
 
   const result = await db.transaction.createMany({
+    skipDuplicates: true,
     data: items.map((item) => ({
       userId,
       accountId,

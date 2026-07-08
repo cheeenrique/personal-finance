@@ -16,7 +16,14 @@ function hasFitId<T extends { fitId: string | null }>(item: T): item is T & { fi
   return item.fitId !== null;
 }
 
-/** Chave de dedup do fallback sem `fitId` (docs/03-DATABASE.md, "Importação de Extrato OFX") — mesma regra dos dois lados (linha existente no banco vs. item recém-parseado). */
+/**
+ * Chave de dedup do fallback sem `fitId` (docs/03-DATABASE.md, "Importação de
+ * Extrato OFX") — mesma regra dos dois lados (linha existente no banco vs.
+ * item recém-parseado). CONTRATO: `amount` sempre normalizado como
+ * `Decimal.toFixed(2)` ("50.00", nunca "50" ou "50.1") — o parser garante em
+ * `parseOfxAmount`, o repository em `findFallbackRows`. Formato divergente
+ * entre os lados quebra a chave e duplica tudo sem fitId no reimport.
+ */
 function fallbackKey(date: Date, amount: string, description: string): string {
   return `${date.toISOString()}|${amount}|${description.trim().toLowerCase()}`;
 }
@@ -78,8 +85,15 @@ async function previewOfxImport(userId: string, accountId: string, fileContent: 
   const novosParsed: ParsedOfxTransaction[] = [];
 
   for (const item of transactions) {
-    if (isDuplicate(item, existingFitIds, existingFallbackKeys)) duplicados += 1;
-    else novosParsed.push(item);
+    if (isDuplicate(item, existingFitIds, existingFallbackKeys)) {
+      duplicados += 1;
+      continue;
+    }
+    novosParsed.push(item);
+    // Dedup in-batch: alimenta o Set durante o loop pra dois `<STMTTRN>` com o
+    // mesmo `<FITID>` no MESMO arquivo contarem como 1 novo + 1 duplicado
+    // (mesma regra do commit — preview e commit nunca podem divergir).
+    if (item.fitId) existingFitIds.add(item.fitId);
   }
 
   const novos: OfxPreviewItem[] = await Promise.all(
@@ -105,9 +119,11 @@ async function previewOfxImport(userId: string, accountId: string, fileContent: 
  * guardado entre preview e commit) e grava só os itens ainda não existentes
  * na conta. Categorização resolvida ANTES do `$transaction` interativo
  * (mantém a janela da transação curta — mesmo cuidado de
- * `modules/cards/pay-invoice.ts`); dedup + insert acontecem dentro dela,
- * atômicos, pra reimportar o mesmo arquivo nunca duplicar (mesmo sob
- * concorrência).
+ * `modules/cards/pay-invoice.ts`); dedup + insert acontecem dentro dela.
+ * Concorrência (duplo clique no Confirmar): o snapshot de dedup NÃO enxerga
+ * inserts ainda não commitados do concorrente (READ COMMITTED) — quem segura
+ * é o índice único parcial em (accountId, fitId) + `skipDuplicates` no insert
+ * (ver `repository.insertMany` e a migration `transaction_fitid_unique`).
  */
 async function commitOfxImport(userId: string, accountId: string, fileContent: string): Promise<OfxImportCommitResult> {
   await assertAccountOwnership(userId, accountId);
@@ -137,10 +153,20 @@ async function commitOfxImport(userId: string, accountId: string, fileContent: s
     ]);
     const existingFallbackKeys = buildFallbackKeySet(fallbackRows);
 
-    const toInsert = withCategory.filter((item) => !isDuplicate(item, existingFitIds, existingFallbackKeys));
+    // Dedup in-batch: alimenta o Set durante o filter pra dois `<STMTTRN>` com
+    // o mesmo `<FITID>` no MESMO arquivo inserirem só o 1º — o snapshot do
+    // banco não enxerga o que ainda está no próprio batch.
+    const toInsert = withCategory.filter((item) => {
+      if (isDuplicate(item, existingFitIds, existingFallbackKeys)) return false;
+      if (item.fitId) existingFitIds.add(item.fitId);
+      return true;
+    });
     const insertedCount = await importRepository.insertMany(userId, accountId, toInsert, tx);
 
-    return { imported: insertedCount, duplicados: withCategory.length - toInsert.length };
+    // `insertedCount < toInsert.length` acontece sob commit concorrente: o
+    // índice único parcial + `skipDuplicates` descartam o que o outro commit
+    // gravou primeiro — essa diferença também é duplicata, não erro.
+    return { imported: insertedCount, duplicados: withCategory.length - insertedCount };
   });
 
   return { imported, duplicados, erros: errors };

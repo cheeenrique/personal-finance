@@ -332,9 +332,15 @@ model Transaction {
   // (a imensa maioria) e também no raro caso de um `<STMTTRN>` sem `<FITID>`
   // no arquivo — nesse caso o módulo de importação (`modules/imports/`) cai
   // num fallback de dedup por (accountId+date+amount+description) em vez
-  // deste campo. Sem `@@unique`: um mesmo fitId pode, em tese, se repetir
-  // entre CONTAS diferentes (bancos não coordenam esse id entre si), e o
-  // índice composto abaixo já cobre a query de dedup (por conta).
+  // deste campo. Unicidade: índice único PARCIAL
+  // `Transaction_accountId_fitId_key` em (accountId, fitId)
+  // WHERE fitId IS NOT NULL AND deletedAt IS NULL — em SQL cru (migration
+  // `transaction_fitid_unique`) porque Prisma não modela unique parcial.
+  // Parcial de propósito: soft-deleted fica fora (reimportar um lançamento
+  // excluído continua possível) e fitId pode repetir entre CONTAS diferentes
+  // (bancos não coordenam esse id entre si). ATENÇÃO `migrate dev`: por não
+  // estar modelado aqui, um diff futuro pode propor DROP desse índice —
+  // revisar a migration gerada antes de aplicar.
   fitId String?
 
   installmentPurchaseId String?
