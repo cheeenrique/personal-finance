@@ -199,65 +199,113 @@ async function restoreByTransferId(userId: string, transferId: string): Promise<
   return result.count;
 }
 
-function buildWhere(userId: string, filters: TransactionListFilter): Prisma.TransactionWhereInput {
-  return {
-    userId,
-    deletedAt: null,
-    ...(filters.search && { description: { contains: filters.search, mode: "insensitive" } }),
-    ...(filters.type && { type: filters.type }),
-    ...(filters.categoryId && { categoryId: filters.categoryId }),
-    ...(filters.accountId && { accountId: filters.accountId }),
-    ...(filters.cardId && { cardId: filters.cardId }),
-    ...(filters.isPaid !== undefined && { isPaid: filters.isPaid }),
-    ...(filters.isTransfer === true && { transferId: { not: null } }),
-    ...(filters.isTransfer === false && { transferId: null }),
-    ...(filters.tagId && { transactionTags: { some: { tagId: filters.tagId } } }),
-    ...((filters.dateFrom || filters.dateTo) && {
-      date: {
-        ...(filters.dateFrom && { gte: filters.dateFrom }),
-        ...(filters.dateTo && { lte: filters.dateTo }),
-      },
-    }),
-    ...((filters.amountMin || filters.amountMax) && {
-      amount: {
-        ...(filters.amountMin && { gte: filters.amountMin }),
-        ...(filters.amountMax && { lte: filters.amountMax }),
-      },
-    }),
-  };
+/**
+ * Condições WHERE da listagem paginada, em SQL cru (`Prisma.Sql[]`, mesmo
+ * padrão de `reports/repository.ts` `buildCashflowConditions`) — única fonte
+ * de verdade reaproveitada tanto pelo COUNT quanto pela query de ids
+ * ordenados (`list` abaixo). Existe em SQL cru (não `Prisma.TransactionWhereInput`
+ * como o resto do módulo) porque o filtro de período passou a usar a DATA
+ * EFETIVA (`COALESCE("paidAt", "date")` — docs/20-TRANSACTIONS.md, "Data
+ * Efetiva"): paga é filtrada pela data em que o dinheiro saiu (`paidAt`),
+ * pendente pelo vencimento (`date`), mesma regra do fluxo de caixa
+ * (`sumAmountByTypeInRange` abaixo). Manter os dois filtros (WHERE do count e
+ * WHERE da ordenação) como Prisma-objects diferentes arriscaria os dois
+ * divergirem com o tempo — um único builder elimina esse risco. `dateTo` é
+ * `lte` cru (sem extensão de fim de dia) de propósito: mesma semântica que o
+ * filtro anterior por `date` já tinha (o caller já resolve o range antes de
+ * chamar `list`, ver `components/transactions/period-presets.ts`) — não é
+ * escopo desta mudança alterar esse contrato.
+ */
+function buildListConditions(userId: string, filters: TransactionListFilter): Prisma.Sql[] {
+  const conditions: Prisma.Sql[] = [Prisma.sql`"userId" = ${userId}`, Prisma.sql`"deletedAt" IS NULL`];
+
+  if (filters.search) conditions.push(Prisma.sql`"description" ILIKE ${`%${filters.search}%`}`);
+  if (filters.type) conditions.push(Prisma.sql`"type" = ${filters.type}::"TransactionType"`);
+  if (filters.categoryId) conditions.push(Prisma.sql`"categoryId" = ${filters.categoryId}`);
+  if (filters.accountId) conditions.push(Prisma.sql`"accountId" = ${filters.accountId}`);
+  if (filters.cardId) conditions.push(Prisma.sql`"cardId" = ${filters.cardId}`);
+  if (filters.isPaid !== undefined) conditions.push(Prisma.sql`"isPaid" = ${filters.isPaid}`);
+  if (filters.isTransfer === true) conditions.push(Prisma.sql`"transferId" IS NOT NULL`);
+  if (filters.isTransfer === false) conditions.push(Prisma.sql`"transferId" IS NULL`);
+  if (filters.tagId) {
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM "TransactionTag" tt WHERE tt."transactionId" = "Transaction"."id" AND tt."tagId" = ${filters.tagId})`,
+    );
+  }
+  if (filters.dateFrom) conditions.push(Prisma.sql`COALESCE("paidAt", "date") >= ${filters.dateFrom}`);
+  if (filters.dateTo) conditions.push(Prisma.sql`COALESCE("paidAt", "date") <= ${filters.dateTo}`);
+  if (filters.amountMin) conditions.push(Prisma.sql`"amount" >= ${filters.amountMin}::numeric`);
+  if (filters.amountMax) conditions.push(Prisma.sql`"amount" <= ${filters.amountMax}::numeric`);
+
+  return conditions;
 }
 
-// `date` é data de calendário (meia-noite) — lançamentos do MESMO dia empatam.
-// `createdAt` desempata pela ordem de cadastro (o da tarde vem antes do da
-// manhã no desc), senão a ordem de mesmo-dia fica arbitrária (ordem física).
-const SORT_MAP: Record<TransactionSort, Prisma.TransactionOrderByWithRelationInput[]> = {
-  date_desc: [{ date: "desc" }, { createdAt: "desc" }],
-  date_asc: [{ date: "asc" }, { createdAt: "asc" }],
-  amount_desc: [{ amount: "desc" }, { createdAt: "desc" }],
-  amount_asc: [{ amount: "asc" }, { createdAt: "desc" }],
+// `COALESCE("paidAt", "date")` é a data EFETIVA (paga = quando o dinheiro
+// saiu; pendente = vencimento) — mesma regra do filtro de período acima e do
+// fluxo de caixa (`sumAmountByTypeInRange`). `createdAt` desempata pela ordem
+// de cadastro (o da tarde vem antes do da manhã no desc) quando duas
+// transações empatam na data efetiva, senão a ordem fica arbitrária (ordem
+// física). `amount_asc` mantém `createdAt DESC` no desempate — comportamento
+// pré-existente preservado (não é uma regra nova desta mudança).
+const SORT_ORDER_SQL: Record<TransactionSort, Prisma.Sql> = {
+  date_desc: Prisma.sql`COALESCE("paidAt", "date") DESC, "createdAt" DESC`,
+  date_asc: Prisma.sql`COALESCE("paidAt", "date") ASC, "createdAt" ASC`,
+  amount_desc: Prisma.sql`"amount" DESC, "createdAt" DESC`,
+  amount_asc: Prisma.sql`"amount" ASC, "createdAt" DESC`,
 };
 
-/** Única listagem paginada do app (docs/01-STACK.md, "Performance") — findMany + count em paralelo, sem N+1. */
+/**
+ * Única listagem paginada do app (docs/01-STACK.md, "Performance"). Ordenar
+ * por data EFETIVA exige `COALESCE("paidAt", "date")` no `ORDER BY`, que o
+ * Prisma não expressa em `orderBy` tipado — daí a query em 2 passos: (1) SQL
+ * cru resolve SÓ os `id`s da página, já filtrados e ordenados corretamente
+ * (`buildListConditions` + `SORT_ORDER_SQL`, com `COUNT(*)` em paralelo pro
+ * total); (2) `findMany` tipado (com `include: TAG_INCLUDE`) busca as linhas
+ * completas desses ids — sem reimplementar em SQL cru o carregamento das
+ * relações (tags, `loan.kind`). Os resultados do passo 2 são reordenados pela
+ * ordem dos ids do passo 1 (`findMany` com `id: { in }}` não preserva ordem).
+ * Effect colateral aceito: 1 round-trip a mais que o `findMany`+`count` em
+ * paralelo de antes — tradeoff necessário pra ordenação correta por data
+ * efetiva, sem risco de N+1 (sempre 2-3 queries, nunca por linha).
+ */
 async function list(
   userId: string,
   filters: TransactionListFilter,
   page: TransactionListPage,
 ): Promise<{ items: TransactionWithTags[]; total: number }> {
-  const where = buildWhere(userId, filters);
+  const conditions = buildListConditions(userId, filters);
+  const whereSql = Prisma.join(conditions, " AND ");
+  const orderBySql = SORT_ORDER_SQL[page.sort];
   const skip = (page.page - 1) * page.pageSize;
 
-  const [items, total] = await Promise.all([
-    prisma.transaction.findMany({
-      where,
-      include: TAG_INCLUDE,
-      orderBy: SORT_MAP[page.sort],
-      skip,
-      take: page.pageSize,
-    }),
-    prisma.transaction.count({ where }),
+  const [idRows, countRows] = await Promise.all([
+    prisma.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "Transaction"
+      WHERE ${whereSql}
+      ORDER BY ${orderBySql}
+      LIMIT ${page.pageSize} OFFSET ${skip}
+    `,
+    prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*) AS count FROM "Transaction"
+      WHERE ${whereSql}
+    `,
   ]);
 
-  return { items, total };
+  const total = Number(countRows[0]?.count ?? 0);
+  const ids = idRows.map((row) => row.id);
+  if (ids.length === 0) return { items: [], total };
+
+  const items: TransactionWithTags[] = await prisma.transaction.findMany({
+    where: { id: { in: ids }, userId, deletedAt: null },
+    include: TAG_INCLUDE,
+  });
+
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const orderedItems = ids
+    .map((id) => itemById.get(id))
+    .filter((item): item is TransactionWithTags => item !== undefined);
+
+  return { items: orderedItems, total };
 }
 
 /** Transação mais recente (por `date`, depois `createdAt`) de um tipo — base do default de cadastro rápido (docs/05-UX_RULES.md). */

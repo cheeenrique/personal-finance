@@ -263,7 +263,23 @@ function endOfDayInclusiveCsv(date: Date): Date {
   return new Date(date.getTime() + CSV_ONE_DAY_MS - 1);
 }
 
+/**
+ * Filtro de período do export CSV pela data EFETIVA (`COALESCE("paidAt",
+ * "date")`) — mesma regra da listagem de Transações (`modules/transactions/
+ * repository.ts` `buildListConditions`) e do fluxo de caixa
+ * (`sumAmountByTypeInRange`): paga usa `paidAt` (quando o dinheiro saiu),
+ * pendente usa `date` (vencimento). Expresso como OR (não `$queryRaw` como a
+ * listagem) porque aqui não existe ordenação por data efetiva a resolver —
+ * `listForCsv` continua ordenando por `date` (vencimento), sem mudança — só o
+ * FILTRO precisa da data efetiva, e o Prisma expressa isso bem com um OR
+ * tipado, sem precisar de SQL cru.
+ */
 function buildCsvWhere(userId: string, filters: CsvFilterInput): Prisma.TransactionWhereInput {
+  const dateFilter = {
+    ...(filters.dateFrom && { gte: filters.dateFrom }),
+    ...(filters.dateTo && { lte: endOfDayInclusiveCsv(filters.dateTo) }),
+  };
+
   return {
     userId,
     deletedAt: null,
@@ -274,10 +290,7 @@ function buildCsvWhere(userId: string, filters: CsvFilterInput): Prisma.Transact
     ...(filters.isPaid !== undefined && { isPaid: filters.isPaid }),
     ...(filters.tagId && { transactionTags: { some: { tagId: filters.tagId } } }),
     ...((filters.dateFrom || filters.dateTo) && {
-      date: {
-        ...(filters.dateFrom && { gte: filters.dateFrom }),
-        ...(filters.dateTo && { lte: endOfDayInclusiveCsv(filters.dateTo) }),
-      },
+      OR: [{ paidAt: dateFilter }, { paidAt: null, date: dateFilter }],
     }),
   };
 }

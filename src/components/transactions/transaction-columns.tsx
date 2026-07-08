@@ -17,6 +17,21 @@ type ColumnDeps = {
 };
 
 /**
+ * Data EFETIVA da transação — paga usa `paidAt` (quando o dinheiro realmente
+ * saiu), pendente usa `date` (vencimento). Mesma regra do fluxo de caixa
+ * (`transactionRepository.sumAmountByTypeInRange`/`reportRepository.
+ * listCashflowByMonthInRange`, ambos `COALESCE("paidAt", "date")`) — a coluna
+ * "Data" da tabela passa a bater com o mês em que o fluxo de caixa reconhece o
+ * lançamento (ex.: parcela com vencimento em dezembro paga adiantada em
+ * agosto aparece em agosto, não em dezembro). O detalhe (`TransactionDetailModal`)
+ * continua mostrando o VENCIMENTO real (`date`) na linha do tempo, de
+ * propósito — só a coluna da tabela usa a data efetiva.
+ */
+export function effectiveTransactionDate(row: Pick<ClientTransaction, "date" | "paidAt">): Date {
+  return row.paidAt ?? row.date;
+}
+
+/**
  * Cor + sinal do valor: transferência usa o tom próprio (`on-transfer`), nunca
  * a cor de receita/despesa crua. Exportado — reaproveitado por
  * `TransactionDetailModal` (mesmo cálculo do valor grande no topo do modal).
@@ -47,7 +62,9 @@ export function buildTransactionColumns({
       key: "date",
       header: "Data",
       sortable: true,
-      render: (row) => <span className="font-mono whitespace-nowrap">{formatDateSaoPaulo(row.date)}</span>,
+      render: (row) => (
+        <span className="font-mono whitespace-nowrap">{formatDateSaoPaulo(effectiveTransactionDate(row))}</span>
+      ),
     },
     {
       key: "description",
