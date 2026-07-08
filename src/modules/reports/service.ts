@@ -147,7 +147,14 @@ async function expenseByCategory(
 
 /**
  * Totais por categoria num período ARBITRÁRIO — "Por categoria" de `/reports`
- * (docs/28-REPORTS.md "Filtros Globais": período + conta + tipo). Distinto de
+ * e "Gastos por categoria" do Dashboard (docs/28-REPORTS.md "Filtros
+ * Globais": período + conta + tipo). Alinhado à MESMA regra de fluxo de caixa
+ * do KPI "Despesas do mês" (`groupCategoryTotalsInRange`: conta-only +
+ * `COALESCE(paidAt, date)`) — soma total bate exato com o KPI pro mesmo
+ * período. `dateTo` estendido até o fim do dia aqui dentro (`endOfDayInclusive`,
+ * mesmo padrão de `cashflow` abaixo): o range agora filtra por
+ * `COALESCE(paidAt, date)`, que carrega hora real, então o caller passa
+ * `dateTo` cru (meia-noite do dia), sem precisar estender por fora. Distinto de
  * `expenseByCategory` acima (mês único, sempre EXPENSE — intocada, também
  * alimenta Dashboard/Telegram). Tipo default EXPENSE; só vira RECEITA quando
  * o filtro pede INCOME explicitamente (ver `CategoryTotalsFilters`, types.ts).
@@ -160,7 +167,11 @@ async function categoryTotals(
 ): Promise<CategoryExpenseTotal[]> {
   assertValidRange(dateFrom, dateTo);
 
-  const rows = await reportRepository.groupCategoryTotalsInRange(userId, { gte: dateFrom, lte: dateTo }, filters);
+  const rows = await reportRepository.groupCategoryTotalsInRange(
+    userId,
+    { gte: dateFrom, lte: endOfDayInclusive(dateTo) },
+    filters,
+  );
   if (rows.length === 0) return [];
 
   const namesById = await reportRepository.findCategoryNamesByIds(rows.map((row) => row.categoryId));
@@ -204,7 +215,11 @@ async function cashflow(
  * desc (maior movimentação primeiro). `accountId` (opcional, filtro global
  * "conta") narrow pra uma única conta — categoria/tipo/cartão não se aplicam
  * aqui (docs/28-REPORTS.md "Relatório por Conta" já cobre transfer/CARD_PAYMENT
- * por design).
+ * por design). `dateTo` estendido até o fim do dia (`endOfDayInclusive`):
+ * filtra por `date` cru (não `paidAt`/COALESCE, semântica de inclusão
+ * intocada), e `date` nem sempre é meia-noite (lançamento rápido/Telegram usa
+ * `new Date()` como default) — sem a extensão, uma transação do ÚLTIMO dia do
+ * período lançada fora da meia-noite ficaria de fora do `lte` cru.
  */
 async function accountReport(
   userId: string,
@@ -214,7 +229,11 @@ async function accountReport(
 ): Promise<AccountMovementReport[]> {
   assertValidRange(dateFrom, dateTo);
 
-  const rows = await reportRepository.groupMovementByAccountInRange(userId, { gte: dateFrom, lte: dateTo }, accountId);
+  const rows = await reportRepository.groupMovementByAccountInRange(
+    userId,
+    { gte: dateFrom, lte: endOfDayInclusive(dateTo) },
+    accountId,
+  );
   if (rows.length === 0) return [];
 
   const totalsByAccount = new Map<string, { in: Prisma.Decimal; out: Prisma.Decimal }>();
@@ -258,14 +277,4 @@ export const reportService = {
   cashflow,
   accountReport,
   patrimonyEvolution,
-  // Exportado só pro caller poder estender manualmente um `dateTo` ANTES de
-  // passar pra `categoryTotals`/`accountReport` (nenhuma das duas estende
-  // internamente, ao contrário de `cashflow` — ver comentário da função).
-  // Consumido hoje pelo Dashboard (`app/(app)/dashboard/page.tsx`, filtro de
-  // período): sem isso, uma despesa do ÚLTIMO dia do range com `date` fora da
-  // meia-noite (ex.: lançamento rápido/Telegram, que usa `new Date()` como
-  // default — `transactions/schemas.ts`) cairia fora do `lte` cru e o
-  // "Gastos por categoria" regrediria vs. o cálculo antigo (`monthWindowUtc`,
-  // limite exclusivo do mês seguinte, sem essa lacuna).
-  endOfDayInclusive,
 };

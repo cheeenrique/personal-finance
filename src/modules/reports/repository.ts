@@ -139,11 +139,22 @@ async function sumCashflowInRange(
 
 /**
  * Totais por categoria num período ARBITRÁRIO — insumo de
- * `reportService.categoryTotals` ("Por categoria" de `/reports`). Distinto de
+ * `reportService.categoryTotals` ("Por categoria" de `/reports` e "Gastos por
+ * categoria" do Dashboard). MESMA regra de caixa do KPI "Despesas do mês"
+ * (`transactions/repository.ts` `sumAmountByTypeInRange`): só conta (`cardId
+ * IS NULL`), sem transferência, só paga, mês pelo MOVIMENTO do dinheiro
+ * (`COALESCE("paidAt", "date")`) — sem isso o total divergia do KPI (cartão
+ * entrava em dobro com a fatura, e uma parcela paga adiantada contava no mês
+ * errado). Cartão já tem sua própria seção ("Por cartão"/fatura), não some do
+ * relatório, só não some aqui de novo. Distinto de
  * `transactionRepository.groupExpensesByCategoryInRange` (mês único, sempre
- * EXPENSE, sem filtro extra — intocado porque também alimenta Dashboard e
- * Telegram): aqui o tipo pode ser INCOME quando o filtro global pede, e o
- * range é o período inteiro selecionado (não só um mês).
+ * EXPENSE, sem filtro extra — intocado porque também alimenta Dashboard
+ * (gráfico de pizza histórico) e Telegram): aqui o tipo pode ser INCOME
+ * quando o filtro global pede, e o range é o período inteiro selecionado (não
+ * só um mês). `groupBy` do Prisma não expressa COALESCE no filtro, daí o
+ * `$queryRaw` parametrizado (mesmo motivo de `buildCashflowConditions`
+ * abaixo). `range` já deve vir com o fim do dia estendido (ver `service.ts`
+ * `endOfDayInclusive`) — `paidAt` carrega hora real, diferente de `date`.
  */
 async function groupCategoryTotalsInRange(
   userId: string,
@@ -152,24 +163,28 @@ async function groupCategoryTotalsInRange(
 ): Promise<CategoryTotalRow[]> {
   const type = filters.type === TransactionType.INCOME ? TransactionType.INCOME : TransactionType.EXPENSE;
 
-  const rows = await prisma.transaction.groupBy({
-    by: ["categoryId"],
-    where: {
-      userId,
-      deletedAt: null,
-      isPaid: true,
-      type,
-      transferId: null,
-      categoryId: { not: null },
-      ...(filters.accountId && { accountId: filters.accountId }),
-      date: { gte: range.gte, lte: range.lte },
-    },
-    _sum: { amount: true },
-  });
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`"userId" = ${userId}`,
+    Prisma.sql`"deletedAt" IS NULL`,
+    Prisma.sql`"isPaid" = true`,
+    Prisma.sql`"transferId" IS NULL`,
+    Prisma.sql`"cardId" IS NULL`,
+    Prisma.sql`"type" = ${type}::"TransactionType"`,
+    Prisma.sql`"categoryId" IS NOT NULL`,
+    Prisma.sql`COALESCE("paidAt", "date") >= ${range.gte}`,
+    Prisma.sql`COALESCE("paidAt", "date") <= ${range.lte}`,
+  ];
 
-  return rows
-    .filter((row): row is typeof row & { categoryId: string } => row.categoryId !== null)
-    .map((row) => ({ categoryId: row.categoryId, sum: row._sum.amount ?? new Prisma.Decimal(0) }));
+  if (filters.accountId) conditions.push(Prisma.sql`"accountId" = ${filters.accountId}`);
+
+  const rows = await prisma.$queryRaw<{ categoryId: string; sum: Prisma.Decimal | string | number }[]>`
+    SELECT "categoryId", COALESCE(SUM("amount"), 0) AS sum
+    FROM "Transaction"
+    WHERE ${Prisma.join(conditions, " AND ")}
+    GROUP BY "categoryId"
+  `;
+
+  return rows.map((row) => ({ categoryId: row.categoryId, sum: new Prisma.Decimal(row.sum) }));
 }
 
 /**

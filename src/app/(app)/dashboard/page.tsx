@@ -110,17 +110,14 @@ async function DashboardContent({ period }: { period: PeriodPreset }) {
     transactionService.listActiveInstallmentPurchases(userId),
     loanService.listActiveLoans(userId),
     // "Gastos por categoria" no range do período — `reportService.categoryTotals`
-    // já implementa exatamente esta agregação pra um range arbitrário (mesma regra
-    // de exclusão de `transactionService.expensesByCategory`, que fica intocada:
-    // ainda alimenta o Telegram, ver docs/30-TELEGRAM.md). Sem filtro de tipo ⇒
-    // default EXPENSE (mesma leitura de sempre). `dateTo` estendido até o fim do
-    // dia (`endOfDayInclusive`, ver `modules/reports/service.ts`): `categoryTotals`
-    // filtra por `date` com `lte` cru, e `date` NEM SEMPRE é meia-noite (lançamento
-    // rápido/Telegram usa `new Date()` como default, `transactions/schemas.ts`) —
-    // sem a extensão, despesa do ÚLTIMO dia do período lançada fora da meia-noite
-    // ficaria de fora, regredindo vs. o `monthWindowUtc` (limite exclusivo) que o
-    // Dashboard usava antes.
-    reportService.categoryTotals(userId, parsedDateFrom, reportService.endOfDayInclusive(parsedDateTo)),
+    // já implementa exatamente esta agregação pra um range arbitrário, agora
+    // alinhada à MESMA regra de fluxo de caixa do KPI "Despesas do mês" acima
+    // (conta-only + `COALESCE(paidAt, date)`, ver `modules/reports/repository.ts`
+    // `groupCategoryTotalsInRange`) — soma bate exato com `monthlyExpense`, sem
+    // cartão nem parcela paga adiantada contando fora do mês. Sem filtro de tipo
+    // ⇒ default EXPENSE (mesma leitura de sempre). Extensão de fim de dia agora é
+    // interna a `categoryTotals` (`endOfDayInclusive`), sem precisar do wrap aqui.
+    reportService.categoryTotals(userId, parsedDateFrom, parsedDateTo),
     reportService.incomeVsExpenseByMonth(userId, year),
     transactionService.listRecentForDashboard(userId, RECENT_TRANSACTIONS_LIMIT),
   ]);
