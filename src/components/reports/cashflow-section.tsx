@@ -1,14 +1,18 @@
 import type { IncomeExpenseMonthPoint } from "@/modules/reports/types";
 import { ChartWrapper } from "@/components/shared/chart-wrapper";
 import { AppLineChart, type LineChartPoint } from "@/components/shared/charts/line-chart";
-import { TIMEZONE } from "@/lib/date/timezone";
 
-const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("pt-BR", { month: "short", timeZone: TIMEZONE });
+/**
+ * Array fixo (sem `Date`/`timeZone`) — mesma receita de
+ * `dashboard/monthly-evolution-chart.tsx` `monthLabel` (não exportada de lá,
+ * recriada aqui). `new Date(year, month - 1, 1)` formatado com
+ * `timeZone: "America/Sao_Paulo"` num servidor UTC volta pro dia 31 do mês
+ * anterior e exibia o mês ERRADO. `month` é 1-12.
+ */
+const MONTHS_ABBR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-/** "jan", "fev"... a partir de `year`/`month` (1-12) — mesma receita de `dashboard/monthly-evolution-chart.tsx` `monthLabel` (não exportada de lá, recriada aqui). */
 function monthLabel(year: number, month: number): string {
-  const label = MONTH_LABEL_FORMATTER.format(new Date(year, month - 1, 1));
-  return label.replace(".", "").replace(/^\w/, (char) => char.toUpperCase());
+  return MONTHS_ABBR[month - 1];
 }
 
 type CashflowSectionProps = {
