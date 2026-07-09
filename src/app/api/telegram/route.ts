@@ -8,12 +8,14 @@ import { telegramApi } from "@/modules/telegram/telegram-api";
 import { looksLikeLinkCommand, tryLinkFromMessage } from "@/modules/telegram/link";
 import { extractLargestPhoto } from "@/modules/telegram/photo";
 import { extractDocument } from "@/modules/telegram/document";
-import { extractVoice } from "@/modules/telegram/voice";
+import { extractVoiceLike, extractVideoNote } from "@/modules/telegram/voice";
 import {
   buildDocumentUnreadableReply,
   buildImageUnreadableReply,
   buildTelegramLinkedReply,
   buildTelegramLinkFailedReply,
+  buildUnsupportedMessageReply,
+  buildVideoRejectedReply,
   buildVoiceUnreadableReply,
 } from "@/modules/telegram/reply";
 import type { TelegramPhotoSize } from "@/modules/telegram/types";
@@ -31,6 +33,9 @@ type TelegramUpdate = {
     caption?: string;
     document?: { file_id: string; file_name?: string; mime_type?: string };
     voice?: { file_id: string; duration?: number; mime_type?: string };
+    audio?: { file_id: string; duration?: number; mime_type?: string; file_name?: string };
+    video_note?: { file_id: string; duration?: number };
+    video?: { file_id: string };
   };
   callback_query?: {
     id: string;
@@ -84,10 +89,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const text = update?.message?.text;
   const photoInput = update?.message ? extractLargestPhoto(update.message) : null;
-  const documentInput = update?.message ? extractDocument(update.message) : null;
-  const voiceInput = update?.message ? extractVoice(update.message) : null;
+  // Áudio como arquivo (`audio` / `document` .ogg) entra no pipeline de voz —
+  // antes ficava mudo (200 sem reply). Documento PDF/foto continua separado.
+  const voiceInput = update?.message ? extractVoiceLike(update.message) : null;
+  const documentInput =
+    !voiceInput && update?.message ? extractDocument(update.message) : null;
+  const videoNoteInput = update?.message ? extractVideoNote(update.message) : null;
+  const hasRegularVideo = Boolean(update?.message?.video?.file_id);
+  const hasUnhandledAttachment = Boolean(
+    update?.message?.document?.file_id ||
+      update?.message?.audio?.file_id ||
+      update?.message?.voice?.file_id,
+  );
 
-  if (!text && !photoInput && !documentInput && !voiceInput) {
+  if (
+    !text &&
+    !photoInput &&
+    !documentInput &&
+    !voiceInput &&
+    !videoNoteInput &&
+    !hasRegularVideo &&
+    !hasUnhandledAttachment
+  ) {
     return NextResponse.json({ ok: true });
   }
 
@@ -107,6 +130,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   if (!isLinkedChat(settings, chatId)) {
     console.log(`chat_id=${chatId} -> rejected_unauthorized`);
+    return NextResponse.json({ ok: true });
+  }
+
+  // Vídeo circular / vídeo comum: responde e NÃO processa (antes ficava mudo).
+  if (videoNoteInput || hasRegularVideo) {
+    await telegramApi.sendMessage(botToken, chatId, buildVideoRejectedReply());
+    console.log(`chat_id=${chatId} -> video_rejected`);
     return NextResponse.json({ ok: true });
   }
 
@@ -142,29 +172,38 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ ok: true });
     }
 
-    // downloadVoice grava em /tmp, lê e APAGA no finally — bytes só em memória
-    // daqui pra frente.
-    const downloaded = await telegramApi.downloadVoice(
-      botToken,
-      voiceInput.fileId,
-      voiceInput.mimeType,
-    );
+    try {
+      // downloadVoice grava em /tmp, lê e APAGA no finally — bytes só em memória
+      // daqui pra frente.
+      const downloaded = await telegramApi.downloadVoice(
+        botToken,
+        voiceInput.fileId,
+        voiceInput.mimeType,
+      );
 
-    if (!downloaded) {
+      if (!downloaded) {
+        await telegramApi.sendMessage(botToken, chatId, buildVoiceUnreadableReply());
+        console.log(`chat_id=${chatId} -> voice_download_failed`);
+        return NextResponse.json({ ok: true });
+      }
+
+      const result = await telegramHandlers.handleVoiceEntry(
+        userId,
+        downloaded.bytes,
+        downloaded.mimeType,
+      );
+      await telegramApi.sendMessage(botToken, chatId, result.text, {
+        replyMarkup: result.replyMarkup,
+      });
+      console.log(`chat_id=${chatId} -> ${result.resultCode}`);
+    } catch (error) {
+      // Exceção não tratada = 500 e Telegram fica mudo — sempre responde.
+      console.error(`[api/telegram] voice handler failed`, {
+        reason: error instanceof Error ? error.name : "unknown",
+      });
       await telegramApi.sendMessage(botToken, chatId, buildVoiceUnreadableReply());
-      console.log(`chat_id=${chatId} -> voice_download_failed`);
-      return NextResponse.json({ ok: true });
+      console.log(`chat_id=${chatId} -> voice_handler_error`);
     }
-
-    const result = await telegramHandlers.handleVoiceEntry(
-      userId,
-      downloaded.bytes,
-      downloaded.mimeType,
-    );
-    await telegramApi.sendMessage(botToken, chatId, result.text, {
-      replyMarkup: result.replyMarkup,
-    });
-    console.log(`chat_id=${chatId} -> ${result.resultCode}`);
     return NextResponse.json({ ok: true });
   }
 
@@ -194,6 +233,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   if (!text) {
+    // Anexo que não casou em nenhum extractor (ex.: document sem mime/extensão
+    // conhecida) — responde em vez de 200 mudo.
+    if (hasUnhandledAttachment || photoInput || documentInput || voiceInput) {
+      await telegramApi.sendMessage(botToken, chatId, buildUnsupportedMessageReply());
+      console.log(`chat_id=${chatId} -> unsupported_attachment`);
+    }
     return NextResponse.json({ ok: true });
   }
 

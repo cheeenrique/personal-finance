@@ -150,6 +150,28 @@ export function buildVoiceUnreadableReply(): string {
   ].join("\n");
 }
 
+/**
+ * Vídeo circular (`video_note`) ou vídeo comum — o bot não processa vídeo
+ * (docs/30-TELEGRAM.md). Antes ficava mudo (200 sem reply); agora explica.
+ */
+export function buildVideoRejectedReply(): string {
+  return [
+    `${ICON_WARNING} Não aceito vídeo.`,
+    "Manda uma nota de voz (ícone do microfone) ou digite o lançamento (ex.: mercado 120).",
+  ].join("\n");
+}
+
+/**
+ * Update com mídia/arquivo que o bot não roteia (sticker, etc.) — evita
+ * webhook 200 mudo (docs/30-TELEGRAM.md).
+ */
+export function buildUnsupportedMessageReply(): string {
+  return [
+    `${ICON_WARNING} Não entendi esse tipo de mensagem.`,
+    "Manda texto, foto, nota de voz ou PDF do contrato.",
+  ].join("\n");
+}
+
 /** Soft-delete via botão Desfazer (callback_query) — confirma e remove o teclado. */
 export function buildTransactionUndoneReply(): string {
   return `${ICON_SUCCESS} Lançamento desfeito.`;

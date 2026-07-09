@@ -205,10 +205,11 @@ export type TelegramPhotoInput = { fileId: string; caption: string | null };
 export type TelegramDocumentInput = { fileId: string; mimeType: string };
 
 /**
- * Nota de voz já detectada (`message.voice`, docs/30-TELEGRAM.md — parsing
- * por áudio via Gemini). Telegram grava OGG Opus; `mimeType` default
- * `audio/ogg`. `durationSeconds` opcional — usado pra rejeitar áudios longos
- * antes de baixar.
+ * Áudio já detectado pra parsing via Gemini (docs/30-TELEGRAM.md):
+ * `message.voice` (nota de voz), `message.audio` (arquivo de áudio) ou
+ * `message.document` com mime/extensão de áudio. `mimeType` default
+ * `audio/ogg`. `durationSeconds` opcional — rejeita >60s antes de baixar.
+ * Vídeo circular NÃO entra aqui — `buildVideoRejectedReply`.
  */
 export type TelegramVoiceInput = {
   fileId: string;

@@ -256,26 +256,36 @@ via Gemini **vision** (mesmo modelo, `gemini-2.5-flash`, mesmo endpoint
 
 ---
 
-# Parsing por IA (nota de VOZ)
+# Parsing por IA (nota de VOZ / áudio)
 
-O bot aceita **nota de voz** (`message.voice` — OGG Opus). Gemini 2.5 Flash
-entende áudio nativo (`inlineData` `audio/ogg`); **não** há STT separado
-(Whisper etc.). Mesmo `responseSchema` do texto (inclui `intent`/`query`) —
-`modules/telegram/ai-parser.ts`, `parseTransactionFromVoice`.
+O bot aceita áudio nestes formatos da Bot API (mesmo pipeline Gemini):
 
-* **Detecção** — `modules/telegram/voice.ts`, `extractVoice` (função pura).
-* **Download + limpeza** — `telegramApi.downloadVoice`: baixa os bytes do
-  Telegram, grava em arquivo temporário (`os.tmpdir()`), lê pra memória e
-  **apaga o arquivo no `finally`** (best-effort `unlink`). O áudio do usuário
-  não fica no disco do serverless depois da leitura. Nunca loga bytes.
+* **nota de voz** — `message.voice` (OGG Opus)
+* **arquivo de áudio** — `message.audio` (player de música no app)
+* **documento de áudio** — `message.document` com mime `audio/*` ou
+  extensão `.ogg`/`.mp3`/… (forward / "enviar como arquivo")
+
+Sem tratar `audio`/`document` áudio, o webhook respondia `200` e o usuário
+ficava **sem mensagem** — bug corrigido em 2026-07-09 (`extractVoiceLike`).
+
+Gemini 2.5 Flash entende áudio nativo (`inlineData`); **não** há STT
+separado. Mesmo `responseSchema` do texto — `parseTransactionFromVoice`.
+
+* **Detecção** — `modules/telegram/voice.ts`, `extractVoiceLike` (pura).
+* **Download + limpeza** — `telegramApi.downloadVoice`: tmp + apaga no
+  `finally`. Nunca loga bytes.
 * **Limite** — duração > 60s → recusa e pede texto (antes de baixar).
-* **Fluxo** — igual ao texto livre: register → `processDraft` (+ botões
-  híbridos); query → `executeTelegramQuery`. Sem fallback regex. Sem
+* **Fluxo** — igual ao texto livre: register / invest / query. Sem
   `GEMINI_API_KEY` / timeout / áudio inaudível → `buildVoiceUnreadableReply`.
-* Voz com pending aberto **não** é tratada como resposta — pede digitar
-  (mesma mensagem de "não entendi a voz").
-* Timeout Gemini da voz: 20s (`callGemini` com `timeoutMs`); webhook
-  `maxDuration=30`.
+* Voz com pending aberto **não** é tratada como resposta — pede digitar.
+* Timeout Gemini da voz: 20s; webhook `maxDuration=30`.
+
+## Vídeo (não aceito)
+
+`message.video_note` (vídeo circular / "round video") e `message.video`
+**não** são processados. O bot responde com `buildVideoRejectedReply`
+pedindo nota de voz (microfone) ou texto — nunca fica mudo.
+
 
 ---
 
