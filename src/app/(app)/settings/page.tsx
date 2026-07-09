@@ -1,10 +1,13 @@
 import { auth } from "@/lib/auth";
 import { settingsService } from "@/modules/settings/service";
 import { findUserById } from "@/modules/auth/repository";
+import { merchantRuleService } from "@/modules/merchant-rules/service";
+import { categoryService } from "@/modules/categories/service";
 import { ProfileCard } from "@/components/settings/profile-card";
 import { PreferencesCard } from "@/components/settings/preferences-card";
 import { AlertsCard } from "@/components/settings/alerts-card";
 import { TelegramCard } from "@/components/settings/telegram-card";
+import { MerchantRulesCard } from "@/components/settings/merchant-rules-card";
 import { DataCard } from "@/components/settings/data-card";
 import { SessionCard } from "@/components/settings/session-card";
 
@@ -30,15 +33,23 @@ import { SessionCard } from "@/components/settings/session-card";
  * (`10-AUTH.md`), então `User.createdAt` é buscado à parte via
  * `modules/auth/repository` — mesmo ponto único de acesso ao Prisma que o
  * módulo de auth já usa para login.
+ *
+ * Regras de categoria (`MerchantRulesCard`, docs/superpowers/specs/
+ * 2026-07-08-telegram-recibo-categoria-refino-design.md): `merchantRuleService.listRules`
+ * e `categoryService.listTree` seguem a mesma convenção acima (leitura direto
+ * do service, sem Server Action) — mutations (criar/excluir regra) usam as
+ * Server Actions do módulo, disparadas pelo client.
  */
 export default async function SettingsPage() {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return null;
 
-  const [settings, user] = await Promise.all([
+  const [settings, user, merchantRules, categoryTree] = await Promise.all([
     settingsService.getSettingsForClient(userId),
     findUserById(userId),
+    merchantRuleService.listRules(userId),
+    categoryService.listTree(userId),
   ]);
   if (!user) return null;
 
@@ -69,6 +80,8 @@ export default async function SettingsPage() {
           pendingCode={pendingCode}
         />
       </div>
+
+      <MerchantRulesCard initialRules={merchantRules} categoryTree={categoryTree} />
 
       <DataCard />
       <SessionCard />
