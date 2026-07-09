@@ -17,6 +17,7 @@ const CATEGORY_PALETTE_TOKENS = [
   "var(--warning)",
 ] as const;
 
+/**
  * Cor da categoria na posição `index` (já ordenada por total desc). A partir
  * da 2ª volta do ciclo (8ª fatia em diante) a cor não repete crua — nesse
  * ponto ela ficaria encostada na 1ª fatia do mesmo tom no anel do donut e as
