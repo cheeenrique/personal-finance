@@ -1,7 +1,7 @@
 # Gastos por categoria — árvore por cartão (+ remoção do Sankey)
 
 Data: 2026-07-08
-Status: aprovado (design), aguardando revisão do spec
+Status: implementado (2026-07-09)
 
 ## Problema
 

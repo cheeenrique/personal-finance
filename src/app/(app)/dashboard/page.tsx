@@ -25,7 +25,6 @@ import { InstallmentsSummary } from "@/components/dashboard/installments-summary
 import { LoansSummary } from "@/components/dashboard/loans-summary";
 import { ExpenseCategoryChart } from "@/components/dashboard/expense-category-chart";
 import { MonthlyEvolutionChart } from "@/components/dashboard/monthly-evolution-chart";
-import { MoneyFlowSankeyChart } from "@/components/dashboard/money-flow-sankey-chart";
 import { RecentTransactionsTable } from "@/components/dashboard/recent-transactions-table";
 
 const RECENT_TRANSACTIONS_LIMIT = 5;
@@ -98,9 +97,8 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     cards,
     installmentPurchases,
     activeLoansRaw,
-    expenseByCategory,
+    expenseByCardTree,
     monthlyCashflow,
-    moneyFlow,
     recentTransactions,
   ] = await Promise.all([
     accountService.getInsufficientBalanceReport(userId),
@@ -120,26 +118,16 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     cardService.listWithSummary(userId),
     transactionService.listActiveInstallmentPurchases(userId),
     loanService.listActiveLoans(userId),
-    // "Gastos por categoria" no range do período — `reportService.categoryTotals`
-    // já implementa exatamente esta agregação pra um range arbitrário, agora
-    // alinhada à MESMA regra de fluxo de caixa do KPI "Despesas do mês" acima
-    // (conta-only + `COALESCE(paidAt, date)`, ver `modules/reports/repository.ts`
-    // `groupCategoryTotalsInRange`) — soma bate exato com `monthlyExpense`, sem
-    // cartão nem parcela paga adiantada contando fora do mês. Sem filtro de tipo
-    // ⇒ default EXPENSE (mesma leitura de sempre). Extensão de fim de dia agora é
-    // interna a `categoryTotals` (`endOfDayInclusive`), sem precisar do wrap aqui.
-    reportService.categoryTotals(userId, parsedDateFrom, parsedDateTo),
+    // "Gastos por categoria" — árvore por cartão (accrual, fatura excluída).
+    // Spec: docs/superpowers/specs/2026-07-08-gastos-por-categoria-arvore-design.md.
+    // Total NÃO bate com o KPI de caixa acima — de propósito.
+    reportService.expenseByCardTree(userId, parsedDateFrom, parsedDateTo),
     // "Evolução mensal" na MESMA base de caixa dos KPIs acima (conta-only +
     // COALESCE(paidAt, date), ver `cashflowByMonth`) — o ponto do mês corrente
     // bate exato com os cards "Receitas/Despesas do mês". NÃO usa
     // `incomeVsExpenseByMonth` (accrual por competência, inclui cartão): mesma
     // tela mostrando dois números pro mesmo mês confundia (parecia bug).
     reportService.cashflowByMonth(userId, year),
-    // "Fluxo de dinheiro" (Sankey) do período selecionado — MESMA base de
-    // caixa de `categoryTotals` acima (reusada nos dois sentidos, ver
-    // `modules/reports/service.ts` `sankeyFlow` pro detalhe de quando essa
-    // soma diverge do KPI de cash-flow: transação sem categoria).
-    reportService.sankeyFlow(userId, parsedDateFrom, parsedDateTo),
     transactionService.listRecentForDashboard(userId, RECENT_TRANSACTIONS_LIMIT),
   ]);
 
@@ -197,11 +185,9 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ExpenseCategoryChart categories={expenseByCategory} />
+        <ExpenseCategoryChart tree={expenseByCardTree} />
         <MonthlyEvolutionChart points={monthlyEvolutionPoints} />
       </div>
-
-      <MoneyFlowSankeyChart data={moneyFlow} />
 
       <RecentTransactionsTable
         transactions={recentTransactions.map((transaction) => ({
@@ -240,8 +226,6 @@ function DashboardSkeleton() {
         <Skeleton className="h-72 w-full rounded-xl" />
         <Skeleton className="h-72 w-full rounded-xl" />
       </div>
-
-      <Skeleton className="h-[340px] w-full rounded-xl" />
 
       <Skeleton className="h-72 w-full rounded-xl" />
     </div>

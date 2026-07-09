@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { Prisma, type Transaction } from "@/generated/prisma/client";
-import { TransactionType } from "@/generated/prisma/enums";
+import { TransactionType, type CardType } from "@/generated/prisma/enums";
 import type { CsvFilterInput } from "./schemas";
 import type { CashflowFilters, CategoryTotalsFilters } from "./types";
 
@@ -19,6 +19,13 @@ export type IncomeExpenseRow = Pick<Transaction, "date" | "type" | "amount">;
 export type CashflowRow = { effectiveDate: Date; type: TransactionType; amount: Prisma.Decimal };
 
 export type CategoryTotalRow = { categoryId: string; sum: Prisma.Decimal };
+
+/** Linha crua da árvore por cartão — `cardId` null = gasto na conta (sem cartão). */
+export type CardCategoryTotalRow = {
+  cardId: string | null;
+  categoryId: string;
+  sum: Prisma.Decimal;
+};
 
 export type AccountTypeMovement = { accountId: string; type: string; sum: Prisma.Decimal };
 
@@ -139,16 +146,16 @@ async function sumCashflowInRange(
 
 /**
  * Totais por categoria num período ARBITRÁRIO — insumo de
- * `reportService.categoryTotals` ("Por categoria" de `/reports`, "Gastos por
- * categoria"/Sankey do Dashboard, Telegram e resumo semanal). GASTO REAL por
- * categoria (accrual, MESMA base dos budgets — `budgets/repository.ts`
- * `groupExpensesByCategoryInRange`): soma TODAS as transações do tipo,
- * INCLUINDO as com `cardId` (compra no cartão), bucketizadas pela data da
- * transação/compra (`date`), não pelo movimento de caixa (`paidAt`) — é onde o
- * dinheiro foi gasto de verdade, não quando a fatura foi paga. Decisão
- * deliberada: diverge do KPI "Despesas do mês" (cash-flow, conta-only) — mesmo
- * período, base diferente, não deveria bater (fix anterior que alinhava os
- * dois pra cash-flow foi revertido aqui a pedido do dono). Distinto de
+ * `reportService.categoryTotals` ("Por categoria" de `/reports`, Telegram e
+ * resumo semanal). GASTO REAL por categoria (accrual, MESMA base dos budgets —
+ * `budgets/repository.ts` `groupExpensesByCategoryInRange`): soma TODAS as
+ * transações do tipo, INCLUINDO as com `cardId` (compra no cartão),
+ * bucketizadas pela data da transação/compra (`date`), não pelo movimento de
+ * caixa (`paidAt`) — é onde o dinheiro foi gasto de verdade, não quando a
+ * fatura foi paga. Decisão deliberada: diverge do KPI "Despesas do mês"
+ * (cash-flow, conta-only) — mesmo período, base diferente, não deveria bater
+ * (fix anterior que alinhava os dois pra cash-flow foi revertido aqui a
+ * pedido do dono). Distinto de
  * `transactionRepository.groupExpensesByCategoryInRange` (mês único, sempre
  * EXPENSE, sem filtro extra — intocado porque também alimenta Dashboard
  * (gráfico de pizza histórico) e Telegram/`expenseByCategory`): aqui o tipo
@@ -207,6 +214,55 @@ async function findCategoryNamesByIds(userId: string, ids: string[]): Promise<Ma
   });
 
   return new Map(categories.map((category) => [category.id, category.name]));
+}
+
+/**
+ * Totais por (cartão, categoria) no período — insumo de
+ * `reportService.expenseByCardTree` (Dashboard). Mesma base accrual de
+ * `groupCategoryTotalsInRange` (EXPENSE paga, sem transfer, por `date`),
+ * MAS agrupa também por `cardId` (null = conta). NÃO exclui a categoria de
+ * fatura aqui — exclusão por nome fica no service (constante de domínio).
+ */
+async function groupExpenseByCardAndCategoryInRange(
+  userId: string,
+  range: DateRange,
+): Promise<CardCategoryTotalRow[]> {
+  const rows = await prisma.$queryRaw<
+    { cardId: string | null; categoryId: string; sum: Prisma.Decimal | string | number }[]
+  >`
+    SELECT "cardId", "categoryId", COALESCE(SUM("amount"), 0) AS sum
+    FROM "Transaction"
+    WHERE "userId" = ${userId}
+      AND "deletedAt" IS NULL
+      AND "isPaid" = true
+      AND "transferId" IS NULL
+      AND "type" = 'EXPENSE'::"TransactionType"
+      AND "categoryId" IS NOT NULL
+      AND "date" >= ${range.gte}
+      AND "date" <= ${range.lte}
+    GROUP BY "cardId", "categoryId"
+  `;
+
+  return rows.map((row) => ({
+    cardId: row.cardId,
+    categoryId: row.categoryId,
+    sum: new Prisma.Decimal(row.sum),
+  }));
+}
+
+/** Nome + tipo de cartão por id — defesa em profundidade com `userId` (mesmo padrão de `findCategoryNamesByIds`). */
+async function findCardMetaByIds(
+  userId: string,
+  ids: string[],
+): Promise<Map<string, { name: string; type: CardType }>> {
+  if (ids.length === 0) return new Map();
+
+  const cards = await prisma.card.findMany({
+    where: { id: { in: ids }, userId },
+    select: { id: true, name: true, type: true },
+  });
+
+  return new Map(cards.map((card) => [card.id, { name: card.name, type: card.type }]));
 }
 
 /**
@@ -321,7 +377,9 @@ export const reportRepository = {
   sumCashflowInRange,
   groupMovementByAccountInRange,
   groupCategoryTotalsInRange,
+  groupExpenseByCardAndCategoryInRange,
   findCategoryNamesByIds,
+  findCardMetaByIds,
   findAccountNamesByIds,
   listForCsv,
 };

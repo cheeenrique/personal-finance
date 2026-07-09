@@ -1,22 +1,21 @@
 import { toZonedTime } from "date-fns-tz";
 import { Prisma } from "@/generated/prisma/client";
-import { TransactionType } from "@/generated/prisma/enums";
+import { CardType, TransactionType } from "@/generated/prisma/enums";
 import { TIMEZONE, parseInSaoPaulo } from "@/lib/date/timezone";
 import { transactionService } from "@/modules/transactions/service";
 import { assetService } from "@/modules/assets/service";
 import { reportRepository, type DateRange } from "./repository";
 import { InvalidDateRangeError } from "./errors";
-import { SANKEY_HUB_NAME, SANKEY_LEFTOVER_NAME } from "./types";
+import { CARD_INVOICE_CATEGORY_NAMES } from "./types";
 import type {
   AccountMovementReport,
+  CardExpenseGroup,
   CashflowFilters,
   CashflowReport,
   CategoryExpenseTotal,
   CategoryTotalsFilters,
+  ExpenseByCardTree,
   IncomeExpenseMonthPoint,
-  SankeyFlowLink,
-  SankeyFlowNode,
-  SankeyFlowReport,
   TotalEvolutionPoint,
 } from "./types";
 
@@ -151,19 +150,14 @@ async function expenseByCategory(
 
 /**
  * Totais por categoria num período ARBITRÁRIO — "Por categoria" de `/reports`,
- * "Gastos por categoria"/Sankey do Dashboard, Telegram e resumo semanal
- * (docs/28-REPORTS.md "Filtros Globais": período + conta + tipo). GASTO REAL
- * accrual (`groupCategoryTotalsInRange`: inclui compra no cartão, bucketizado
- * por `date`) — MESMA base dos budgets, deliberadamente DIFERENTE do KPI
- * "Despesas do mês" (cash-flow, conta-only): mesmo período, totais diferentes
- * por design (cartão entra aqui na data da compra, não quando a fatura é
- * paga). `dateTo` estendido até o fim do dia aqui dentro (`endOfDayInclusive`,
- * mesmo padrão de `cashflow` abaixo): `date` nem sempre é meia-noite
- * (lançamento rápido/Telegram), então o caller passa `dateTo` cru (meia-noite
- * do dia) sem precisar estender por fora. Distinto de `expenseByCategory`
- * acima (mês único, sempre EXPENSE — intocada, também alimenta
- * Dashboard/Telegram). Tipo default EXPENSE; só vira RECEITA quando o filtro
- * pede INCOME explicitamente (ver `CategoryTotalsFilters`, types.ts).
+ * Telegram e resumo semanal (docs/28-REPORTS.md). GASTO REAL accrual
+ * (`groupCategoryTotalsInRange`: inclui compra no cartão, bucketizado por
+ * `date`) — MESMA base dos budgets, deliberadamente DIFERENTE do KPI
+ * "Despesas do mês" (cash-flow, conta-only). O Dashboard NÃO usa mais esta
+ * função pro donut (passou pra `expenseByCardTree`, que exclui a fatura);
+ * `categoryTotals` continua intocado pros demais consumidores. `dateTo`
+ * estendido até o fim do dia (`endOfDayInclusive`). Tipo default EXPENSE;
+ * só vira RECEITA quando o filtro pede INCOME.
  */
 async function categoryTotals(
   userId: string,
@@ -191,78 +185,82 @@ async function categoryTotals(
 }
 
 /**
- * Fluxo de dinheiro do período pro Sankey do Dashboard (docs/11-DASHBOARD.md,
- * "5. Gráficos e Análises"): cada categoria de RECEITA → hub "Renda" → cada
- * categoria de DESPESA + "Sobrou" (receita − despesa, quando positivo).
- * Reaproveita `categoryTotals` (acima) nos dois sentidos — `type: INCOME` de
- * um lado, default (EXPENSE) do outro — mesma base accrual (inclui cartão,
- * bucketizado por `date`) que alimenta "Por categoria"/Dashboard, não a
- * cash-flow do KPI "Despesas do mês"/"Receitas do mês". Sem repositório novo:
- * `categoryTotals` já generaliza pra INCOME via `CategoryTotalsFilters.type`
- * (rule 02-dry-kiss-yagni — reusar em vez de duplicar a query).
- *
- * `income`/`expense`/`isDeficit`/`deficit` são derivados da MESMA soma que
- * alimenta os nós (`incomeRows`/`expenseRows`, ambos via `categoryTotals`) —
- * garante que o diagrama nunca fique inconsistente internamente (entrada do
- * hub sempre bate com saída + Sobrou). NÃO bate com o KPI de cash-flow
- * (`reportService.cashflow`, conta-only): aqui é accrual (inclui cartão), lá é
- * caixa — divergência esperada, mesma dos outros consumidores de
- * `categoryTotals`. `categoryTotals` exige `categoryId IS NOT NULL` (mesma
- * regra de `groupCategoryTotalsInRange`) — só omite transação sem categoria
- * por import/seed que pule essa validação (zod exige categoria pra
- * INCOME/EXPENSE na criação, `modules/transactions/schemas.ts`), mesma
- * limitação que "Gastos por categoria" (`ExpenseCategoryChart`) já tem hoje,
- * não uma regressão nova.
- *
- * Déficit (despesa > receita, pela MESMA base categorizada acima): Sankey
- * não lida bem com link de valor negativo, então "Sobrou" só existe quando
- * há sobra real (`> 0`) — em déficit o nó nem aparece em `nodes`/`links`, o
- * caller sinaliza via `isDeficit`/`deficit` pra UI mostrar o aviso fora do
- * diagrama.
+ * Árvore "Gastos por categoria" do Dashboard (spec
+ * 2026-07-08-gastos-por-categoria-arvore-design.md): cartão = pasta,
+ * conta = flat, categoria de fatura ("Cartão de Crédito") excluída pra
+ * não dobrar o total. Base accrual por `date` (igual `categoryTotals`),
+ * mas agrupada por `cardId`. Total resultante NÃO bate com o KPI de
+ * caixa — de propósito ("onde gastei" vs "o que saiu da conta").
  */
-async function sankeyFlow(userId: string, dateFrom: Date, dateTo: Date): Promise<SankeyFlowReport> {
+async function expenseByCardTree(
+  userId: string,
+  dateFrom: Date,
+  dateTo: Date,
+): Promise<ExpenseByCardTree> {
   assertValidRange(dateFrom, dateTo);
 
-  const [incomeCategories, expenseCategories] = await Promise.all([
-    categoryTotals(userId, dateFrom, dateTo, { type: TransactionType.INCOME }),
-    categoryTotals(userId, dateFrom, dateTo),
+  const rows = await reportRepository.groupExpenseByCardAndCategoryInRange(userId, {
+    gte: dateFrom,
+    lte: endOfDayInclusive(dateTo),
+  });
+  if (rows.length === 0) return { cards: [], accountCategories: [] };
+
+  const categoryIds = [...new Set(rows.map((row) => row.categoryId))];
+  const cardIds = [...new Set(rows.map((row) => row.cardId).filter((id): id is string => id !== null))];
+
+  const [categoryNames, cardMeta] = await Promise.all([
+    reportRepository.findCategoryNamesByIds(userId, categoryIds),
+    reportRepository.findCardMetaByIds(userId, cardIds),
   ]);
 
-  // Zero-value defensivo: `categoryTotals` só retorna categoria com soma > 0
-  // na prática (query agrupada de transações existentes), mas um link de
-  // valor 0 não agrega nada ao diagrama — fora por clareza, não por bug real.
-  const incomeRows = incomeCategories.filter((row) => row.total.greaterThan(0));
-  const expenseRows = expenseCategories.filter((row) => row.total.greaterThan(0));
+  const invoiceNames = new Set<string>(CARD_INVOICE_CATEGORY_NAMES);
 
-  const totalIncome = incomeRows.reduce((sum, row) => sum.plus(row.total), new Prisma.Decimal(0));
-  const totalExpense = expenseRows.reduce((sum, row) => sum.plus(row.total), new Prisma.Decimal(0));
-  const net = totalIncome.minus(totalExpense);
-  const isDeficit = net.lessThan(0);
-  const leftover = isDeficit ? new Prisma.Decimal(0) : net;
+  const cardBuckets = new Map<
+    string,
+    { name: string; type: CardType; total: Prisma.Decimal; categories: CategoryExpenseTotal[] }
+  >();
+  const accountCategories: CategoryExpenseTotal[] = [];
 
-  const hubIndex = incomeRows.length;
-  const expenseStartIndex = hubIndex + 1;
-  const leftoverIndex = expenseStartIndex + expenseRows.length;
-  const hasLeftoverNode = leftover.greaterThan(0);
+  for (const row of rows) {
+    const categoryName = categoryNames.get(row.categoryId) ?? "—";
+    if (invoiceNames.has(categoryName)) continue;
 
-  const nodes: SankeyFlowNode[] = [
-    ...incomeRows.map((row) => ({ name: row.categoryName })),
-    { name: SANKEY_HUB_NAME },
-    ...expenseRows.map((row) => ({ name: row.categoryName })),
-    ...(hasLeftoverNode ? [{ name: SANKEY_LEFTOVER_NAME }] : []),
-  ];
+    const entry: CategoryExpenseTotal = {
+      categoryId: row.categoryId,
+      categoryName,
+      total: row.sum,
+    };
 
-  const links: SankeyFlowLink[] = [
-    ...incomeRows.map((row, index) => ({ source: index, target: hubIndex, value: row.total.toNumber() })),
-    ...expenseRows.map((row, index) => ({
-      source: hubIndex,
-      target: expenseStartIndex + index,
-      value: row.total.toNumber(),
-    })),
-    ...(hasLeftoverNode ? [{ source: hubIndex, target: leftoverIndex, value: leftover.toNumber() }] : []),
-  ];
+    if (row.cardId === null) {
+      accountCategories.push(entry);
+      continue;
+    }
 
-  return { nodes, links, isDeficit, deficit: isDeficit ? net.abs() : new Prisma.Decimal(0) };
+    const meta = cardMeta.get(row.cardId);
+    const bucket = cardBuckets.get(row.cardId) ?? {
+      name: meta?.name ?? "—",
+      type: meta?.type ?? CardType.CREDIT,
+      total: new Prisma.Decimal(0),
+      categories: [],
+    };
+    bucket.total = bucket.total.plus(row.sum);
+    bucket.categories.push(entry);
+    cardBuckets.set(row.cardId, bucket);
+  }
+
+  const cards: CardExpenseGroup[] = Array.from(cardBuckets.entries())
+    .map(([cardId, bucket]) => ({
+      cardId,
+      cardName: bucket.name,
+      cardType: bucket.type,
+      total: bucket.total,
+      categories: [...bucket.categories].sort((a, b) => b.total.comparedTo(a.total)),
+    }))
+    .sort((a, b) => b.total.comparedTo(a.total));
+
+  accountCategories.sort((a, b) => b.total.comparedTo(a.total));
+
+  return { cards, accountCategories };
 }
 
 /**
@@ -358,7 +356,7 @@ export const reportService = {
   cashflowByMonth,
   expenseByCategory,
   categoryTotals,
-  sankeyFlow,
+  expenseByCardTree,
   cashflow,
   accountReport,
   patrimonyEvolution,

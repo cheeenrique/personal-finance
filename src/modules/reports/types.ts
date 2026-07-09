@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import type { TransactionType } from "@/generated/prisma/enums";
+import type { CardType, TransactionType } from "@/generated/prisma/enums";
 import type { CategoryExpenseTotal } from "@/modules/transactions/types";
 import type { TotalEvolutionPoint } from "@/modules/assets/types";
 
@@ -77,27 +77,31 @@ export type CategoryTotalsFilters = {
   type?: TransactionType;
 };
 
-/** Nome do nó central do Sankey "Fluxo de dinheiro" — fonte única pra `service.ts` (monta o nó) e pro componente (decide a cor, ver `components/dashboard/money-flow-sankey-chart.tsx`). */
-export const SANKEY_HUB_NAME = "Renda";
-/** Nome do nó de destino que representa receita não gasta no período (só existe quando `income - expense > 0`, ver `service.ts` `sankeyFlow`). */
-export const SANKEY_LEFTOVER_NAME = "Sobrou";
+/**
+ * Nomes da categoria de pagamento de fatura — excluídos do donut/árvore
+ * "Gastos por categoria" do Dashboard (docs/superpowers/specs/
+ * 2026-07-08-gastos-por-categoria-arvore-design.md). Sem schema novo: a
+ * fatura é o agregado das compras itemizadas no cartão; somar os dois
+ * dobra o total. Frágil se o usuário renomear a categoria — aceito
+ * deliberadamente (app escopada, sem migrar pra `CARD_PAYMENT` agora).
+ */
+export const CARD_INVOICE_CATEGORY_NAMES = ["Cartão de Crédito"] as const;
 
-/** Nó do gráfico Sankey "Fluxo de dinheiro" (Dashboard) — só o nome; cor é decisão de quem compõe a tela (ver `components/dashboard/money-flow-sankey-chart.tsx`). */
-export type SankeyFlowNode = { name: string };
-
-/** Link do Sankey — `source`/`target` são índices em `SankeyFlowReport.nodes` (convenção da lib de gráficos, ver docs/04-DESIGN_SYSTEM.md "Gráficos"). */
-export type SankeyFlowLink = { source: number; target: number; value: number };
+/** Pasta de um cartão na árvore de gastos (Dashboard) — total + categorias filhas. */
+export type CardExpenseGroup = {
+  cardId: string;
+  cardName: string;
+  cardType: CardType;
+  total: Money;
+  categories: CategoryExpenseTotal[];
+};
 
 /**
- * Fluxo de dinheiro do período pro Dashboard (docs/11-DASHBOARD.md, "5.
- * Gráficos e Análises"): receita por categoria → hub "Renda" → despesa por
- * categoria + "Sobrou". `isDeficit`/`deficit` sinalizam despesa > receita —
- * nesse caso o nó "Sobrou" nem existe em `links`/`nodes` (Sankey não lida bem
- * com link de valor negativo), a UI mostra o aviso fora do diagrama.
+ * Árvore "Gastos por categoria" do Dashboard: cartões como pastas +
+ * categorias de conta (sem `cardId`) flat. Cada real aparece uma vez
+ * (fatura "Cartão de Crédito" excluída).
  */
-export type SankeyFlowReport = {
-  nodes: SankeyFlowNode[];
-  links: SankeyFlowLink[];
-  isDeficit: boolean;
-  deficit: Money;
+export type ExpenseByCardTree = {
+  cards: CardExpenseGroup[];
+  accountCategories: CategoryExpenseTotal[];
 };
