@@ -185,7 +185,26 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ExpenseCategoryChart tree={expenseByCardTree} />
+        <ExpenseCategoryChart
+          tree={{
+            cards: expenseByCardTree.cards.map((card) => ({
+              cardId: card.cardId,
+              cardName: card.cardName,
+              cardType: card.cardType,
+              total: card.total.toNumber(),
+              categories: card.categories.map((category) => ({
+                categoryId: category.categoryId,
+                categoryName: category.categoryName,
+                total: category.total.toNumber(),
+              })),
+            })),
+            accountCategories: expenseByCardTree.accountCategories.map((category) => ({
+              categoryId: category.categoryId,
+              categoryName: category.categoryName,
+              total: category.total.toNumber(),
+            })),
+          }}
+        />
         <MonthlyEvolutionChart points={monthlyEvolutionPoints} />
       </div>
 

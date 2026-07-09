@@ -3,15 +3,31 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 
-import type { ExpenseByCardTree } from "@/modules/reports/types";
+import type { CardType } from "@/generated/prisma/enums";
 import { ChartWrapper } from "@/components/shared/chart-wrapper";
 import { AppDonutChart, type DonutChartSlice } from "@/components/shared/charts/donut-chart";
 import { resolveCategoryColor } from "@/components/shared/charts/category-palette";
 import { formatBRL } from "@/lib/money/format";
 import { cn } from "@/lib/utils";
 
+/**
+ * Shape serializável pra atravessar o boundary RSC → client (Decimal do
+ * Prisma NÃO sobrevive ao flight — vira string/number e `.toNumber()`
+ * quebra em prod). O server converte em `dashboard/page.tsx`.
+ */
+export type ClientExpenseByCardTree = {
+  cards: Array<{
+    cardId: string;
+    cardName: string;
+    cardType: CardType;
+    total: number;
+    categories: Array<{ categoryId: string; categoryName: string; total: number }>;
+  }>;
+  accountCategories: Array<{ categoryId: string; categoryName: string; total: number }>;
+};
+
 type ExpenseCategoryChartProps = {
-  tree: ExpenseByCardTree;
+  tree: ClientExpenseByCardTree;
 };
 
 type TopRow =
@@ -43,19 +59,19 @@ export function ExpenseCategoryChart({ tree }: ExpenseCategoryChartProps) {
       kind: "card" as const,
       id: card.cardId,
       label: card.cardName,
-      value: card.total.toNumber(),
+      value: card.total,
       color: resolveCategoryColor(index),
       children: card.categories.map((category) => ({
         id: category.categoryId,
         label: category.categoryName,
-        value: category.total.toNumber(),
+        value: category.total,
       })),
     })),
     ...tree.accountCategories.map((category, index) => ({
       kind: "account" as const,
       id: category.categoryId,
       label: category.categoryName,
-      value: category.total.toNumber(),
+      value: category.total,
       color: resolveCategoryColor(tree.cards.length + index),
     })),
   ];
