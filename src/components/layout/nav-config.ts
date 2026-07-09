@@ -8,6 +8,7 @@ import {
   Building2,
   PiggyBank,
   Landmark,
+  TrendingUp,
   FolderTree,
   Tag,
   BarChart3,
@@ -111,6 +112,12 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/budgets",
         icon: PiggyBank,
         description: "Planejado vs. realizado por categoria",
+      },
+      {
+        label: "Investimentos",
+        href: "/investments",
+        icon: TrendingUp,
+        description: "CDB, cofrinhos e aportes com % do CDI",
       },
       {
         label: "Patrimônio",

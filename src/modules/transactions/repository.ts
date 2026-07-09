@@ -20,6 +20,10 @@ export type CreateTransactionData = {
   notes: string | null;
   isPaid: boolean;
   tagIds: string[];
+  /** Aporte de investimento (docs/28-INVESTMENTS.md) — opcional. */
+  assetId?: string | null;
+  /** Override do % do CDI neste aporte; null = default do Asset. */
+  yieldPercentOfBenchmark?: string | null;
 };
 
 export type UpdateTransactionData = Partial<Omit<CreateTransactionData, "tagIds">> & {
@@ -101,6 +105,10 @@ async function create(userId: string, data: CreateTransactionData): Promise<Tran
       date: data.date,
       notes: data.notes,
       isPaid: data.isPaid,
+      ...(data.assetId !== undefined && { assetId: data.assetId }),
+      ...(data.yieldPercentOfBenchmark !== undefined && {
+        yieldPercentOfBenchmark: data.yieldPercentOfBenchmark,
+      }),
       transactionTags:
         data.tagIds.length > 0 ? { create: data.tagIds.map((tagId) => ({ tagId })) } : undefined,
     },
@@ -536,6 +544,24 @@ async function softDeleteFutureInstallments(
 }
 
 /**
+ * Atualiza `categoryId` de TODAS as parcelas vivas de uma compra — fonte
+ * única da categoria (docs/23-INSTALLMENTS.md: não há categoryId no pai).
+ * Parcelas soft-deletadas (cancelamento) ficam intactas.
+ */
+async function updateCategoryForInstallmentPurchase(
+  userId: string,
+  installmentPurchaseId: string,
+  categoryId: string,
+  db: Db = prisma,
+): Promise<number> {
+  const result = await db.transaction.updateMany({
+    where: { userId, installmentPurchaseId, deletedAt: null },
+    data: { categoryId },
+  });
+  return result.count;
+}
+
+/**
  * Preview do Dashboard (docs/11-DASHBOARD.md, "Últimas Transações") — resolve
  * nome de categoria/conta/cartão e dados de parcelamento direto no `select`,
  * sem N+1. Não reaproveita `TAG_INCLUDE`/`list`: essa tela não precisa de
@@ -603,20 +629,35 @@ async function listInstallmentPurchasesWithTransactions(
       card: { select: { name: true } },
       transactions: {
         where: { deletedAt: null },
-        select: { installmentNumber: true, amount: true, date: true },
+        select: {
+          installmentNumber: true,
+          amount: true,
+          date: true,
+          categoryId: true,
+          category: { select: { name: true } },
+        },
         orderBy: { date: "asc" },
       },
     },
   });
 
-  return purchases.map((purchase) => ({
-    id: purchase.id,
-    description: purchase.description,
-    totalAmount: purchase.totalAmount,
-    installmentsCount: purchase.installmentsCount,
-    cardName: purchase.card.name,
-    transactions: purchase.transactions,
-  }));
+  return purchases.map((purchase) => {
+    const first = purchase.transactions[0];
+    return {
+      id: purchase.id,
+      description: purchase.description,
+      totalAmount: purchase.totalAmount,
+      installmentsCount: purchase.installmentsCount,
+      cardName: purchase.card.name,
+      categoryId: first?.categoryId ?? null,
+      categoryName: first?.category?.name ?? null,
+      transactions: purchase.transactions.map((transaction) => ({
+        installmentNumber: transaction.installmentNumber,
+        amount: transaction.amount,
+        date: transaction.date,
+      })),
+    };
+  });
 }
 
 export const transactionRepository = {
@@ -640,6 +681,7 @@ export const transactionRepository = {
   findInstallmentTotalsByIds,
   findInstallmentPurchaseById,
   softDeleteFutureInstallments,
+  updateCategoryForInstallmentPurchase,
   listRecentForDashboard,
   listInstallmentPurchasesWithTransactions,
 };

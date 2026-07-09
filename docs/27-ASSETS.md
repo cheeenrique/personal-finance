@@ -209,7 +209,10 @@ Linha do tempo do patrimônio total, construída a partir dos `AssetSnapshot` de
 
 ## Regra 1
 
-Assets não impactam saldo de conta diretamente.
+Assets não impactam saldo de conta **sozinhos**. Aportes de investimento
+(`type=INVESTMENT`, ver `28-INVESTMENTS.md`) debitam a conta via `Transaction`
+`EXPENSE` com `assetId` e sobem `currentValue` — o movimento de caixa é a
+Transaction, não o Asset.
 
 ---
 
@@ -282,13 +285,11 @@ Futuro:
 
 # Integração com Budget e Transactions
 
-Assets não interferem em:
+Assets não alteram orçamento sozinhos.
 
-* orçamento
-* transações
-* saldo de conta
-
-São camada separada de análise
+Aportes de investimento (docs/28-INVESTMENTS.md) **referenciam** o Asset via
+`Transaction.assetId` e debitam a conta escolhida. Demais tipos de Asset
+continuam só informativos (valor manual + snapshots).
 
 ---
 

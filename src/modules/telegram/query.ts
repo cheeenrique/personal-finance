@@ -2,6 +2,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { CardType } from "@/generated/prisma/enums";
 import { accountService } from "@/modules/accounts/service";
 import { cardService } from "@/modules/cards/service";
+import { investmentService } from "@/modules/investments/service";
 import { reportService } from "@/modules/reports/service";
 import { transactionService } from "@/modules/transactions/service";
 import { nowInSaoPaulo, parseInSaoPaulo } from "@/lib/date/timezone";
@@ -160,5 +161,22 @@ export async function executeTelegramQuery(
 
     case "card_invoice":
       return resolveCardInvoice(userId, query.cardName);
+
+    case "investments": {
+      const items = await investmentService.list(userId);
+      const total = items.reduce(
+        (sum, item) => sum.plus(item.currentValue),
+        new Prisma.Decimal(0),
+      );
+      return {
+        kind: "investments",
+        items: items.map((item) => ({
+          name: item.name,
+          currentValue: item.currentValue.toString(),
+          yieldPercentOfBenchmark: item.yieldPercentOfBenchmark?.toString() ?? null,
+        })),
+        total: total.toString(),
+      };
+    }
   }
 }

@@ -51,6 +51,8 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
     paidCount: purchase.paidCount,
     paidAmount: purchase.paidAmount.toString(),
     remainingAmount: purchase.remainingAmount.toString(),
+    categoryId: purchase.categoryId,
+    categoryName: purchase.categoryName,
     installments: purchase.installments.map((installment) => ({
       installmentNumber: installment.installmentNumber,
       amount: installment.amount.toString(),

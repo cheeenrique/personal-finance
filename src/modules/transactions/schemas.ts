@@ -115,3 +115,10 @@ export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 export type ListFilterInput = z.infer<typeof listFilterSchema>;
 export type CreateInstallmentPurchaseInput = z.infer<typeof createInstallmentPurchaseSchema>;
+
+/** Troca a categoria de TODAS as parcelas vivas de uma compra (docs/23-INSTALLMENTS.md). */
+export const updateInstallmentPurchaseCategorySchema = z.object({
+  categoryId: z.string().trim().min(1, "Categoria é obrigatória"),
+});
+
+export type UpdateInstallmentPurchaseCategoryInput = z.infer<typeof updateInstallmentPurchaseCategorySchema>;

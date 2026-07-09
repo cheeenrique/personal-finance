@@ -2,6 +2,7 @@ import { CategoryType } from "@/generated/prisma/enums";
 import { categoryService } from "@/modules/categories/service";
 import { accountService } from "@/modules/accounts/service";
 import { cardService } from "@/modules/cards/service";
+import { investmentService } from "@/modules/investments/service";
 import { transactionService } from "@/modules/transactions/service";
 import { merchantRuleService } from "@/modules/merchant-rules/service";
 import type { Category, CategoryTreeNode } from "@/modules/categories/types";
@@ -464,4 +465,63 @@ const KNOWN_MERCHANTS_LIMIT = 40;
  */
 export async function listKnownMerchantsForAI(userId: string): Promise<KnownMerchant[]> {
   return transactionService.listKnownMerchants(userId, KNOWN_MERCHANTS_LIMIT);
+}
+
+/** Nomes dos Assets INVESTMENT — insumo do prompt (consulta + aporte via Telegram). */
+export async function listInvestmentNamesForAI(userId: string): Promise<string[]> {
+  const investments = await investmentService.list(userId);
+  return investments.map((item) => item.name);
+}
+
+/**
+ * Resolve nome de investimento citado (aporte/consulta) — match exato
+ * case/acento-insensível, depois "contém" se único. Sem fallback inventado.
+ */
+export async function matchInvestmentByName(
+  userId: string,
+  investmentName: string,
+): Promise<{ id: string; name: string } | null> {
+  const investments = await investmentService.list(userId);
+  const normalizedTarget = normalizeWord(investmentName);
+  if (!normalizedTarget) return null;
+
+  const exact = investments.find((item) => normalizeWord(item.name) === normalizedTarget);
+  if (exact) return { id: exact.id, name: exact.name };
+
+  const contains = investments.filter((item) => {
+    const name = normalizeWord(item.name);
+    return name.includes(normalizedTarget) || normalizedTarget.includes(name);
+  });
+  if (contains.length === 1) return { id: contains[0].id, name: contains[0].name };
+
+  return null;
+}
+
+/** Conta ativa por nome (aporte) — null se não achar; caller usa default. */
+export async function matchActiveAccountByName(
+  userId: string,
+  accountName: string,
+): Promise<{ id: string; name: string } | null> {
+  const accounts = await accountService.listWithBalances(userId);
+  const normalizedTarget = normalizeWord(accountName);
+  const match = accounts.find(
+    (account) => account.isActive && normalizeWord(account.name) === normalizedTarget,
+  );
+  return match ? { id: match.id, name: match.name } : null;
+}
+
+/** Conta ativa default (mais antiga) — mesma regra de `findDefaultActiveAccount`. */
+export async function resolveDefaultActiveAccount(
+  userId: string,
+): Promise<{ id: string; name: string }> {
+  const account = await findDefaultActiveAccount(userId);
+  return { id: account.id, name: account.name };
+}
+
+/** Categoria EXPENSE "Investimento (aporte)" do seed — null se o usuário apagou. */
+export async function findAporteCategoryId(userId: string): Promise<string | null> {
+  const tree = await categoryService.listTree(userId);
+  const categories = flattenTree(tree).filter((category) => category.type === CategoryType.EXPENSE);
+  const match = categories.find((category) => category.name === "Investimento (aporte)");
+  return match?.id ?? null;
 }

@@ -6,7 +6,10 @@ import { parseInSaoPaulo, TIMEZONE } from "@/lib/date/timezone";
 import { assertCardOwnership, assertCategoryOwnership } from "./service";
 import { transactionRepository } from "./repository";
 import { InstallmentInvalidCountError, InstallmentPurchaseNotFoundError } from "./errors";
-import type { CreateInstallmentPurchaseInput } from "./schemas";
+import type {
+  CreateInstallmentPurchaseInput,
+  UpdateInstallmentPurchaseCategoryInput,
+} from "./schemas";
 import type { InstallmentPurchaseResult } from "./types";
 
 const MIN_INSTALLMENTS = 2;
@@ -156,4 +159,25 @@ export async function cancelInstallmentPurchase(userId: string, installmentPurch
   await prisma.$transaction(async (tx) => {
     await transactionRepository.softDeleteFutureInstallments(userId, installmentPurchaseId, new Date(), tx);
   });
+}
+
+/**
+ * Troca a categoria de TODAS as parcelas vivas de uma compra (docs/23-INSTALLMENTS.md):
+ * a categoria vive nas `Transaction` filhas, não no `InstallmentPurchase`.
+ * Soft-deletadas (cancelamento) ficam intactas.
+ */
+export async function updateInstallmentPurchaseCategory(
+  userId: string,
+  installmentPurchaseId: string,
+  input: UpdateInstallmentPurchaseCategoryInput,
+): Promise<void> {
+  const purchase = await transactionRepository.findInstallmentPurchaseById(userId, installmentPurchaseId);
+  if (!purchase) throw new InstallmentPurchaseNotFoundError(installmentPurchaseId);
+
+  await assertCategoryOwnership(userId, input.categoryId, TransactionType.EXPENSE);
+  await transactionRepository.updateCategoryForInstallmentPurchase(
+    userId,
+    installmentPurchaseId,
+    input.categoryId,
+  );
 }

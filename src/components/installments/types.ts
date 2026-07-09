@@ -22,5 +22,7 @@ export type InstallmentPurchaseView = {
   paidCount: number;
   paidAmount: string;
   remainingAmount: string;
+  categoryId: string | null;
+  categoryName: string | null;
   installments: InstallmentLineItemView[];
 };

@@ -28,6 +28,7 @@ Cartões          → /cards
 Parcelamentos    → /installments
 Orçamentos       → /budgets
 Patrimônio       → /assets
+Investimentos    → /investments
 Categorias       → /categories
 Tags             → /tags
 Relatórios       → /reports
@@ -537,6 +538,26 @@ Sem paginação — lista completa do mês selecionado.
 - Error: mensagem humana + tentar novamente.
 
 **Referência:** `26-BUDGETS.md`.
+
+---
+
+## Investimentos (`/investments`)
+
+**Objetivo:** cadastrar produtos indexados ao CDI (CDB/cofrinho), aportar a partir do saldo da conta e projetar rendimento estimado (docs/28-INVESTMENTS.md).
+
+**Layout desktop:**
+
+```text
+┌ Header: Investimentos ─────────────────────────────────┐
+│ [Card Cofrinho] [Card CDB] [+ Novo investimento]       │
+└────────────────────────────────────────────────────────┘
+```
+
+Detalhe (`/investments/[id]`): KPIs (posição, % CDI, CDI do dia, taxa efetiva), bloco de projeção, tabela de aportes, ação Aportar.
+
+**Componentes:** `InvestmentsBoard`, `InvestmentCard`, `InvestmentFormModal`, `ContributeModal`, `InvestmentDetailView`.
+
+**Referência:** `28-INVESTMENTS.md`.
 
 ---
 

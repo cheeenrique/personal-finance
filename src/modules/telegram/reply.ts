@@ -155,6 +155,44 @@ export function buildTransactionUndoneReply(): string {
   return `${ICON_SUCCESS} Lançamento desfeito.`;
 }
 
+export function buildInvestmentNeedAmountReply(): string {
+  return `${ICON_WARNING} Quanto você quer investir? Ex.: "investi 100 no Cofrinho Nubank".`;
+}
+
+export function buildInvestmentNeedNameReply(): string {
+  return `${ICON_WARNING} Em qual investimento? Ex.: "investi 100 no Cofrinho Nubank".`;
+}
+
+export function buildInvestmentNotFoundReply(name: string): string {
+  return `${ICON_WARNING} Não encontrei o investimento "${name}". Cadastre-o em Investimentos no app.`;
+}
+
+export function buildInsufficientBalanceReply(
+  accountName: string,
+  balance: string,
+  amount: string,
+): string {
+  return [
+    `${ICON_ERROR} Saldo insuficiente na conta ${accountName}.`,
+    `Disponível: ${formatBRL(balance)} · Tentativa: ${formatBRL(amount)}.`,
+  ].join("\n");
+}
+
+export function buildInvestmentContributionReply(params: {
+  investmentName: string;
+  amount: string;
+  accountName: string;
+  position: string;
+}): string {
+  return [
+    `${ICON_SUCCESS} Aporte registrado`,
+    "",
+    `${formatBRL(params.amount)} → ${params.investmentName}`,
+    `Conta: ${params.accountName}`,
+    `Posição atual: ${formatBRL(params.position)}`,
+  ].join("\n");
+}
+
 /** Rótulo pt-BR de um período de consulta (docs/30-TELEGRAM.md, "Consulta por IA") — usado nos títulos de `buildQueryReply`. */
 function periodLabel(period: TelegramQueryPeriod): string {
   switch (period) {
@@ -221,6 +259,31 @@ export function buildQueryReply(result: TelegramQueryResult): string {
 
     case "card_ambiguous":
       return buildAskOriginAmbiguousReply(result.candidates);
+
+    case "investments": {
+      if (result.items.length === 0) {
+        return [
+          `${ICON_SUCCESS} Investimentos`,
+          "",
+          "Nenhum investimento cadastrado.",
+        ].join("\n");
+      }
+
+      const lines = result.items.map((item, index) => {
+        const yieldLabel = item.yieldPercentOfBenchmark
+          ? ` · ${Number(item.yieldPercentOfBenchmark).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% CDI`
+          : "";
+        return `${index + 1}. ${item.name}: ${formatBRL(item.currentValue)}${yieldLabel}`;
+      });
+
+      return [
+        `${ICON_SUCCESS} Investimentos (${result.items.length})`,
+        "",
+        ...lines,
+        "",
+        `Total: ${formatBRL(result.total)}`,
+      ].join("\n");
+    }
   }
 }
 

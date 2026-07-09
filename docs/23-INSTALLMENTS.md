@@ -205,6 +205,12 @@ Ao cancelar uma compra parcelada:
 
 ---
 
+# Troca de categoria
+
+A categoria não vive em `InstallmentPurchase` — cada parcela (`Transaction`) carrega o mesmo `categoryId` na criação. No modal de detalhes (`/installments`), o usuário pode trocar a categoria: `updateMany` em **todas** as parcelas ainda vivas (`deletedAt: null`). Parcelas soft-deletadas (cancelamento) ficam intactas.
+
+---
+
 # Regras de Negócio
 
 ## Regra 1

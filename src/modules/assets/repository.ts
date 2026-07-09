@@ -9,6 +9,8 @@ export type CreateAssetData = {
   currentValue: string;
   purchaseDate: Date;
   notes?: string | null;
+  yieldBenchmark?: "NONE" | "CDI";
+  yieldPercentOfBenchmark?: string | null;
 };
 
 export type UpdateAssetData = Partial<CreateAssetData>;
@@ -40,6 +42,10 @@ async function create(userId: string, data: CreateAssetData): Promise<Asset> {
       currentValue: data.currentValue,
       purchaseDate: data.purchaseDate,
       notes: data.notes ?? null,
+      ...(data.yieldBenchmark !== undefined && { yieldBenchmark: data.yieldBenchmark }),
+      ...(data.yieldPercentOfBenchmark !== undefined && {
+        yieldPercentOfBenchmark: data.yieldPercentOfBenchmark,
+      }),
     },
   });
 }

@@ -111,6 +111,23 @@ enum AmortizationSystem {
   CUSTOM
 }
 
+// Benchmark de rendimento de Asset INVESTMENT (docs/28-INVESTMENTS.md).
+// NONE = sem yield (imóvel/veículo/etc.); CDI = % do CDI (ex.: Cofrinho 115%).
+enum YieldBenchmark {
+  NONE
+  CDI
+}
+
+// Índice de mercado cotado (cache diário — Gemini ou entrada manual).
+enum MarketIndex {
+  CDI
+}
+
+enum MarketIndexQuoteSource {
+  GEMINI
+  MANUAL
+}
+
 // ---------------------------------------------------------------------------
 // User
 // ---------------------------------------------------------------------------
@@ -404,6 +421,14 @@ model Transaction {
   // `modules/loans/installments.ts`).
   loanId String?
 
+  // Aporte/resgate de investimento (docs/28-INVESTMENTS.md) — FK opcional
+  // pro Asset INVESTMENT. Não altera saldo sozinho: a Transaction EXPENSE
+  // na conta é o que debita; o asset sobe via `currentValue` + snapshot.
+  assetId String?
+
+  // Override do `% do CDI` neste aporte; null = usa o default do Asset.
+  yieldPercentOfBenchmark Decimal? @db.Decimal(7, 2)
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -414,6 +439,7 @@ model Transaction {
   card                Card?                @relation(fields: [cardId], references: [id], onDelete: Restrict)
   installmentPurchase InstallmentPurchase? @relation(fields: [installmentPurchaseId], references: [id], onDelete: Restrict)
   loan                Loan?                @relation(fields: [loanId], references: [id], onDelete: Restrict)
+  asset               Asset?               @relation(fields: [assetId], references: [id], onDelete: Restrict)
   transactionTags     TransactionTag[]
 
   @@index([userId, date])
@@ -423,6 +449,7 @@ model Transaction {
   @@index([transferId])
   @@index([installmentPurchaseId])
   @@index([loanId])
+  @@index([userId, assetId])
   @@index([accountId, fitId])
 }
 
@@ -461,17 +488,42 @@ model Asset {
   currentValue  Decimal   @db.Decimal(12, 2)
   purchaseDate  DateTime
   notes         String?
+
+  // Yield só faz sentido em INVESTMENT (docs/28-INVESTMENTS.md). Demais
+  // tipos ficam NONE / null. `yieldPercentOfBenchmark` = 115.00 → 115% do CDI.
+  yieldBenchmark            YieldBenchmark @default(NONE)
+  yieldPercentOfBenchmark   Decimal?       @db.Decimal(7, 2)
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
 
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  snapshots AssetSnapshot[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  snapshots    AssetSnapshot[]
   // Financiamentos (`kind=FINANCING`) linkados a este bem via `Loan.assetId`
   // (opcional — ver model Loan).
-  loans     Loan[]
+  loans        Loan[]
+  transactions Transaction[]
 
   @@index([userId])
+  @@index([userId, type])
+}
+
+// ---------------------------------------------------------------------------
+// MarketIndexQuote — cache diário de CDI (Gemini ou manual)
+// ---------------------------------------------------------------------------
+
+model MarketIndexQuote {
+  id                String                  @id @default(cuid())
+  index             MarketIndex
+  // Meia-noite America/Sao_Paulo do dia cotado (mesmo padrão de datas do app).
+  date              DateTime
+  annualRatePercent Decimal                 @db.Decimal(7, 4)
+  source            MarketIndexQuoteSource
+  fetchedAt         DateTime                @default(now())
+
+  @@unique([index, date])
+  @@index([index, date])
 }
 
 // ---------------------------------------------------------------------------

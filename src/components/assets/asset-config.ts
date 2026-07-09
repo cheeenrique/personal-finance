@@ -27,6 +27,16 @@ export const ASSET_TYPE_OPTIONS = Object.values(AssetType).map((type) => ({
   label: ASSET_TYPE_LABELS[type],
 }));
 
+/**
+ * Opções do formulário genérico de `/assets` — sem INVESTMENT (criação
+ * operacional fica em `/investments`, docs/28-INVESTMENTS.md). Edição de
+ * asset já INVESTMENT ainda mostra o tipo (read-only via options completas
+ * quando `isEditing`).
+ */
+export const ASSET_TYPE_OPTIONS_FOR_CREATE = ASSET_TYPE_OPTIONS.filter(
+  (option) => option.value !== AssetType.INVESTMENT,
+);
+
 /** Ordem fixa de exibição dos grupos — segue a ordem do handoff ("Imóveis, Veículos, Investimentos, Reserva, Outros"), com FGTS entre Investimentos e Reserva. */
 export const ASSET_TYPE_GROUP_ORDER: AssetType[] = [
   AssetType.PROPERTY,

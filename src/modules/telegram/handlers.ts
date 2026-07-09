@@ -14,6 +14,7 @@ import { telegramPendingRepository } from "./pending";
 import { normalizeWord } from "./normalize";
 import {
   listCategoryNamesForAI,
+  listInvestmentNamesForAI,
   listKnownMerchantsForAI,
   listOriginNamesForAI,
   originPayload,
@@ -21,6 +22,7 @@ import {
   resolveOrigin,
 } from "./resolve";
 import { executeTelegramQuery, resolvePeriodRange } from "./query";
+import { handleInvestContribution } from "./invest";
 import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildBalanceReply,
@@ -104,10 +106,11 @@ async function handleCreateTransaction(
  * "Parsing por IA") + "hoje" em SP.
  */
 async function buildAiContext(userId: string) {
-  const [categoryNames, origins, knownMerchants] = await Promise.all([
+  const [categoryNames, origins, knownMerchants, investmentNames] = await Promise.all([
     listCategoryNamesForAI(userId),
     listOriginNamesForAI(userId),
     listKnownMerchantsForAI(userId),
+    listInvestmentNamesForAI(userId),
   ]);
 
   return {
@@ -115,6 +118,7 @@ async function buildAiContext(userId: string) {
     categoryNames,
     accountNames: origins.accountNames,
     cardNames: origins.cardNames,
+    investmentNames,
     knownMerchants,
   };
 }
@@ -163,6 +167,11 @@ async function handleFreeformEntry(
     if (!ai.query) return { text: buildUnknownReply(), resultCode: "unknown_message" };
     const result = await executeTelegramQuery(userId, ai.query);
     return { text: buildQueryReply(result), resultCode: `query_${result.kind}` };
+  }
+
+  if (intent === "invest") {
+    if (!ai.invest) return { text: buildUnknownReply(), resultCode: "unknown_message" };
+    return handleInvestContribution(userId, ai.invest);
   }
 
   if (!ai.isTransaction) {
@@ -285,6 +294,11 @@ export async function handleVoiceEntry(
     if (!ai.query) return { text: buildUnknownReply(), resultCode: "unknown_message" };
     const result = await executeTelegramQuery(userId, ai.query);
     return { text: buildQueryReply(result), resultCode: `query_${result.kind}` };
+  }
+
+  if (intent === "invest") {
+    if (!ai.invest) return { text: buildUnknownReply(), resultCode: "unknown_message" };
+    return handleInvestContribution(userId, ai.invest);
   }
 
   if (!ai.isTransaction) {

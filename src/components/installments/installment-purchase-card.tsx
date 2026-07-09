@@ -1,5 +1,7 @@
 "use client";
 
+import { Eye } from "lucide-react";
+
 import { ProgressBar } from "@/components/dashboard/progress-bar";
 import { Button } from "@/components/ui/button";
 import { formatBRL } from "@/lib/money/format";
@@ -45,7 +47,13 @@ export function InstallmentPurchaseCard({ purchase, onShowDetails }: Installment
         <p className="truncate text-[11.5px] font-semibold text-muted-foreground">{purchase.cardName}</p>
       </div>
 
-      <Button type="button" variant="outline" onClick={onShowDetails} className="mt-1 w-full">
+      <Button
+        type="button"
+        variant="neutral"
+        onClick={onShowDetails}
+        className="mt-1 h-9 w-full gap-[7px] rounded-[10px] px-3.5 text-[13px] font-bold"
+      >
+        <Eye className="size-[15px]" strokeWidth={2} aria-hidden="true" />
         Detalhes
       </Button>
     </div>

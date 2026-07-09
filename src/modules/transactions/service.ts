@@ -468,6 +468,8 @@ async function listInstallmentPurchasesWithProgress(
       paidAmount,
       remainingAmount,
       nextDueDate: upcoming[0]?.date ?? null,
+      categoryId: purchase.categoryId,
+      categoryName: purchase.categoryName,
       installments: purchase.transactions.map((transaction) => ({
         // `installmentNumber` é sempre preenchido nas Transactions de uma InstallmentPurchase
         // (ver installments.ts `createInstallmentPurchase`) — null só existe no tipo por ele
@@ -511,6 +513,8 @@ async function listActiveInstallmentPurchases(
       paidAmount: purchase.paidAmount,
       remainingAmount: purchase.remainingAmount,
       nextDueDate: purchase.nextDueDate,
+      categoryId: purchase.categoryId,
+      categoryName: purchase.categoryName,
     }));
 }
 

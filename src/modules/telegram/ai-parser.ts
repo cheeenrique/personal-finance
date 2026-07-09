@@ -29,6 +29,7 @@ const QUERY_TYPE_VALUES = [
   "top_categories",
   "card_invoice",
   "unpaid",
+  "investments",
 ] as const;
 
 const QUERY_PERIOD_VALUES = ["this_month", "last_month", "this_year"] as const;
@@ -50,7 +51,7 @@ const RESPONSE_SCHEMA = {
     // a extração de imagem (`buildImagePrompt`) nunca as menciona, então o
     // modelo tende a omiti-las nesse caminho (nenhuma delas é `required`
     // abaixo, de propósito — zero regressão no caminho de foto/register).
-    intent: { type: "STRING", enum: ["register", "query", "unknown"], nullable: true },
+    intent: { type: "STRING", enum: ["register", "query", "invest", "unknown"], nullable: true },
     query: {
       type: "OBJECT",
       nullable: true,
@@ -62,6 +63,16 @@ const RESPONSE_SCHEMA = {
       },
       required: ["queryType", "period"],
     },
+    invest: {
+      type: "OBJECT",
+      nullable: true,
+      properties: {
+        amount: { type: "STRING", nullable: true },
+        investmentName: { type: "STRING", nullable: true },
+        accountName: { type: "STRING", nullable: true },
+      },
+      required: [],
+    },
   },
   required: ["isTransaction", "type", "description"],
 } as const;
@@ -71,6 +82,12 @@ const queryResponseSchema = z.object({
   period: z.enum(QUERY_PERIOD_VALUES).default("this_month"),
   categoryName: z.string().nullable().optional(),
   cardName: z.string().nullable().optional(),
+});
+
+const investResponseSchema = z.object({
+  amount: z.string().min(1).nullable().optional(),
+  investmentName: z.string().nullable().optional(),
+  accountName: z.string().nullable().optional(),
 });
 
 /** Valida a saída do modelo — nunca confiamos no JSON de um LLM sem checar shape (mesmo com `responseSchema`). */
@@ -86,8 +103,9 @@ const aiResponseSchema = z.object({
   paymentMethod: z.enum(["credit", "debit", "pix", "transfer", "cash"]).nullable().optional(),
   originKind: z.enum(["account", "card"]).nullable().optional(),
   originName: z.string().nullable().optional(),
-  intent: z.enum(["register", "query", "unknown"]).nullable().optional(),
+  intent: z.enum(["register", "query", "invest", "unknown"]).nullable().optional(),
   query: queryResponseSchema.nullable().optional(),
+  invest: investResponseSchema.nullable().optional(),
 });
 
 export type AiParserContext = {
@@ -99,6 +117,8 @@ export type AiParserContext = {
   accountNames: string[];
   /** Nomes dos cartões ATIVOS do usuário. */
   cardNames: string[];
+  /** Nomes dos investimentos (Asset INVESTMENT) — aporte/consulta via Telegram. */
+  investmentNames: string[];
   /**
    * Pagadores/merchants conhecidos do usuário — descrição já usada + a
    * categoria dominante dela (`transactionService.listKnownMerchants`, ver
@@ -133,6 +153,7 @@ function buildPrompt(rawText: string, ctx: AiParserContext): string {
   const categoriesLabel = labelOrPlaceholder(ctx.categoryNames, "(nenhuma cadastrada)");
   const accountsLabel = labelOrPlaceholder(ctx.accountNames, "(nenhuma cadastrada)");
   const cardsLabel = labelOrPlaceholder(ctx.cardNames, "(nenhum cadastrado)");
+  const investmentsLabel = labelOrPlaceholder(ctx.investmentNames, "(nenhum cadastrado)");
   const merchantsLabel = knownMerchantsLabel(ctx.knownMerchants);
 
   return [
@@ -140,13 +161,15 @@ function buildPrompt(rawText: string, ctx: AiParserContext): string {
     `Data de referência ("hoje"): ${ctx.todaySaoPaulo} (America/Sao_Paulo).`,
     "",
     "PRIMEIRO classifique a mensagem em um `intent`:",
-    '- "register": o usuário quer REGISTRAR um lançamento novo (gasto ou receita) — ex.: "mercado 120", "recebi 500 de freela".',
-    '- "query": o usuário está PERGUNTANDO sobre as finanças dele, sem querer registrar nada novo — ex.: "quanto gastei esse mês", "qual meu saldo", "fatura do Nubank", "quanto falta pagar".',
+    '- "register": o usuário quer REGISTRAR um lançamento novo (gasto ou receita) — ex.: "mercado 120", "recebi 500 de freela". NÃO use register para aporte em investimento (cofrinho/CDB).',
+    '- "invest": o usuário quer APORTAR / investir dinheiro num produto cadastrado — ex.: "investi 100 no Cofrinho Nubank", "aportei 200 no CDB", "coloquei 50 no cofrinho".',
+    '- "query": o usuário está PERGUNTANDO sobre as finanças dele, sem querer registrar nada novo — ex.: "quanto gastei esse mês", "qual meu saldo", "quais meus investimentos", "fatura do Nubank", "quanto falta pagar".',
     '- "unknown": nem lançamento nem pergunta reconhecível (saudação, mensagem aleatória, pergunta fora de escopo financeiro).',
     "",
-    'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null.',
-    'Se intent="query": preencha isTransaction=false, description com qualquer texto curto (não é usado), e preencha o objeto `query` seguindo as "Regras de pergunta" abaixo.',
-    'Se intent="unknown": preencha isTransaction=false e deixe query=null.',
+    'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null e invest=null.',
+    'Se intent="invest": preencha isTransaction=false, description curto, invest={amount, investmentName, accountName}, query=null.',
+    'Se intent="query": preencha isTransaction=false, description com qualquer texto curto (não é usado), e preencha o objeto `query` seguindo as "Regras de pergunta" abaixo. Deixe invest=null.',
+    'Se intent="unknown": preencha isTransaction=false e deixe query=null e invest=null.',
     "",
     'Regras de lançamento (só valem quando intent="register"):',
     "- isTransaction=false se a mensagem NÃO for um lançamento (saudação, pergunta, texto aleatório sem qualquer menção a gasto/recebimento de dinheiro).",
@@ -158,14 +181,20 @@ function buildPrompt(rawText: string, ctx: AiParserContext): string {
     '- paymentMethod: identifique COMO o dinheiro saiu/entrou — "credit" (cartão de crédito), "debit" (cartão de débito), "pix", "transfer" (transferência/TED/DOC), "cash" (dinheiro/espécie). Se a mensagem não mencionar nenhum canal, retorne null.',
     '- originKind/originName: só preencha se o nome citado bater com um item REAL das listas abaixo. Se citar um CARTÃO da lista (geralmente junto de "crédito"/"débito"), originKind="card" e originName = nome EXATO da lista de cartões. Se citar uma CONTA da lista (geralmente junto de "pix"/"transferência"/banco), originKind="account" e originName = nome EXATO da lista de contas. IMPORTANTE: nome de pessoa/empresa EXTERNA (que foi pra description) NUNCA é origem, mesmo aparecendo perto de "pix" ou "transferência". Sem menção de conta/cartão real do usuário, ambos null.',
     "",
+    'Regras de aporte (só valem quando intent="invest"):',
+    '- invest.amount: valor decimal em string (ex.: "100" ou "100.50"). null se não houver valor — NUNCA invente.',
+    `- invest.investmentName: nome MAIS PRÓXIMO dentre os investimentos do usuário: [${investmentsLabel}]. null se não citar nenhum.`,
+    `- invest.accountName: conta de onde sai o dinheiro, se citada — nome EXATO de [${accountsLabel}]. null se não citar (o app usa a conta default).`,
+    "",
     'Regras de pergunta (só valem quando intent="query"):',
-    '- queryType: "spent" (quanto gastou), "received" (quanto recebeu), "balance" (saldo das contas), "category_total" (quanto gastou numa categoria específica — preencha categoryName), "top_categories" (quais categorias tiveram maior gasto), "card_invoice" (fatura de um cartão específico — preencha cardName) ou "unpaid" (quanto falta pagar / previsto).',
+    '- queryType: "spent" (quanto gastou), "received" (quanto recebeu), "balance" (saldo das contas), "category_total" (quanto gastou numa categoria específica — preencha categoryName), "top_categories" (quais categorias tiveram maior gasto), "card_invoice" (fatura de um cartão específico — preencha cardName), "unpaid" (quanto falta pagar / previsto) ou "investments" (quais investimentos tem / posição / total investido).',
     `- categoryName (só relevante para queryType="category_total"): nome MAIS PRÓXIMO dentre a lista de categorias do usuário: [${categoriesLabel}]. null se a mensagem não citar uma categoria ou o queryType for outro.`,
     `- cardName (só relevante para queryType="card_invoice"): nome MAIS PRÓXIMO dentre a lista de cartões do usuário: [${cardsLabel}]. null se a mensagem não citar um cartão ou o queryType for outro.`,
-    '- period: "this_month" (padrão — quando a mensagem não menciona período, ou fala do mês atual), "last_month" (mês passado), "this_year" (esse ano/ano todo).',
+    '- period: "this_month" (padrão — quando a mensagem não menciona período, ou fala do mês atual), "last_month" (mês passado), "this_year" (esse ano/ano todo). Para queryType="investments" use "this_month" (período é ignorado).',
     "",
     `Contas do usuário: [${accountsLabel}]`,
     `Cartões do usuário: [${cardsLabel}]`,
+    `Investimentos do usuário: [${investmentsLabel}]`,
     `Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${merchantsLabel}]`,
     "",
     `Mensagem do usuário: "${rawText}"`,
@@ -236,6 +265,7 @@ function buildVoicePrompt(ctx: AiParserContext): string {
   const categoriesLabel = labelOrPlaceholder(ctx.categoryNames, "(nenhuma cadastrada)");
   const accountsLabel = labelOrPlaceholder(ctx.accountNames, "(nenhuma cadastrada)");
   const cardsLabel = labelOrPlaceholder(ctx.cardNames, "(nenhum cadastrado)");
+  const investmentsLabel = labelOrPlaceholder(ctx.investmentNames, "(nenhum cadastrado)");
   const merchantsLabel = knownMerchantsLabel(ctx.knownMerchants);
 
   return [
@@ -244,13 +274,15 @@ function buildVoicePrompt(ctx: AiParserContext): string {
     `Data de referência ("hoje"): ${ctx.todaySaoPaulo} (America/Sao_Paulo).`,
     "",
     "PRIMEIRO classifique a mensagem em um `intent`:",
-    '- "register": o usuário quer REGISTRAR um lançamento novo (gasto ou receita) — ex.: "mercado cento e vinte", "recebi quinhentos de freela".',
-    '- "query": o usuário está PERGUNTANDO sobre as finanças dele — ex.: "quanto gastei esse mês", "qual meu saldo".',
+    '- "register": o usuário quer REGISTRAR um lançamento novo (gasto ou receita) — ex.: "mercado cento e vinte", "recebi quinhentos de freela". NÃO use register para aporte em investimento.',
+    '- "invest": o usuário quer APORTAR / investir — ex.: "investi cem no Cofrinho Nubank", "aportei duzentos no CDB".',
+    '- "query": o usuário está PERGUNTANDO sobre as finanças dele — ex.: "quanto gastei esse mês", "qual meu saldo", "quais meus investimentos".',
     '- "unknown": áudio inaudível, saudação, ou nada financeiro reconhecível.',
     "",
-    'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null.',
-    'Se intent="query": preencha isTransaction=false, description com qualquer texto curto, e preencha o objeto `query`.',
-    'Se intent="unknown": preencha isTransaction=false e deixe query=null.',
+    'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null e invest=null.',
+    'Se intent="invest": preencha isTransaction=false, description curto, invest={amount, investmentName, accountName}, query=null.',
+    'Se intent="query": preencha isTransaction=false, description com qualquer texto curto, e preencha o objeto `query`. Deixe invest=null.',
+    'Se intent="unknown": preencha isTransaction=false e deixe query=null e invest=null.',
     "",
     'Regras de lançamento (só valem quando intent="register"):',
     "- isTransaction=false se o áudio NÃO for um lançamento.",
@@ -262,14 +294,20 @@ function buildVoicePrompt(ctx: AiParserContext): string {
     '- paymentMethod: "credit"/"debit"/"pix"/"transfer"/"cash", ou null.',
     '- originKind/originName: só se citar conta/cartão REAL das listas. Pessoa externa NUNCA é origem.',
     "",
+    'Regras de aporte (só valem quando intent="invest"):',
+    '- invest.amount: valor decimal em string. null se não houver — NUNCA invente.',
+    `- invest.investmentName: mais próximo de [${investmentsLabel}], ou null.`,
+    `- invest.accountName: conta citada de [${accountsLabel}], ou null.`,
+    "",
     'Regras de pergunta (só valem quando intent="query"):',
-    '- queryType: "spent" | "received" | "balance" | "category_total" | "top_categories" | "card_invoice" | "unpaid".',
+    '- queryType: "spent" | "received" | "balance" | "category_total" | "top_categories" | "card_invoice" | "unpaid" | "investments".',
     `- categoryName (category_total): mais próximo de [${categoriesLabel}], ou null.`,
     `- cardName (card_invoice): mais próximo de [${cardsLabel}], ou null.`,
-    '- period: "this_month" (padrão) | "last_month" | "this_year".',
+    '- period: "this_month" (padrão) | "last_month" | "this_year". Para investments use "this_month".',
     "",
     `Contas do usuário: [${accountsLabel}]`,
     `Cartões do usuário: [${cardsLabel}]`,
+    `Investimentos do usuário: [${investmentsLabel}]`,
     `Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${merchantsLabel}]`,
   ].join("\n");
 }
@@ -302,6 +340,13 @@ function parseAiTransactionResponse(rawJson: unknown): AiParsedTransaction | nul
           period: parsed.data.query.period,
           categoryName: parsed.data.query.categoryName ?? null,
           cardName: parsed.data.query.cardName ?? null,
+        }
+      : null,
+    invest: parsed.data.invest
+      ? {
+          amount: parsed.data.invest.amount ?? null,
+          investmentName: parsed.data.invest.investmentName ?? null,
+          accountName: parsed.data.invest.accountName ?? null,
         }
       : null,
   };

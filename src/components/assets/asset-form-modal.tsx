@@ -18,7 +18,7 @@ import { createAssetAction, updateAssetAction } from "@/modules/assets/actions";
 import { AssetType } from "@/generated/prisma/enums";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { notifySuccess } from "@/lib/toast";
-import { ASSET_TYPE_OPTIONS } from "./asset-config";
+import { ASSET_TYPE_OPTIONS, ASSET_TYPE_OPTIONS_FOR_CREATE } from "./asset-config";
 import type { AssetCardData } from "./types";
 
 type AssetFormModalProps = {
@@ -136,14 +136,14 @@ export function AssetFormModal({ open, onOpenChange, asset }: AssetFormModalProp
         <FormField label="Tipo" htmlFor="asset-type" required error={fieldErrors.type}>
           <EntitySelect
             id="asset-type"
-            options={ASSET_TYPE_OPTIONS}
+            options={isEditing ? ASSET_TYPE_OPTIONS : ASSET_TYPE_OPTIONS_FOR_CREATE}
             value={type}
             onValueChange={(value) => {
               setType(value as AssetType);
               clearFieldError("type");
             }}
             placeholder="Selecione o tipo"
-            disabled={isPending}
+            disabled={isPending || (isEditing && type === AssetType.INVESTMENT)}
             aria-invalid={Boolean(fieldErrors.type)}
             className="w-full"
           />

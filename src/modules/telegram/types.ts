@@ -68,7 +68,11 @@ export type TelegramPaymentMethod = "credit" | "debit" | "pix" | "transfer" | "c
  * nesse caminho; `handlers.ts` cai no default `isTransaction ? "register" :
  * "unknown"` quando ausente.
  */
-export type TelegramIntent = "register" | "query" | "unknown";
+/**
+ * "invest" = aporte em produto cadastrado em `/investments` (docs/28-INVESTMENTS.md
+ * + docs/30-TELEGRAM.md) — não é lançamento genérico nem consulta.
+ */
+export type TelegramIntent = "register" | "query" | "invest" | "unknown";
 
 /** Tipo de pergunta reconhecido pela IA (docs/30-TELEGRAM.md, "Consulta por IA") — mapeado 1:1 pro executor (`query.ts`, `executeTelegramQuery`). */
 export type TelegramQueryType =
@@ -78,7 +82,8 @@ export type TelegramQueryType =
   | "category_total"
   | "top_categories"
   | "card_invoice"
-  | "unpaid";
+  | "unpaid"
+  | "investments";
 
 /** Período do range da consulta — "this_month" é o default quando a mensagem não menciona período (ver `ai-parser.ts`). */
 export type TelegramQueryPeriod = "this_month" | "last_month" | "this_year";
@@ -94,6 +99,16 @@ export type TelegramQueryParsed = {
   period: TelegramQueryPeriod;
   categoryName: string | null;
   cardName: string | null;
+};
+
+/**
+ * Payload de aporte via Telegram (`intent="invest"`) — valor + nome do
+ * produto (Asset INVESTMENT) + conta opcional (default = conta ativa).
+ */
+export type TelegramInvestParsed = {
+  amount: string | null;
+  investmentName: string | null;
+  accountName: string | null;
 };
 
 /**
@@ -115,7 +130,12 @@ export type TelegramQueryResult =
   | { kind: "card_invoice"; cardName: string; total: string; dueDate: Date }
   | { kind: "card_not_found"; cardName: string }
   | { kind: "card_ambiguous"; candidates: string[] }
-  | { kind: "card_no_invoice"; cardName: string };
+  | { kind: "card_no_invoice"; cardName: string }
+  | {
+      kind: "investments";
+      items: Array<{ name: string; currentValue: string; yieldPercentOfBenchmark: string | null }>;
+      total: string;
+    };
 
 /**
  * Saída estruturada do parsing por IA (docs/30-TELEGRAM.md, "Parsing por
@@ -142,6 +162,8 @@ export type AiParsedTransaction = {
   originName: string | null;
   intent?: TelegramIntent;
   query?: TelegramQueryParsed | null;
+  /** Só preenchido quando `intent="invest"` (aporte em investimento). */
+  invest?: TelegramInvestParsed | null;
 };
 
 /** Campo obrigatório ainda faltando num lançamento em progresso (docs/30-TELEGRAM.md, "Fluxo conversacional"). Categoria nunca entra aqui — sempre tem fallback ("Outros"/"Outros (Receita)"), nunca bloqueia. */

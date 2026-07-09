@@ -93,6 +93,13 @@ Tags **não** ficam inline em Transaction. Associação via junction `Transactio
 
 Despesa pendente (`isPaid=false`) não entra em "Despesas do mês" nem em "Saldo atual" — entra em bloco "Previsto/A pagar". Compra normal nasce `isPaid=true`.
 
+### Aporte de investimento
+
+`assetId` (opcional) liga a Transaction a um `Asset` `INVESTMENT`. Aportes são
+`EXPENSE` pagas na conta + sobem `Asset.currentValue` (ver `28-INVESTMENTS.md`).
+`yieldPercentOfBenchmark` na Transaction é override do % do CDI daquele aporte;
+`null` = usa o default do Asset.
+
 ---
 
 ## Account
@@ -227,10 +234,32 @@ purchaseDate
 
 notes
 
+yieldBenchmark // NONE | CDI (default NONE; INVESTMENT usa CDI)
+yieldPercentOfBenchmark // Decimal(7,2)? — ex.: 115.00 = 115% do CDI
+
 createdAt
 updatedAt
 deletedAt
 ```
+
+Ver `28-INVESTMENTS.md` para o fluxo operacional de investimentos.
+
+---
+
+## MarketIndexQuote
+
+```ts
+id
+index // CDI
+date // meia-noite SP do dia cotado
+annualRatePercent // Decimal(7,4)
+source // GEMINI | MANUAL
+fetchedAt
+
+@@unique([index, date])
+```
+
+Cache diário do CDI (Gemini ou manual) — docs/28-INVESTMENTS.md.
 
 ---
 

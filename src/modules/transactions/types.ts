@@ -99,6 +99,9 @@ export type InstallmentPurchaseRow = {
   totalAmount: Money;
   installmentsCount: number;
   cardName: string;
+  /** Categoria das parcelas vivas (todas iguais na criação; 1ª parcela define a leitura). */
+  categoryId: string | null;
+  categoryName: string | null;
   transactions: Array<{ installmentNumber: number | null; amount: Money; date: Date }>;
 };
 
@@ -113,6 +116,8 @@ export type ActiveInstallmentPurchase = {
   paidAmount: Money;
   remainingAmount: Money;
   nextDueDate: Date | null;
+  categoryId: string | null;
+  categoryName: string | null;
 };
 
 /** Uma parcela dentro da lista de "Detalhes" de uma compra parcelada (docs/23-INSTALLMENTS.md, "Parcelas Futuras"). */

@@ -1,15 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Ban, Layers3 } from "lucide-react";
+import { Ban, Layers3, Loader2 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
-import { cancelInstallmentPurchaseAction } from "@/modules/transactions/actions";
+import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
+import { FormField } from "@/components/forms/form-field";
+import {
+  cancelInstallmentPurchaseAction,
+  updateInstallmentPurchaseCategoryAction,
+} from "@/modules/transactions/actions";
+import { listCategoryTreeAction } from "@/modules/categories/actions";
+import { CategoryType } from "@/generated/prisma/enums";
+import type { CategoryTreeNode } from "@/modules/categories/types";
 import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
 import { formatBRL } from "@/lib/money/format";
 import { formatDateSaoPaulo } from "@/lib/date/format";
@@ -48,6 +56,14 @@ const COLUMNS: DataTableColumn<InstallmentLineItemView>[] = [
   },
 ];
 
+/** Achata a árvore de categorias EXPENSE — mesmo padrão de `installment-form-modal.tsx`. */
+function flattenExpenseCategories(nodes: CategoryTreeNode[], depth = 0): EntitySelectOption[] {
+  return nodes.flatMap((node) => [
+    { value: node.id, label: `${"— ".repeat(depth)}${node.name}` },
+    ...flattenExpenseCategories(node.children, depth + 1),
+  ]);
+}
+
 /**
  * "Detalhes" de uma compra parcelada — lista das N parcelas (datas, valor,
  * status pago/futuro), sem paginação (docs/23-INSTALLMENTS.md, "Parcelas
@@ -55,6 +71,9 @@ const COLUMNS: DataTableColumn<InstallmentLineItemView>[] = [
  * Reaproveita `FormModal` (par Modal/Drawer padrão do app) mesmo sem ser um
  * formulário — é o wrapper Dialog(desktop)/Sheet(mobile) genérico do
  * projeto, e `DataTable` já lista "Parcelamentos" entre seus consumidores.
+ *
+ * Categoria: vive nas `Transaction` filhas (não no pai). Trocar aqui aplica
+ * `updateMany` em todas as parcelas vivas.
  *
  * "Cancelar parcelamento" (docs/23-INSTALLMENTS.md, "Cancelamento") só
  * aparece havendo parcela futura ainda viva (`!isPaid`) — mesmo racional de
@@ -68,8 +87,42 @@ export function InstallmentDetailsModal({ purchase, onOpenChange }: InstallmentD
   const router = useRouter();
   const queryClient = useQueryClient();
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [categoryOptions, setCategoryOptions] = useState<EntitySelectOption[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [isSavingCategory, startSaveCategory] = useTransition();
 
+  const open = purchase !== null;
   const hasFutureInstallments = purchase?.installments.some((installment) => !installment.isPaid) ?? false;
+  const categoryDirty = Boolean(purchase && categoryId && categoryId !== purchase.categoryId);
+
+  const [syncedPurchaseId, setSyncedPurchaseId] = useState(purchase?.id ?? null);
+  if (purchase?.id !== syncedPurchaseId) {
+    setSyncedPurchaseId(purchase?.id ?? null);
+    setCategoryId(purchase?.categoryId ?? undefined);
+    setCategoryError(null);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+
+    Promise.resolve()
+      .then(() => {
+        setLoadingCategories(true);
+        return listCategoryTreeAction();
+      })
+      .then((categoryResult) => {
+        setCategoryOptions(
+          categoryResult.success
+            ? flattenExpenseCategories(
+                categoryResult.data.filter((node) => node.type === CategoryType.EXPENSE),
+              )
+            : [],
+        );
+      })
+      .finally(() => setLoadingCategories(false));
+  }, [open]);
 
   async function handleCancel() {
     if (!purchase) return;
@@ -83,23 +136,73 @@ export function InstallmentDetailsModal({ purchase, onOpenChange }: InstallmentD
     router.refresh();
   }
 
+  function handleSaveCategory() {
+    if (!purchase || !categoryId) return;
+    setCategoryError(null);
+
+    startSaveCategory(async () => {
+      const result = await updateInstallmentPurchaseCategoryAction(purchase.id, { categoryId });
+      if (!result.success) {
+        setCategoryError(result.error.message);
+        return;
+      }
+
+      invalidateAllTransactionLists(queryClient);
+      notifySuccess("Categoria atualizada");
+      router.refresh();
+    });
+  }
+
   return (
     <FormModal
-      open={purchase !== null}
+      open={open}
       onOpenChange={onOpenChange}
       title={purchase?.description ?? "Parcelas"}
       description={purchase ? `${purchase.installmentsCount} parcelas · ${purchase.cardName}` : undefined}
       size="wide"
     >
       <div className="flex flex-col gap-3">
-        {hasFutureInstallments && (
-          <div className="flex justify-end">
-            <Button type="button" variant="destructive" size="sm" onClick={() => setCancelOpen(true)}>
-              <Ban className="size-4" aria-hidden="true" />
-              Cancelar parcelamento
-            </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <FormField
+              label="Categoria"
+              htmlFor="installment-details-category"
+              error={categoryError ?? undefined}
+            >
+              <EntitySelect
+                id="installment-details-category"
+                options={categoryOptions}
+                value={categoryId}
+                onValueChange={(value) => {
+                  setCategoryId(value);
+                  setCategoryError(null);
+                }}
+                placeholder={loadingCategories ? "Carregando…" : "Selecione a categoria"}
+                disabled={loadingCategories || isSavingCategory}
+              />
+            </FormField>
           </div>
-        )}
+
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            {categoryDirty && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSaveCategory}
+                disabled={isSavingCategory || loadingCategories}
+              >
+                {isSavingCategory ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+                Salvar categoria
+              </Button>
+            )}
+            {hasFutureInstallments && (
+              <Button type="button" variant="destructive" size="sm" onClick={() => setCancelOpen(true)}>
+                <Ban className="size-4" aria-hidden="true" />
+                Cancelar parcelamento
+              </Button>
+            )}
+          </div>
+        </div>
 
         <DataTable
           data={purchase?.installments ?? []}

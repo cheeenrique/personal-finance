@@ -3,12 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { transactionService } from "./service";
-import { createInstallmentPurchase, cancelInstallmentPurchase } from "./installments";
+import {
+  createInstallmentPurchase,
+  cancelInstallmentPurchase,
+  updateInstallmentPurchaseCategory,
+} from "./installments";
 import {
   createTransactionSchema,
   updateTransactionSchema,
   listFilterSchema,
   createInstallmentPurchaseSchema,
+  updateInstallmentPurchaseCategorySchema,
 } from "./schemas";
 import { TransactionDomainError } from "./errors";
 import type {
@@ -213,6 +218,32 @@ export async function cancelInstallmentPurchaseAction(purchaseId: string): Promi
 
   try {
     await cancelInstallmentPurchase(userId, purchaseId);
+    revalidateTransactionRoutes();
+    revalidatePath(INSTALLMENTS_PATH);
+    return { success: true, data: null };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Troca a categoria de todas as parcelas vivas da compra (docs/23-INSTALLMENTS.md). */
+export async function updateInstallmentPurchaseCategoryAction(
+  purchaseId: string,
+  input: unknown,
+): Promise<ActionResult<null>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  const parsed = updateInstallmentPurchaseCategorySchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Dados inválidos." },
+    };
+  }
+
+  try {
+    await updateInstallmentPurchaseCategory(userId, purchaseId, parsed.data);
     revalidateTransactionRoutes();
     revalidatePath(INSTALLMENTS_PATH);
     return { success: true, data: null };

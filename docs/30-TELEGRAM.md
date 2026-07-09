@@ -138,9 +138,14 @@ livre passa por IA.
   `responseMimeType: "application/json"` + `responseSchema` (structured
   output) — **sem SDK**, `fetch` nativo (Vercel serverless já tem fetch).
 * A IA extrai, a partir da mensagem + do contexto do usuário (categorias,
-  contas, cartões reais, passados no prompt):
+  contas, cartões, **investimentos** reais, passados no prompt):
+  * `intent` — `register` | `query` | `invest` | `unknown`
   * `isTransaction` — `false` se a mensagem não for um lançamento (saudação,
     pergunta etc.), aí cai na resposta padrão de "não entendi".
+  * Para `intent=invest`: `invest.amount`, `invest.investmentName`,
+    `invest.accountName` (opcional)
+  * Para `intent=query`: `query.queryType` inclui `investments` (lista/
+    posição/total) além de spent/received/balance/etc.
   * `type` (EXPENSE/INCOME) — por DIREÇÃO do dinheiro: "recebido"/"recebi"/
     "caiu" (entrou) → INCOME; "paguei"/"comprei"/"para <alguém>" (saiu) →
     EXPENSE. Ambíguo assume EXPENSE.
@@ -375,6 +380,36 @@ gastos mes
 ```text id="d4v8qp"
 hoje
 ```
+
+---
+
+## Consulta de investimentos
+
+Via IA (`intent=query`, `queryType=investments`) — lista nome, % CDI, posição
+e total investido:
+
+```text
+quais meus investimentos
+meus investimentos
+quanto tenho investido
+```
+
+---
+
+## Aporte em investimento
+
+Via IA (`intent=invest`) — debita a conta (teto = saldo) e sobe a posição do
+Asset INVESTMENT (docs/28-INVESTMENTS.md). Conta omitida → conta ativa default.
+Categoria fixa: `Investimento (aporte)`.
+
+```text
+investi 100 no Cofrinho Nubank
+aportei 200 no CDB
+coloquei 50 no cofrinho pela conta Nubank
+```
+
+Saldo insuficiente → erro explícito com disponível vs tentativa (não cria
+lançamento).
 
 ---
 
