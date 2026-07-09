@@ -7,10 +7,11 @@ import { AccountDomainError } from "@/modules/accounts/errors";
 import { reportService } from "@/modules/reports/service";
 import { nowInSaoPaulo, parseInSaoPaulo } from "@/lib/date/timezone";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
-import { parseTransactionFromImage, parseTransactionWithAI } from "./ai-parser";
+import { parseTransactionFromImage, parseTransactionFromVoice, parseTransactionWithAI } from "./ai-parser";
 import { parseFinancingFromDocument } from "./financing-parser";
 import { draftFromAi, handlePendingReply, processDraft } from "./draft";
 import { telegramPendingRepository } from "./pending";
+import { normalizeWord } from "./normalize";
 import {
   listCategoryNamesForAI,
   listKnownMerchantsForAI,
@@ -33,6 +34,7 @@ import {
   buildTodaySummaryReply,
   buildTransactionConfirmationReply,
   buildUnknownReply,
+  buildVoiceUnreadableReply,
 } from "./reply";
 import { TelegramDomainError } from "./errors";
 import type { CommandResult, ParsedCommand, TelegramIntent } from "./types";
@@ -189,7 +191,48 @@ async function handleFreeformEntry(
  * Não verifica pending em aberto (diferente de `handleFreeformEntry`): uma
  * foto nunca é tratada como resposta textual a uma pergunta anterior (fora de
  * escopo desta versão — ver Improvement Suggestions no relatório).
+ *
+ * Se a legenda casar com conta/cartão real e a IA não preencheu origem,
+ * `enrichAiOriginFromCaption` completa origin/paymentMethod de forma
+ * determinística (legenda "Crédito pessoal" = cartão, não categoria).
  */
+function enrichAiOriginFromCaption(
+  ai: NonNullable<Awaited<ReturnType<typeof parseTransactionFromImage>>>,
+  caption: string | null,
+  accountNames: string[],
+  cardNames: string[],
+): typeof ai {
+  if (!caption || ai.originName) return ai;
+
+  const captionNorm = normalizeWord(caption);
+  const cardMatch = cardNames.find((name) => normalizeWord(name) === captionNorm);
+  if (cardMatch) {
+    return {
+      ...ai,
+      originKind: "card",
+      originName: cardMatch,
+      paymentMethod: ai.paymentMethod ?? "credit",
+      // Legenda era nome de cartão — não deve virar categoria.
+      categoryName:
+        ai.categoryName && normalizeWord(ai.categoryName) === captionNorm ? null : ai.categoryName,
+    };
+  }
+
+  const accountMatch = accountNames.find((name) => normalizeWord(name) === captionNorm);
+  if (accountMatch) {
+    return {
+      ...ai,
+      originKind: "account",
+      originName: accountMatch,
+      paymentMethod: ai.paymentMethod ?? "pix",
+      categoryName:
+        ai.categoryName && normalizeWord(ai.categoryName) === captionNorm ? null : ai.categoryName,
+    };
+  }
+
+  return ai;
+}
+
 export async function handleImageEntry(
   userId: string,
   imageBytes: Buffer,
@@ -197,10 +240,55 @@ export async function handleImageEntry(
   caption: string | null,
 ): Promise<CommandResult> {
   const ctx = await buildAiContext(userId);
-  const ai = await parseTransactionFromImage(imageBytes, mimeType, caption, ctx);
+  const aiRaw = await parseTransactionFromImage(imageBytes, mimeType, caption, ctx);
 
-  if (ai === null || !ai.isTransaction || !ai.amount) {
-    return { text: buildImageUnreadableReply(), resultCode: "image_unreadable" };
+  if (aiRaw === null) {
+    return { text: buildImageUnreadableReply(), resultCode: "image_ai_null" };
+  }
+  if (!aiRaw.isTransaction || !aiRaw.amount) {
+    return { text: buildImageUnreadableReply(), resultCode: "image_no_amount" };
+  }
+
+  const ai = enrichAiOriginFromCaption(aiRaw, caption, ctx.accountNames, ctx.cardNames);
+  return processDraft(userId, draftFromAi(ai), 0);
+}
+
+/**
+ * Nota de voz (docs/30-TELEGRAM.md) — Gemini entende OGG nativo; mesmo
+ * fluxo de texto livre (intent register/query + processDraft + botões).
+ * Sem fallback regex. Áudio já foi apagado do disco em `downloadVoice`.
+ */
+export async function handleVoiceEntry(
+  userId: string,
+  audioBytes: Buffer,
+  mimeType: string,
+): Promise<CommandResult> {
+  const pending = await telegramPendingRepository.getActive(userId);
+  // Voz com pending aberto: não trata como resposta textual — pede digitar.
+  if (pending) {
+    return {
+      text: buildVoiceUnreadableReply(),
+      resultCode: "voice_pending_open",
+    };
+  }
+
+  const ctx = await buildAiContext(userId);
+  const ai = await parseTransactionFromVoice(audioBytes, mimeType, ctx);
+
+  if (ai === null) {
+    return { text: buildVoiceUnreadableReply(), resultCode: "voice_ai_null" };
+  }
+
+  const intent: TelegramIntent = ai.intent ?? (ai.isTransaction ? "register" : "unknown");
+
+  if (intent === "query") {
+    if (!ai.query) return { text: buildUnknownReply(), resultCode: "unknown_message" };
+    const result = await executeTelegramQuery(userId, ai.query);
+    return { text: buildQueryReply(result), resultCode: `query_${result.kind}` };
+  }
+
+  if (!ai.isTransaction) {
+    return { text: buildUnknownReply(), resultCode: "unknown_message" };
   }
 
   return processDraft(userId, draftFromAi(ai), 0);
@@ -329,4 +417,9 @@ async function executeCommand(userId: string, command: ParsedCommand, rawText: s
   }
 }
 
-export const telegramHandlers = { executeCommand, handleImageEntry, handleDocumentEntry };
+export const telegramHandlers = {
+  executeCommand,
+  handleImageEntry,
+  handleVoiceEntry,
+  handleDocumentEntry,
+};

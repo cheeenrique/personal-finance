@@ -5,19 +5,102 @@
  * (nunca lido daqui — o caller sempre passa o token explícito).
  */
 
+import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { TelegramReplyMarkup } from "./types";
+
 type GetMeResult = { ok: boolean; username?: string };
 type SetWebhookResult = { ok: true } | { ok: false; error: string };
 
+type SendMessageOptions = {
+  replyMarkup?: TelegramReplyMarkup;
+};
+
 /** Nunca loga `text` (docs/30-TELEGRAM.md, "Segurança": nunca logar corpo da mensagem nem valores monetários). */
-async function sendMessage(botToken: string, chatId: string | number, text: string): Promise<void> {
+async function sendMessage(
+  botToken: string,
+  chatId: string | number,
+  text: string,
+  options?: SendMessageOptions,
+): Promise<void> {
   const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      ...(options?.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
+    }),
   });
 
   if (!response.ok) {
     console.error(`[modules/telegram] falha ao enviar mensagem (chat_id=${chatId}, status=${response.status})`);
+  }
+}
+
+/**
+ * Responde a um callback_query (docs/30-TELEGRAM.md — botões inline). Sem
+ * isso o Telegram fica com o "loading" no botão. `text` opcional = toast
+ * curto. Nunca loga o texto.
+ */
+async function answerCallbackQuery(
+  botToken: string,
+  callbackQueryId: string,
+  text?: string,
+): Promise<void> {
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      callback_query_id: callbackQueryId,
+      ...(text ? { text } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    console.error(`[modules/telegram] falha ao answerCallbackQuery (status=${response.status})`);
+  }
+}
+
+type EditMessageOptions = {
+  replyMarkup?: TelegramReplyMarkup | null;
+};
+
+/**
+ * Edita texto (+ teclado) de uma mensagem já enviada — usado após
+ * Desfazer / Trocar categoria / Trocar origem. `replyMarkup: null` remove
+ * o teclado. Nunca loga `text`.
+ */
+async function editMessageText(
+  botToken: string,
+  chatId: string | number,
+  messageId: number,
+  text: string,
+  options?: EditMessageOptions,
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+  };
+
+  if (options && "replyMarkup" in options) {
+    // null = remove teclado; Telegram exige objeto — teclado vazio remove.
+    body.reply_markup = options.replyMarkup ?? { inline_keyboard: [] };
+  }
+
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/editMessageText`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    console.error(
+      `[modules/telegram] falha ao editMessageText (chat_id=${chatId}, status=${response.status})`,
+    );
   }
 }
 
@@ -82,6 +165,9 @@ const FILE_REQUEST_TIMEOUT_MS = 8000;
 
 /** Telegram sempre recomprime `message.photo` como JPEG — mimeType fixo, sem depender da extensão do `file_path`. */
 const PHOTO_MIME_TYPE = "image/jpeg";
+
+/** Nota de voz do Telegram (`message.voice`) — OGG Opus. */
+const VOICE_MIME_TYPE = "audio/ogg";
 
 /**
  * Resolve o `file_path` de um `file_id` (1º passo pra baixar uma foto — ver
@@ -174,4 +260,46 @@ async function downloadDocument(
   return { bytes: download.bytes, mimeType };
 }
 
-export const telegramApi = { sendMessage, getMe, setWebhook, deleteWebhook, downloadPhoto, downloadDocument };
+/**
+ * Baixa nota de voz (`message.voice`) pra um arquivo TEMPORÁRIO, lê os bytes
+ * e APAGA o arquivo no `finally` (docs/30-TELEGRAM.md — voz: não deixar
+ * áudio do usuário no disco). `null` em qualquer falha de download/IO.
+ * Nunca loga bytes nem o path com token.
+ */
+async function downloadVoice(
+  botToken: string,
+  fileId: string,
+  mimeType: string = VOICE_MIME_TYPE,
+): Promise<{ bytes: Buffer; mimeType: string } | null> {
+  const file = await getFile(botToken, fileId);
+  if (!file.ok) return null;
+
+  const download = await downloadFileBytes(botToken, file.filePath);
+  if (!download.ok) return null;
+
+  const tempPath = join(tmpdir(), `tg-voice-${randomUUID()}.ogg`);
+
+  try {
+    await fs.writeFile(tempPath, download.bytes);
+    const bytes = await fs.readFile(tempPath);
+    return { bytes, mimeType: mimeType || VOICE_MIME_TYPE };
+  } catch {
+    return null;
+  } finally {
+    await fs.unlink(tempPath).catch(() => {
+      // Best-effort — /tmp do serverless limpa sozinho; não derruba o webhook.
+    });
+  }
+}
+
+export const telegramApi = {
+  sendMessage,
+  answerCallbackQuery,
+  editMessageText,
+  getMe,
+  setWebhook,
+  deleteWebhook,
+  downloadPhoto,
+  downloadDocument,
+  downloadVoice,
+};

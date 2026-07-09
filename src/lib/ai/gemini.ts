@@ -20,7 +20,7 @@ const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const REQUEST_TIMEOUT_MS = 8000;
 
-/** Parte de um `content` da API Gemini — texto puro ou bytes inline (imagem/PDF) em base64. */
+/** Parte de um `content` da API Gemini — texto puro ou bytes inline (imagem/PDF/áudio) em base64. */
 export type GeminiContentPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
 /**
@@ -30,18 +30,20 @@ export type GeminiContentPart = { text: string } | { inlineData: { mimeType: str
  * os casos de uso; a chamada HTTP/timeout/tratamento de erro é idêntica
  * (rule 02-dry-kiss-yagni, DRY a partir do 2º caso concreto real). `source`
  * só rotula os logs pra diferenciar qual caminho falhou.
+ * `timeoutMs` opcional — voz precisa de mais tempo que texto (default 8s).
  */
 export async function callGemini<T>(
   contents: Array<{ parts: GeminiContentPart[] }>,
   source: string,
   responseSchema: object,
   parseResponse: (rawJson: unknown) => T | null,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<T | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {

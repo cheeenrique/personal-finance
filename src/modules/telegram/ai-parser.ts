@@ -190,18 +190,22 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
 
   const lines = [
     "Você extrai dados de uma IMAGEM de um lançamento financeiro pessoal (pt-BR) enviada por um usuário a um bot do Telegram.",
-    'A imagem pode ser um recibo/nota fiscal de compra, um comprovante de Pix/transferência OU uma notificação push do banco/cartão (print de tela do celular) — ex.: "Compra no crédito aprovada — Compra de R$ 67,89 APROVADA em FILIAL ELDORA para o cartão com final 7547." Trate qualquer um desses formatos igual.',
+    "A imagem pode ser QUALQUER um destes formatos — trate todos como lançamento válido quando houver valor + estabelecimento/comércio:",
+    '  1) recibo/nota fiscal de compra;',
+    '  2) comprovante de Pix/transferência;',
+    '  3) notificação push do banco/cartão (print) — ex.: "Compra no crédito aprovada — Compra de R$ 67,89 APROVADA em FILIAL ELDORA para o cartão com final 7547.";',
+    '  4) TELA DE DETALHE da compra no app do banco/cartão (ex.: Nubank, Inter, C6) — UI escura/clara com logo do estabelecimento, valor grande "R$ 30,45", data por extenso ("Quarta-feira, 8 de julho de 2026, 20:00"), badge "Compra à vista"/"Parcelado", campos "Estabelecimento", "Dado original" (ex.: "99food *Predileto S Sa") e "Cartão virtual .... 7547". ESSA tela É um lançamento — NÃO diga isTransaction=false só porque não é recibo de papel nem push.',
     `Data de referência ("hoje"): ${ctx.todaySaoPaulo} (America/Sao_Paulo).`,
     "",
     "Regras:",
-    "- isTransaction=false se a imagem NÃO mostrar nenhum lançamento financeiro reconhecível (foto sem valor nem estabelecimento/lançamento visível).",
-    '- type: INCOME quando o dinheiro ENTRA pro usuário (recebimento, Pix recebido, depósito); EXPENSE quando o dinheiro SAI (compra aprovada, pagamento, Pix enviado). Assuma EXPENSE quando ambíguo — a maioria das notificações de cartão/recibo é gasto.',
-    '- amount: valor TOTAL exatamente como aparece na imagem (o valor "aprovado"/"pago"/da compra), em string decimal (ex.: "67.89"), sem símbolo de moeda. Se a imagem NÃO mostrar nenhum valor numérico legível, retorne null — NUNCA invente um valor.',
-    '- description: o ESTABELECIMENTO/comércio citado na imagem (ex.: "FILIAL ELDORA"), poucas palavras. Pessoa/empresa EXTERNA (destinatário de um Pix, por exemplo) segue a mesma regra do texto: vai na descrição, nunca é origem. Se o estabelecimento/pagador bater com um item da lista "Pagadores/recebedores conhecidos" abaixo (mesmo com o texto diferente — variação de grafia, abreviação, razão social com CNPJ junto etc.), escreva a description com o nome CANÔNICO desse item (o texto entre aspas antes da seta).',
-    "- date: se a imagem mostrar a data/hora do lançamento, resolva pro formato YYYY-MM-DD (ano corrente quando omitido). Sem nenhuma data visível na imagem, retorne null (o sistema assume hoje).",
-    `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Se a imagem for um recibo/nota com PRODUTOS/itens legíveis, baseie a categoria nos PRODUTOS comprados, não só no nome da loja — isso importa principalmente quando a loja é GENERALISTA (ex.: mercado que também vende item de farmácia/perfumaria): remédio, fralda ou produto de higiene no recibo pedem a categoria de Farmácia mesmo numa loja que parece mercado, e vice-versa. Continue retornando UMA categoria só para a transação inteira (não extraia a lista de itens, só use-a como pista). Se o estabelecimento/pagador bater com um item da lista "Pagadores/recebedores conhecidos" abaixo (mesmo critério da regra de description), use a categoria DESSE item apenas quando os PRODUTOS do recibo não indicarem outra categoria — produto visível tem prioridade sobre o histórico do pagador. Sem boa correspondência (nem por produto, nem por histórico), retorne null. Você não vê nem precisa se preocupar com eventuais regras de categorização que o usuário tenha cadastrado no sistema para um estabelecimento — se existir uma, ela já é aplicada por fora, de forma determinística, depois da sua resposta; escolha a categoria normalmente pelos critérios acima.`,
-    '- paymentMethod: identifique o canal pelas palavras da imagem — "credit" (crédito), "debit" (débito), "pix", "transfer" (TED/DOC/transferência), "cash" (dinheiro/espécie). Sem menção clara, retorne null.',
-    `- originKind/originName: só preencha se o NOME (não o número) de uma conta ou cartão REAL do usuário aparecer na imagem, batendo com um item das listas abaixo. Menções como "cartão com final 7547" ou os últimos dígitos de um cartão NÃO bastam pra identificar QUAL cartão cadastrado é — o app não guarda os últimos dígitos dos cartões, então NUNCA infira qual cartão a partir só desse número. Nesse caso deixe originKind/originName null (o sistema pergunta ao usuário qual cartão/conta foi).`,
+    "- isTransaction=false SOMENTE se a imagem NÃO mostrar valor monetário NEM estabelecimento/lançamento financeiro (selfie, meme, print sem compra). Print de detalhe de compra no app do cartão = isTransaction=true.",
+    '- type: INCOME quando o dinheiro ENTRA pro usuário (recebimento, Pix recebido, depósito); EXPENSE quando o dinheiro SAI (compra aprovada, pagamento, Pix enviado, compra à vista no cartão). Assuma EXPENSE quando ambíguo — a maioria das telas de cartão/recibo é gasto.',
+    '- amount: valor TOTAL da compra exatamente como aparece (o valor grande "R$ …", ou "aprovado"/"pago"), em string decimal com PONTO (ex.: "30.45"), sem símbolo de moeda. Se a imagem NÃO mostrar nenhum valor numérico legível, retorne null — NUNCA invente um valor.',
+    '- description: o ESTABELECIMENTO/comércio citado (ex.: "99 Food", "FILIAL ELDORA"), poucas palavras. Em tela de detalhe do cartão, prefira o nome do estabelecimento; se estiver genérico/vazio, use o "Dado original" (ex.: "99food *Predileto S Sa") como descrição. Pessoa/empresa EXTERNA (destinatário de um Pix) vai na descrição, nunca é origem. Se bater com um item da lista "Pagadores/recebedores conhecidos" abaixo, use o nome CANÔNICO desse item (texto entre aspas antes da seta).',
+    "- date: se a imagem mostrar a data/hora do lançamento (incluindo por extenso em pt-BR), resolva pro formato YYYY-MM-DD. Sem nenhuma data visível, retorne null (o sistema assume hoje).",
+    `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Baseie-se no estabelecimento / "Dado original" / produtos do recibo — NÃO use o nome de um cartão/conta como categoria. Se a imagem for um recibo/nota com PRODUTOS/itens legíveis, baseie a categoria nos PRODUTOS, não só no nome da loja (loja generalista: remédio no mercado → Farmácia). Uma categoria só para a transação inteira. Se o pagador bater com a lista de conhecidos abaixo, use a categoria DESSE item só quando os produtos não indicarem outra. Sem boa correspondência, retorne null.`,
+    '- paymentMethod: "credit" quando a imagem mostrar compra no cartão de crédito, "Cartão virtual", "Compra à vista"/"Parcelado" no app do cartão, ou "crédito"; "debit" (débito); "pix"; "transfer" (TED/DOC/transferência); "cash" (dinheiro). Sem menção clara, retorne null.',
+    `- originKind/originName: só preencha se o NOME (não o número) de uma conta ou cartão REAL do usuário aparecer na imagem OU na legenda (ver abaixo), batendo com um item das listas. Menções como "cartão com final 7547" / ".... 7547" NÃO bastam — o app não guarda os últimos dígitos. Nesse caso deixe originKind/originName null.`,
     `Contas do usuário: [${accountsLabel}]`,
     `Cartões do usuário: [${cardsLabel}]`,
     `Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${merchantsLabel}]`,
@@ -210,12 +214,13 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
   if (caption) {
     lines.push(
       "",
-      `IMPORTANTE — o usuário escreveu esta legenda junto da foto, que é o RÓTULO/intenção dele para o lançamento: "${caption}".`,
-      "A CATEGORIA sempre vem do produto/serviço descrito na legenda (a imagem serve pro VALOR/data/canal, nunca pra categoria quando há legenda).",
-      "Para a DESCRIÇÃO, DECIDA pelo contexto se deve COMBINAR o pagador/destinatário da imagem com o produto da legenda, ou usar SÓ a legenda:",
-      "  - COMBINE no formato \"Pagador - Produto\" quando o pagador/destinatário da imagem AGREGA informação nova (é uma pessoa ou estabelecimento específico, diferente do próprio usuário). Ex.: imagem = pagamento para 'LucasDeLimaSilva', legenda = 'Açaí delivery' → description = \"LucasDeLimaSilva - Açaí\".",
-      "  - Use SÓ a legenda quando o pagador/destinatário da imagem é RUÍDO ou REDUNDANTE — não agrega nada (ex.: é a própria empresa/PJ do usuário recebendo uma transferência do próprio usuário, então repetir o nome dela na descrição não ajuda). Ex.: imagem = transferência para a PJ do próprio usuário, legenda = 'Imposto TFE' → description = \"Imposto TFE\", sem o nome da PJ.",
-      "Se a legenda citar conta/cartão (ex.: 'pix Nubank'), use como origem também.",
+      `IMPORTANTE — o usuário escreveu esta legenda junto da foto: "${caption}".`,
+      "DECIDA o papel da legenda:",
+      `  - Se a legenda (ou parte dela) bater com o NOME de um cartão/conta das listas acima (ex.: "Crédito pessoal" = cartão cadastrado "Crédito pessoal"), use como ORIGEM: originName = esse nome, originKind = "card" ou "account" conforme a lista, e paymentMethod = "credit" se for cartão (ou o canal citado na legenda, ex. "pix Nubank"). NÃO use esse texto como categoryName.`,
+      "  - Se a legenda descrever o PRODUTO/serviço (ex.: \"Açaí delivery\", \"Imposto TFE\"), aí sim ela influencia description/categoria:",
+      "      · COMBINE \"Pagador - Produto\" quando o estabelecimento da imagem agrega info nova.",
+      "      · Use SÓ a legenda quando o pagador da imagem for ruído/redundante.",
+      "  - NUNCA force categoryName = legenda só porque a legenda existe — categoria vem do estabelecimento/produtos da imagem, salvo quando a legenda é claramente um produto/serviço (não um nome de cartão/conta).",
     );
   }
 
@@ -223,9 +228,56 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
 }
 
 /**
+ * Prompt pra nota de voz — mesmas regras de lançamento/consulta do texto
+ * (`buildPrompt`), só a FONTE muda (áudio OGG). Gemini 2.5 Flash entende
+ * áudio nativo (`audio/ogg`); não há STT separado.
+ */
+function buildVoicePrompt(ctx: AiParserContext): string {
+  const categoriesLabel = labelOrPlaceholder(ctx.categoryNames, "(nenhuma cadastrada)");
+  const accountsLabel = labelOrPlaceholder(ctx.accountNames, "(nenhuma cadastrada)");
+  const cardsLabel = labelOrPlaceholder(ctx.cardNames, "(nenhum cadastrado)");
+  const merchantsLabel = knownMerchantsLabel(ctx.knownMerchants);
+
+  return [
+    "Você processa uma NOTA DE VOZ (pt-BR) enviada por um usuário a um bot do Telegram de finanças pessoais.",
+    "Transcreva mentalmente o áudio e classifique/extraia como se fosse texto digitado.",
+    `Data de referência ("hoje"): ${ctx.todaySaoPaulo} (America/Sao_Paulo).`,
+    "",
+    "PRIMEIRO classifique a mensagem em um `intent`:",
+    '- "register": o usuário quer REGISTRAR um lançamento novo (gasto ou receita) — ex.: "mercado cento e vinte", "recebi quinhentos de freela".',
+    '- "query": o usuário está PERGUNTANDO sobre as finanças dele — ex.: "quanto gastei esse mês", "qual meu saldo".',
+    '- "unknown": áudio inaudível, saudação, ou nada financeiro reconhecível.',
+    "",
+    'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null.',
+    'Se intent="query": preencha isTransaction=false, description com qualquer texto curto, e preencha o objeto `query`.',
+    'Se intent="unknown": preencha isTransaction=false e deixe query=null.',
+    "",
+    'Regras de lançamento (só valem quando intent="register"):',
+    "- isTransaction=false se o áudio NÃO for um lançamento.",
+    '- type: INCOME quando o dinheiro ENTRA; EXPENSE quando SAI. Assuma EXPENSE quando ambíguo.',
+    '- amount: valor decimal em string (ex.: "30" ou "30.50"). Números falados ("trinta", "trinta e quarenta e cinco") viram decimal. Se NÃO houver valor, retorne null — NUNCA invente.',
+    '- description: descrição curta. Pessoa/empresa externa vai na description, nunca é origem. Se bater com "Pagadores/recebedores conhecidos", use o nome canônico.',
+    '- date: relativos ("hoje"/"ontem") e absolutos → YYYY-MM-DD. Sem data → null.',
+    `- categoryName: mais próximo de [${categoriesLabel}], ou null.`,
+    '- paymentMethod: "credit"/"debit"/"pix"/"transfer"/"cash", ou null.',
+    '- originKind/originName: só se citar conta/cartão REAL das listas. Pessoa externa NUNCA é origem.',
+    "",
+    'Regras de pergunta (só valem quando intent="query"):',
+    '- queryType: "spent" | "received" | "balance" | "category_total" | "top_categories" | "card_invoice" | "unpaid".',
+    `- categoryName (category_total): mais próximo de [${categoriesLabel}], ou null.`,
+    `- cardName (card_invoice): mais próximo de [${cardsLabel}], ou null.`,
+    '- period: "this_month" (padrão) | "last_month" | "this_year".',
+    "",
+    `Contas do usuário: [${accountsLabel}]`,
+    `Cartões do usuário: [${cardsLabel}]`,
+    `Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${merchantsLabel}]`,
+  ].join("\n");
+}
+
+/**
  * Valida a saída bruta do Gemini contra `aiResponseSchema` e mapeia pro shape
  * final `AiParsedTransaction` — usado como `parseResponse` de `callGemini`
- * nos dois caminhos de transação (texto e imagem). `null` quando o shape não
+ * nos caminhos de transação (texto, imagem e voz). `null` quando o shape não
  * bate (nunca confiamos cegamente em saída de LLM, é input externo como
  * qualquer outro).
  */
@@ -298,5 +350,34 @@ export async function parseTransactionFromImage(
     "vision",
     RESPONSE_SCHEMA,
     parseAiTransactionResponse,
+  );
+}
+
+/** Timeout maior pra voz — áudio + structured output costuma passar de 8s. */
+const VOICE_GEMINI_TIMEOUT_MS = 20000;
+
+/**
+ * Extração via Gemini a partir de NOTA DE VOZ (OGG Opus). Mesmo schema do
+ * texto (inclui intent/query). `null` em falha — sem fallback regex; o
+ * caller pede pra digitar. NUNCA loga bytes do áudio nem a API key.
+ */
+export async function parseTransactionFromVoice(
+  audioBytes: Buffer,
+  mimeType: string,
+  ctx: AiParserContext,
+): Promise<AiParsedTransaction | null> {
+  return callGemini(
+    [
+      {
+        parts: [
+          { inlineData: { mimeType, data: audioBytes.toString("base64") } },
+          { text: buildVoicePrompt(ctx) },
+        ],
+      },
+    ],
+    "voice",
+    RESPONSE_SCHEMA,
+    parseAiTransactionResponse,
+    VOICE_GEMINI_TIMEOUT_MS,
   );
 }

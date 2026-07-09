@@ -31,7 +31,7 @@ Ele apenas acelera entradas e consultas.
 
 # Endpoint
 
-Webhook exposto em `POST /api/telegram` (Route Handler — exceção ao padrão Server Actions do app, junto com os crons), compartilhado por TODOS os bots (um por usuário). Recebe o update do Telegram, identifica de qual usuário é o bot pelo secret do header (ver "Segurança"), processa e responde.
+Webhook exposto em `POST /api/telegram` (Route Handler — exceção ao padrão Server Actions do app, junto com os crons), compartilhado por TODOS os bots (um por usuário). Recebe o update do Telegram (`message` — texto/foto/voz/documento — ou `callback_query`), identifica de qual usuário é o bot pelo secret do header (ver "Segurança"), processa e responde.
 
 ---
 
@@ -203,12 +203,13 @@ livre passa por IA.
 
 # Parsing por IA (lançamento via FOTO)
 
-O bot também aceita **foto** de nota fiscal, comprovante (Pix/transferência)
-ou notificação push do banco/cartão (print de tela do celular) — ex.: "Compra
-no crédito aprovada — Compra de R$ 67,89 APROVADA em FILIAL ELDORA para o
-cartão com final 7547.". Extração via Gemini **vision** (mesmo modelo,
-`gemini-2.5-flash`, mesmo endpoint `generateContent`, mesmo `responseSchema`),
-`modules/telegram/ai-parser.ts`, `parseTransactionFromImage`.
+O bot também aceita **foto** de nota fiscal, comprovante (Pix/transferência),
+notificação push do banco/cartão **ou tela de detalhe da compra no app do
+cartão** (ex.: Nubank — logo do estabelecimento, valor grande `R$ …`, data por
+extenso, "Compra à vista", "Dado original", "Cartão virtual …. XXXX"). Extração
+via Gemini **vision** (mesmo modelo, `gemini-2.5-flash`, mesmo endpoint
+`generateContent`, mesmo `responseSchema`), `modules/telegram/ai-parser.ts`,
+`parseTransactionFromImage`.
 
 * **Detecção** — `message.photo` do Telegram é um array de `PhotoSize`
   (thumb→full, ordem não garantida); `modules/telegram/photo.ts`,
@@ -223,28 +224,53 @@ cartão com final 7547.". Extração via Gemini **vision** (mesmo modelo,
   reenviar.
 * **Extração** — mesmas regras de type/amount/description/categoryName/
   paymentMethod da extração por texto (ver seção acima), só a FONTE muda
-  (imagem via `inlineData` + prompt, em vez de texto puro). Cobre recibo, nota
-  fiscal, comprovante de Pix E notificação push do banco — o prompt trata os
-  4 formatos igual.
+  (imagem via `inlineData` + prompt). Cobre recibo, nota fiscal, comprovante
+  de Pix, notificação push **e tela de detalhe no app do cartão** — o prompt
+  trata esses formatos como lançamento válido quando há valor + estabelecimento.
+* **Legenda inteligente** — se o `caption` casar (case-insensitive) com o nome
+  de um cartão/conta ATIVO do usuário (ex.: "Crédito pessoal"), vira
+  `originName`/`paymentMethod` de forma determinística em `handlers.ts`
+  (`enrichAiOriginFromCaption`) — **não** vira `categoryName`. Categoria vem
+  do estabelecimento / "Dado original" / itens da imagem. Final `…. 7547`
+  sozinho continua **não** resolvendo cartão.
 * **`originKind`/`originName` na imagem** — mesma regra estrita do texto: só
-  preenche se o NOME de uma conta/cartão REAL do usuário aparecer na imagem.
-  Uma notificação citando só "cartão com final 7547" (dígitos, não nome) NÃO
-  é suficiente pra resolver qual cartão cadastrado é — o app não guarda os
-  últimos dígitos de nenhum cartão — então a IA deixa `originName=null` nesse
-  caso e o fluxo conversacional pergunta "De onde saiu?" normalmente (nunca
-  inventa um cartão a partir do número).
+  preenche se o NOME de uma conta/cartão REAL do usuário aparecer na imagem
+  (ou na legenda, acima). Dígitos do cartão NÃO bastam.
 * **Mesmo fluxo conversacional do texto** — a partir do momento em que a IA
   reconhece um lançamento na foto (`isTransaction=true` + `amount` legível),
-  o resultado cai no MESMO `processDraft` (`draft.ts`) do texto: confirma
-  origem ambígua, aplica a tag "Telegram", cria a transação. Sem fallback
-  determinístico pra foto (não dá pra "regex" uma imagem) — sem
-  `GEMINI_API_KEY`, erro/timeout, imagem sem lançamento reconhecível ou sem
-  valor legível, o bot responde pedindo pra reenviar a foto (mais nítida) ou
-  digitar o lançamento em texto, sem abrir pending.
+  o resultado cai no MESMO `processDraft` (`draft.ts`) do texto (híbrido com
+  botões — ver abaixo). Sem fallback determinístico pra foto — sem
+  `GEMINI_API_KEY`, erro/timeout, imagem sem lançamento/valor, o bot responde
+  pedindo pra reenviar o print inteiro ou digitar em texto (mensagem honesta,
+  sem culpar "luz/foco"), sem abrir pending. `resultCode` distingue
+  `image_ai_null` vs `image_no_amount` no log.
 * Uma foto enviada enquanto já existe um pending em aberto (pergunta de
   valor/origem pendente) NÃO é tratada como resposta a esse pending nesta
   versão — vira um lançamento novo via imagem (o pending antigo só expira
   pelo TTL de sempre). Fora de escopo desta iteração.
+
+---
+
+# Parsing por IA (nota de VOZ)
+
+O bot aceita **nota de voz** (`message.voice` — OGG Opus). Gemini 2.5 Flash
+entende áudio nativo (`inlineData` `audio/ogg`); **não** há STT separado
+(Whisper etc.). Mesmo `responseSchema` do texto (inclui `intent`/`query`) —
+`modules/telegram/ai-parser.ts`, `parseTransactionFromVoice`.
+
+* **Detecção** — `modules/telegram/voice.ts`, `extractVoice` (função pura).
+* **Download + limpeza** — `telegramApi.downloadVoice`: baixa os bytes do
+  Telegram, grava em arquivo temporário (`os.tmpdir()`), lê pra memória e
+  **apaga o arquivo no `finally`** (best-effort `unlink`). O áudio do usuário
+  não fica no disco do serverless depois da leitura. Nunca loga bytes.
+* **Limite** — duração > 60s → recusa e pede texto (antes de baixar).
+* **Fluxo** — igual ao texto livre: register → `processDraft` (+ botões
+  híbridos); query → `executeTelegramQuery`. Sem fallback regex. Sem
+  `GEMINI_API_KEY` / timeout / áudio inaudível → `buildVoiceUnreadableReply`.
+* Voz com pending aberto **não** é tratada como resposta — pede digitar
+  (mesma mensagem de "não entendi a voz").
+* Timeout Gemini da voz: 20s (`callGemini` com `timeoutMs`); webhook
+  `maxDuration=30`.
 
 ---
 
@@ -269,22 +295,52 @@ que nunca pergunta (ver seção acima).
   RESPOSTA a ele (`draft.ts`, `handlePendingReply`), nunca como um lançamento
   novo — mesmo que pareça um. Pending expirado é tratado como se não
   existisse (apagado na leitura, `pending.ts`).
-* **Cancelamento** — responder `cancelar` (case/acento-insensível) apaga o
-  pending e confirma, sem criar nada.
+* **Cancelamento** — responder `cancelar` (case/acento-insensível) **ou**
+  tocar o botão Cancelar no teclado inline apaga o pending e confirma, sem
+  criar nada.
 * **Merge da resposta** — `modules/telegram/pending-merge.ts`,
   `mergeReplyIntoDraft`. DETERMINÍSTICO (sem 2ª chamada à IA — resposta curta,
   vocabulário fixo, custo/latência de IA não compensam aqui):
   * `missingField="amount"` — extrai o primeiro número da resposta (ex.: "30",
-    "foi 30", "R$ 30,50").
-  * `missingField="origin"` — reconhece o canal por palavra-chave
-    ("crédito"/"débito"/"pix"/"transferência"/"dinheiro") e o nome de
-    conta/cartão real ATIVO como SUBSTRING da resposta normalizada (ex.: "pix
-    nubank" bate com a conta "Nubank").
+    "foi 30", "R$ 30,50"). Só texto (botões não ajudam pra valor livre).
+  * `missingField="origin"` — texto ("crédito"/"pix Nubank" etc.) **ou**
+    botão inline da conta/cartão (`callback.ts`, `po:a:{id}` / `po:c:{id}`).
 * **Rodadas** — cada pergunta incrementa `attempts`; depois de ~3 rodadas sem
   resolver, o bot desiste (apaga o pending, pede pra reenviar a mensagem
   completa) em vez de perguntar pra sempre.
 * **Conclusão** — draft completo cria a transação (mesma regra de `isPaid`,
-  mesma tag "Telegram" do lançamento direto) e apaga o pending.
+  mesma tag "Telegram") e apaga o pending; a confirmação traz teclado pós-save
+  (ver "Botões inline").
+
+---
+
+# Botões inline (fluxo híbrido médio)
+
+O webhook aceita `callback_query` além de `message` (`app/api/telegram/route.ts`).
+Mesma auth (secret no header) e allowlist de chat; sempre
+`answerCallbackQuery` pra tirar o loading do botão. Ownership da transação /
+pending é revalidada pelo `userId` do secret — `callback_data` só carrega ids
+(≤ 64 bytes). Implementação: `modules/telegram/inline-keyboard.ts`,
+`callback.ts`, `telegram-api.ts` (`sendMessage` com `reply_markup`,
+`editMessageText`, `answerCallbackQuery`).
+
+**Híbrido:**
+
+* Draft **completo** (caminho IA texto ou foto) → cria a transação e anexa
+  teclado: `Desfazer` | `Trocar categoria` | `Trocar origem`.
+  * Desfazer → soft-delete (`transactionService.deleteTransaction`) + edita a
+    mensagem pra "Lançamento desfeito" e remove o teclado.
+  * Trocar categoria / origem → edita a mensagem com lista clicável; ao
+    escolher, `updateTransaction` e reedita a confirmação com o teclado médio
+    de novo. « Voltar» restaura o teclado médio sem mutar.
+* Draft **incompleto** (falta origem) → pergunta em texto **+** botões das
+  contas/cartões ativos (+ Cancelar). Resposta em texto continua válida.
+* Falta **valor** → só texto ("Quanto foi?").
+* Fallback **regex** (`mercado 120` sem IA) → cria direto **sem** teclado
+  nesta versão (atalho de 5 segundos intacto).
+
+`CommandResult.replyMarkup` opcional carrega o teclado; o route envia ou edita
+conforme o update.
 
 ---
 
@@ -354,7 +410,9 @@ Data: 06/07/2026
 Com data futura (lançamento previsto) a linha de data ganha o sufixo
 "(previsto)" (ex.: `Data: 18/06/2026 (previsto)`) — ver "Parsing por IA".
 
-Confirmação inline por botão (ex.: trocar categoria antes de salvar) é opcional, não obrigatória no MVP.
+Confirmação pós-save no caminho IA/foto traz botões inline (Desfazer /
+Trocar categoria / Trocar origem) — ver "Botões inline". Fallback regex
+continua sem teclado.
 
 ---
 
@@ -369,8 +427,16 @@ Confirmação inline por botão (ex.: trocar categoria antes de salvar) é opcio
 Responda com o cartão ou conta (ex.: crédito Nubank, pix Carteira).
 ```
 
-Ver "Fluxo conversacional" acima — a resposta do usuário é mesclada no
-rascunho pendente até completar valor + origem.
+Na pergunta de origem, o bot também anexa botões inline das contas/cartões
+ativos (e Cancelar). Ver "Botões inline" e "Fluxo conversacional" acima.
+
+---
+
+## Pós-save (teclado médio)
+
+Após criar via IA/foto, a confirmação traz:
+
+`Desfazer` | `Trocar categoria` | `Trocar origem`
 
 ---
 
@@ -499,7 +565,11 @@ Telegram não pode criar dados inconsistentes.
 * comandos mais inteligentes
 * notificações de orçamento
 * alertas de cartão
-* resumo semanal automático
+* resumo semanal automático (push no Telegram — docs/29 menciona; ainda não
+  implementado no código de alerts)
+* teclado também no fallback regex (`mercado 120`)
+* editar valor/descrição por botão no chat (além do médio atual)
+* router genérico de documentos (docs/51-TELEGRAM-DOC-ROUTER.md)
 * **Follow-up documentado — transferência interna real (2 pernas):** hoje
   `paymentMethod="transfer"` é tratado como um canal de pagamento NUMA conta
   (gera INCOME ou EXPENSE conforme a direção, igual pix/débito/dinheiro) —

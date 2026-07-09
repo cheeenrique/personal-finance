@@ -128,16 +128,31 @@ export function buildPendingGaveUpReply(): string {
 
 /**
  * Foto que não deu pra baixar OU que o Gemini não conseguiu ler como um
- * lançamento (sem valor legível, ou nada de financeiro reconhecível na
- * imagem — docs/30-TELEGRAM.md, bot aceita foto de nota/comprovante/
- * notificação). Mesmo padrão de "não entendi" (`buildUnknownReply`): ⚠️, pede
- * pra tentar de novo ou digitar em texto.
+ * lançamento (sem valor legível, ou nada de financeiro reconhecível —
+ * docs/30-TELEGRAM.md). Mensagem honesta: não culpa "luz/foco" (prints
+ * digitais nítidos também falham). Pede reenvio ou texto.
  */
 export function buildImageUnreadableReply(): string {
   return [
-    `${ICON_WARNING} Não consegui identificar um lançamento nessa foto.`,
-    "Manda de novo com mais luz/foco, ou digite o lançamento em texto (ex.: mercado 120).",
+    `${ICON_WARNING} Não consegui ler valor/estabelecimento nessa imagem.`,
+    "Manda de novo (print inteiro da compra) ou digite o lançamento em texto (ex.: mercado 120).",
   ].join("\n");
+}
+
+/**
+ * Nota de voz inaudível / Gemini falhou / pending aberto (docs/30-TELEGRAM.md
+ * — parsing por voz). Pede pra digitar; não culpa o microfone genérico.
+ */
+export function buildVoiceUnreadableReply(): string {
+  return [
+    `${ICON_WARNING} Não consegui entender essa nota de voz.`,
+    "Manda de novo com mais clareza, ou digite o lançamento (ex.: mercado 120).",
+  ].join("\n");
+}
+
+/** Soft-delete via botão Desfazer (callback_query) — confirma e remove o teclado. */
+export function buildTransactionUndoneReply(): string {
+  return `${ICON_SUCCESS} Lançamento desfeito.`;
 }
 
 /** Rótulo pt-BR de um período de consulta (docs/30-TELEGRAM.md, "Consulta por IA") — usado nos títulos de `buildQueryReply`. */

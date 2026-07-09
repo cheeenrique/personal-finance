@@ -22,14 +22,25 @@ export type ParsedCommand =
   | { kind: "unknown" };
 
 /**
+ * Botão inline do Telegram (`InlineKeyboardButton`) — tipagem mínima pra
+ * `reply_markup` sem acoplar o domínio à Bot API inteira.
+ */
+export type TelegramInlineButton = { text: string; callback_data: string };
+
+/** Teclado inline opcional anexado a uma resposta (fluxo híbrido médio). */
+export type TelegramReplyMarkup = { inline_keyboard: TelegramInlineButton[][] };
+
+/**
  * Resultado de executar um comando: texto de resposta pro usuário + código
  * curto pro log (`chat_id=X -> resultCode`). O log NUNCA usa `text` — só
  * `resultCode` (docs/30-TELEGRAM.md, "Segurança": nunca logar corpo da
- * mensagem nem valores monetários).
+ * mensagem nem valores monetários). `replyMarkup` opcional — confirmação
+ * pós-save e pergunta de origem com botões (docs/30-TELEGRAM.md, híbrido).
  */
 export type CommandResult = {
   text: string;
   resultCode: string;
+  replyMarkup?: TelegramReplyMarkup;
 };
 
 /** Origem citada numa mensagem de lançamento livre — "cartão X" vs "conta X" (ver `ai-parser.ts`/`resolve.ts`). */
@@ -170,6 +181,18 @@ export type TelegramPhotoInput = { fileId: string; caption: string | null };
  * não tem documento ou quando não dá pra resolver nenhum mimeType.
  */
 export type TelegramDocumentInput = { fileId: string; mimeType: string };
+
+/**
+ * Nota de voz já detectada (`message.voice`, docs/30-TELEGRAM.md — parsing
+ * por áudio via Gemini). Telegram grava OGG Opus; `mimeType` default
+ * `audio/ogg`. `durationSeconds` opcional — usado pra rejeitar áudios longos
+ * antes de baixar.
+ */
+export type TelegramVoiceInput = {
+  fileId: string;
+  durationSeconds: number | null;
+  mimeType: string;
+};
 
 /**
  * Rascunho de um lançamento em progresso — persistido em

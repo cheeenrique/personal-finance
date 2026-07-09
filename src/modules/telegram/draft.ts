@@ -2,9 +2,16 @@ import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { positiveDecimalSchema } from "@/lib/money/schema";
 import { createTransactionSchema } from "@/modules/transactions/schemas";
 import { transactionService } from "@/modules/transactions/service";
+import { buildPendingOriginKeyboard, buildPostSaveKeyboard } from "./inline-keyboard";
 import { isCancelCommand, mergeReplyIntoDraft } from "./pending-merge";
 import { telegramPendingRepository, type PendingEntry } from "./pending";
-import { originPayload, resolveCategoryByName, resolveOriginStrict } from "./resolve";
+import {
+  expectedOriginKind,
+  listActiveOriginsForButtons,
+  originPayload,
+  resolveCategoryByName,
+  resolveOriginStrict,
+} from "./resolve";
 import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildAskAmountReply,
@@ -15,7 +22,13 @@ import {
   buildPendingGaveUpReply,
   buildTransactionConfirmationReply,
 } from "./reply";
-import type { AiParsedTransaction, CommandResult, TelegramDraft, TelegramOrigin } from "./types";
+import type {
+  AiParsedTransaction,
+  CommandResult,
+  TelegramDraft,
+  TelegramOrigin,
+  TelegramOriginKind,
+} from "./types";
 
 /**
  * Rodadas máximas de pergunta antes de desistir (docs/30-TELEGRAM.md, "Fluxo
@@ -35,6 +48,24 @@ export function draftFromAi(ai: AiParsedTransaction): TelegramDraft {
     paymentMethod: ai.paymentMethod,
     originKind: ai.originKind,
     originName: ai.originName,
+  };
+}
+
+/**
+ * Callback de pending origem escolheu conta/cartão por id — preenche
+ * originKind/originName com o NOME cadastrado (não o id), pra
+ * `resolveOriginStrict` casar no fluxo normal. Caller já resolveu o nome.
+ */
+export function draftFromOriginIds(
+  draft: TelegramDraft,
+  kind: TelegramOriginKind,
+  originName: string,
+): TelegramDraft {
+  return {
+    ...draft,
+    originKind: kind,
+    originName,
+    paymentMethod: draft.paymentMethod ?? (kind === "card" ? "credit" : null),
   };
 }
 
@@ -134,6 +165,7 @@ async function createTransactionFromDraft(
       isPaid: created.isPaid,
     }),
     resultCode: "transaction_created",
+    replyMarkup: buildPostSaveKeyboard(created.id),
   };
 }
 
@@ -164,14 +196,25 @@ export async function processDraft(userId: string, draft: TelegramDraft, attempt
     return { text: buildAskAmountReply(), resultCode: "pending_amount_asked" };
   }
 
+  const wantKind = expectedOriginKind(draft.paymentMethod);
+  const origins =
+    resolution.ambiguousLabels && resolution.ambiguousLabels.length > 0
+      ? (await listActiveOriginsForButtons(userId, wantKind)).filter((origin) =>
+          resolution.ambiguousLabels!.includes(origin.label),
+        )
+      : await listActiveOriginsForButtons(userId, wantKind);
+
+  const replyMarkup = origins.length > 0 ? buildPendingOriginKeyboard(origins) : undefined;
+
   if (resolution.ambiguousLabels && resolution.ambiguousLabels.length > 0) {
     return {
       text: buildAskOriginAmbiguousReply(resolution.ambiguousLabels),
       resultCode: "pending_origin_ambiguous",
+      replyMarkup,
     };
   }
 
-  return { text: buildAskOriginReply(), resultCode: "pending_origin_asked" };
+  return { text: buildAskOriginReply(), resultCode: "pending_origin_asked", replyMarkup };
 }
 
 /**

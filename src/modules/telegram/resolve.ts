@@ -396,6 +396,49 @@ export async function listCategoryNamesForAI(userId: string): Promise<string[]> 
   return flattenTree(tree).map((category) => category.name);
 }
 
+/** Cap de botões de categoria no teclado inline (Telegram fica ilegível com dezenas). */
+const CATEGORY_BUTTONS_LIMIT = 16;
+
+/**
+ * Categorias do tipo pedido pra teclado "Trocar categoria" (docs/30-TELEGRAM.md —
+ * fluxo híbrido médio). Árvore achatada, filhas primeiro quando possível
+ * (mais específicas), limitada a `CATEGORY_BUTTONS_LIMIT`.
+ */
+export async function listCategoriesForButtons(
+  userId: string,
+  type: TelegramTransactionType,
+): Promise<Array<{ id: string; name: string }>> {
+  const expectedType = type === "INCOME" ? CategoryType.INCOME : CategoryType.EXPENSE;
+  const tree = await categoryService.listTree(userId);
+  const categories = flattenTree(tree).filter((category) => category.type === expectedType);
+
+  // Filhas (parentId set) antes dos pais — granularidade específica no teclado.
+  const sorted = [...categories].sort((a, b) => {
+    const aChild = a.parentId ? 0 : 1;
+    const bChild = b.parentId ? 0 : 1;
+    if (aChild !== bChild) return aChild - bChild;
+    return a.name.localeCompare(b.name, "pt-BR");
+  });
+
+  return sorted.slice(0, CATEGORY_BUTTONS_LIMIT).map((category) => ({
+    id: category.id,
+    name: category.name,
+  }));
+}
+
+/**
+ * Contas + cartões ATIVOS pra teclado de origem (pending ou "Trocar origem").
+ * `wantKind` restringe quando o paymentMethod já aponta cartão vs conta;
+ * `null` lista os dois.
+ */
+export async function listActiveOriginsForButtons(
+  userId: string,
+  wantKind: TelegramOriginKind | null,
+): Promise<TelegramOrigin[]> {
+  const candidates = await activeOriginCandidates(userId, wantKind);
+  return candidates.map((candidate) => candidate.origin);
+}
+
 /** Nomes de contas + cartões ATIVOS do usuário — insumo do prompt da IA pra escolher a origem do lançamento. */
 export async function listOriginNamesForAI(
   userId: string,
