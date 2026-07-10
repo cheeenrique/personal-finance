@@ -25,7 +25,7 @@ export function AccountHeaderActions({ accountId, accounts }: AccountHeaderActio
     <div className="flex flex-wrap items-center gap-2.5">
       {accounts.length >= 2 && (
         <>
-          <Button type="button" variant="outline" size="lg" className="gap-2" onClick={() => setTransferOpen(true)}>
+          <Button type="button" variant="neutral" size="lg" className="gap-2" onClick={() => setTransferOpen(true)}>
             <Repeat className="size-4" aria-hidden="true" />
             Transferir
           </Button>

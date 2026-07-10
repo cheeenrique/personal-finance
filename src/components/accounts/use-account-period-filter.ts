@@ -115,12 +115,11 @@ export function accountPeriodFullLabel(mode: AccountPeriodMode): string {
  * filtros de `/transactions` (docs/06-SCREENS.md, "Contas").
  */
 export function useAccountPeriodFilter() {
-  // Default "all": importação de OFX traz lançamentos de meses passados — com
-  // "Mês atual" eles somem da tabela (mas contam no saldo/gráfico), o que
-  // confunde ("importei e não apareceu"). "Todos" mostra tudo (paginado), sem
-  // aparecer como pill ativa no segmented control (handoff só define 4
-  // opções) — nenhuma pill fica destacada até o usuário escolher uma.
-  const [mode, setMode] = useState<AccountPeriodMode>("all");
+  // Default "Mês atual" (pedido do usuário): a tela abre já filtrada no mês
+  // corrente com a pill destacada. Importação de OFX traz lançamentos de meses
+  // passados — eles não aparecem na tabela até trocar pra "3 meses"/
+  // "Personalizado" (mas seguem contando no saldo).
+  const [mode, setMode] = useState<AccountPeriodMode>("this_month");
   const [customFrom, setCustomFrom] = useState(() => toDateInputValueSaoPaulo());
   const [customTo, setCustomTo] = useState(() => toDateInputValueSaoPaulo());
 
