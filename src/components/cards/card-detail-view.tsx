@@ -116,17 +116,22 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
           </Button>
         </div>
 
-        <CardPeriodFilterBar
-          mode={periodFilter.mode}
-          setMode={periodFilter.setMode}
-          customFrom={periodFilter.customFrom}
-          setCustomFrom={periodFilter.setCustomFrom}
-          customTo={periodFilter.customTo}
-          setCustomTo={periodFilter.setCustomTo}
-          idPrefix="card-invoice-period"
+        <InvoiceItemsTable
+          cardId={card.id}
+          dateFrom={periodFilter.range.dateFrom}
+          dateTo={periodFilter.range.dateTo}
+          periodFilter={
+            <CardPeriodFilterBar
+              mode={periodFilter.mode}
+              setMode={periodFilter.setMode}
+              customFrom={periodFilter.customFrom}
+              setCustomFrom={periodFilter.setCustomFrom}
+              customTo={periodFilter.customTo}
+              setCustomTo={periodFilter.setCustomTo}
+              idPrefix="card-invoice-period"
+            />
+          }
         />
-
-        <InvoiceItemsTable cardId={card.id} dateFrom={periodFilter.range.dateFrom} dateTo={periodFilter.range.dateTo} />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">

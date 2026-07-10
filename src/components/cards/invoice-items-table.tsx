@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Receipt } from "lucide-react";
 
@@ -23,6 +23,8 @@ type InvoiceItemsTableProps = {
   /** Range do período selecionado no segmented control acima (`use-card-period-filter.ts`) — `YYYY-MM-DD`, `undefined` num dos lados = sem limite. */
   dateFrom?: string;
   dateTo?: string;
+  /** Segmented de período renderizado no MESMO slot de filtros, ao lado da categoria (fica um do lado do outro em vez de empilhado). */
+  periodFilter?: ReactNode;
 };
 
 /**
@@ -50,7 +52,7 @@ type InvoiceItemsTableProps = {
  * a página pro mesmo padrão de `AccountTransactionsHistory`. O período
  * (segmented control) vive um nível acima, em `card-detail-view.tsx`.
  */
-export function InvoiceItemsTable({ cardId, dateFrom, dateTo }: InvoiceItemsTableProps) {
+export function InvoiceItemsTable({ cardId, dateFrom, dateTo, periodFilter }: InvoiceItemsTableProps) {
   const router = useRouter();
   const referenceData = useTransactionsReferenceData();
 
@@ -113,14 +115,17 @@ export function InvoiceItemsTable({ cardId, dateFrom, dateTo }: InvoiceItemsTabl
           description: "As compras lançadas neste cartão dentro do período selecionado aparecem aqui.",
         }}
         filters={
-          <EntitySelect
-            aria-label="Filtrar por categoria"
-            options={[{ value: ALL_CATEGORIES_VALUE, label: "Todas as categorias" }, ...referenceData.categoryOptions]}
-            value={categoryId ?? ALL_CATEGORIES_VALUE}
-            onValueChange={(value) => setCategoryId(value === ALL_CATEGORIES_VALUE ? undefined : value)}
-            className="h-[38px] w-auto min-w-[200px]"
-            disabled={referenceData.loading}
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            {periodFilter}
+            <EntitySelect
+              aria-label="Filtrar por categoria"
+              options={[{ value: ALL_CATEGORIES_VALUE, label: "Todas as categorias" }, ...referenceData.categoryOptions]}
+              value={categoryId ?? ALL_CATEGORIES_VALUE}
+              onValueChange={(value) => setCategoryId(value === ALL_CATEGORIES_VALUE ? undefined : value)}
+              className="h-[38px] w-auto min-w-[200px]"
+              disabled={referenceData.loading}
+            />
+          </div>
         }
         rowActions={(row) => (
           <TransactionRowActions
