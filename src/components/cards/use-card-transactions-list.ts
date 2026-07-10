@@ -13,6 +13,9 @@ const EMPTY_PAGE: PaginatedResult<ClientTransaction> = { items: [], total: 0, pa
 
 export type CardTransactionsFilter = {
   cardId: string;
+  /** Range do filtro de período segmentado acima da tabela (`use-card-period-filter.ts`) — `YYYY-MM-DD`, `undefined` num dos lados = sem limite. */
+  dateFrom?: string;
+  dateTo?: string;
   page: number;
 };
 
@@ -24,6 +27,8 @@ type CardTransactionsListData = {
 async function fetchCardTransactionsList(filter: CardTransactionsFilter): Promise<CardTransactionsListData> {
   const result = await listTransactionsAction({
     cardId: filter.cardId,
+    dateFrom: filter.dateFrom,
+    dateTo: filter.dateTo,
     page: filter.page,
     pageSize: DEFAULT_PAGE_SIZE,
   });

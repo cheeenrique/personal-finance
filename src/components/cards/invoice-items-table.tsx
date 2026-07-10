@@ -20,20 +20,19 @@ const ALL_CATEGORIES_VALUE = "__ALL__";
 
 type InvoiceItemsTableProps = {
   cardId: string;
-  /** Range do ciclo aberto (`InvoiceView.periodStart`/`periodEnd`, ISO) — `periodEnd` é EXCLUSIVO, ver `modules/cards/cycle.ts`. */
-  periodStart: string;
-  periodEnd: string;
+  /** Range do período selecionado no segmented control acima (`use-card-period-filter.ts`) — `YYYY-MM-DD`, `undefined` num dos lados = sem limite. */
+  dateFrom?: string;
+  dateTo?: string;
 };
 
 /**
- * Compras da fatura atual (docs/22-CREDIT_CARDS.md, "Detalhe do Cartão") —
- * MESMA `DataTable` + colunas (`buildTransactionColumns`) + paginação
- * server-side + editar/excluir de `AccountTransactionsHistory`
- * (`/accounts/[id]`), filtrando por `cardId` + range do ciclo atual em vez de
- * `accountId` + período livre (ver `use-invoice-items-list.ts`). Cada item da
- * fatura É uma `Transaction` real (`type=EXPENSE`) — `cardService.buildInvoice`
- * só DERIVA esta lista a partir dela (`modules/cards/repository.ts`
- * `findExpensesInRange`), não cria uma entidade própria.
+ * Compras do cartão dentro do período selecionado (docs/22-CREDIT_CARDS.md,
+ * "Detalhe do Cartão") — MESMA `DataTable` + colunas
+ * (`buildTransactionColumns`) + paginação server-side + editar/excluir de
+ * `AccountTransactionsHistory` (`/accounts/[id]`), filtrando por `cardId` +
+ * range livre em vez de `accountId` + período livre (ver
+ * `use-invoice-items-list.ts`). Cada item É uma `Transaction` real
+ * (`type=EXPENSE`) — sem entidade própria.
  *
  * A listagem já traz o shape completo (`ClientTransaction`, mesma Server
  * Action de `/transactions`), então "Editar" abre o modal direto — sem o
@@ -48,28 +47,31 @@ type InvoiceItemsTableProps = {
  * Filtro por categoria acima da tabela (`filters` slot do `DataTable`,
  * mesmo `EntitySelect` bare de `installments-board.tsx` — sem barra
  * multi-filtro, essa tela só tem esse dropdown) — trocar de categoria reseta
- * a página pro mesmo padrão de `AccountTransactionsHistory`.
+ * a página pro mesmo padrão de `AccountTransactionsHistory`. O período
+ * (segmented control) vive um nível acima, em `card-detail-view.tsx`.
  */
-export function InvoiceItemsTable({ cardId, periodStart, periodEnd }: InvoiceItemsTableProps) {
+export function InvoiceItemsTable({ cardId, dateFrom, dateTo }: InvoiceItemsTableProps) {
   const router = useRouter();
   const referenceData = useTransactionsReferenceData();
 
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Trocar de categoria invalida a página atual — mesmo ajuste durante o
-  // render (não `useEffect`) de `AccountTransactionsHistory`.
+  // Trocar de categoria ou de período invalida a página atual — mesmo ajuste
+  // durante o render (não `useEffect`) de `AccountTransactionsHistory`.
   const [prevCategoryId, setPrevCategoryId] = useState(categoryId);
-  if (categoryId !== prevCategoryId) {
+  const [prevRange, setPrevRange] = useState({ dateFrom, dateTo });
+  if (categoryId !== prevCategoryId || dateFrom !== prevRange.dateFrom || dateTo !== prevRange.dateTo) {
     setPrevCategoryId(categoryId);
+    setPrevRange({ dateFrom, dateTo });
     setCurrentPage(1);
   }
 
   const { page, installmentTotals, loading, error, reload } = useInvoiceItemsList({
     cardId,
     categoryId,
-    periodStart,
-    periodEnd,
+    dateFrom,
+    dateTo,
     page: currentPage,
   });
 
@@ -107,8 +109,8 @@ export function InvoiceItemsTable({ cardId, periodStart, periodEnd }: InvoiceIte
         onRetry={reload}
         emptyState={{
           icon: Receipt,
-          title: "Nenhuma compra nesta fatura",
-          description: "As compras lançadas neste cartão dentro do ciclo atual aparecem aqui.",
+          title: "Nenhuma compra no período",
+          description: "As compras lançadas neste cartão dentro do período selecionado aparecem aqui.",
         }}
         filters={
           <EntitySelect

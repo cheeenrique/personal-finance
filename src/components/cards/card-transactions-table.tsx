@@ -15,22 +15,38 @@ import { useTransactionMutations } from "@/components/transactions/use-transacti
 import type { ClientTransaction } from "@/modules/transactions/types";
 import { useCardTransactionsList } from "./use-card-transactions-list";
 
-type CardTransactionsTableProps = { cardId: string };
+type CardTransactionsTableProps = {
+  cardId: string;
+  /** Range do segmented control acima (`use-card-period-filter.ts`, ver `card-detail-view-meal.tsx`) — `YYYY-MM-DD`, `undefined` num dos lados = sem limite. */
+  dateFrom?: string;
+  dateTo?: string;
+};
 
 /**
- * Recargas (INCOME) + gastos (EXPENSE) de um cartão MEAL — MESMA `DataTable` +
- * colunas (`buildTransactionColumns`) + paginação server-side + editar/excluir
- * de `InvoiceItemsTable` (fatura CREDIT), sem o filtro de categoria/ciclo:
- * aqui o filtro é só `cardId` (`use-card-transactions-list.ts`), sem noção de
- * fatura/ciclo (MEAL não tem, ver `modules/cards/service.ts` `assertCreditCard`).
+ * Recargas (INCOME) + gastos (EXPENSE) de um cartão MEAL dentro do período
+ * selecionado — MESMA `DataTable` + colunas (`buildTransactionColumns`) +
+ * paginação server-side + editar/excluir de `InvoiceItemsTable` (fatura
+ * CREDIT), sem o filtro de categoria (aqui o filtro é `cardId` + período,
+ * ver `use-card-transactions-list.ts`), sem noção de fatura/ciclo (MEAL não
+ * tem, ver `modules/cards/service.ts` `assertCreditCard`).
  */
-export function CardTransactionsTable({ cardId }: CardTransactionsTableProps) {
+export function CardTransactionsTable({ cardId, dateFrom, dateTo }: CardTransactionsTableProps) {
   const router = useRouter();
   const referenceData = useTransactionsReferenceData();
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Trocar de período invalida a página atual — mesmo ajuste durante o
+  // render (não `useEffect`) de `InvoiceItemsTable`/`AccountTransactionsHistory`.
+  const [prevRange, setPrevRange] = useState({ dateFrom, dateTo });
+  if (dateFrom !== prevRange.dateFrom || dateTo !== prevRange.dateTo) {
+    setPrevRange({ dateFrom, dateTo });
+    setCurrentPage(1);
+  }
+
   const { page, installmentTotals, loading, error, reload } = useCardTransactionsList({
     cardId,
+    dateFrom,
+    dateTo,
     page: currentPage,
   });
 
@@ -68,8 +84,8 @@ export function CardTransactionsTable({ cardId }: CardTransactionsTableProps) {
         onRetry={reload}
         emptyState={{
           icon: Receipt,
-          title: "Nenhuma movimentação neste cartão",
-          description: "Recargas e gastos lançados neste cartão aparecem aqui.",
+          title: "Nenhuma movimentação no período",
+          description: "Recargas e gastos lançados neste cartão dentro do período selecionado aparecem aqui.",
         }}
         rowActions={(row) => (
           <TransactionRowActions

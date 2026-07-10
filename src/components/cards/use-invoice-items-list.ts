@@ -15,9 +15,17 @@ const EMPTY_PAGE: PaginatedResult<ClientTransaction> = { items: [], total: 0, pa
 export type InvoiceItemsFilter = {
   cardId: string;
   categoryId?: string;
-  /** Ciclo da fatura atual — mesmo shape ISO de `InvoiceView`. `periodEnd` é EXCLUSIVO (ver `modules/cards/cycle.ts` `cycleContaining`). */
-  periodStart: string;
-  periodEnd: string;
+  /**
+   * Range do filtro de período segmentado acima da tabela (`use-card-period-filter.ts`,
+   * "Mês atual"/"Mês passado"/"Personalizado") — `YYYY-MM-DD`, ambos
+   * INCLUSIVOS (mesmo formato de `periodToRange`). `undefined` num dos lados
+   * = sem limite. Não é mais o ciclo da fatura (`InvoiceView.periodStart`/
+   * `periodEnd`) — a lista de compras virou período livre, independente do
+   * fechamento do cartão (fonte visual: `Personal Finance - Cartoes.dc.html`,
+   * segmented "Mês atual/Mês passado/Personalizado").
+   */
+  dateFrom?: string;
+  dateTo?: string;
   page: number;
 };
 
@@ -26,31 +34,18 @@ type InvoiceItemsListData = {
   installmentTotals: Map<string, number>;
 };
 
-/**
- * `cycle.periodEnd` é EXCLUSIVO (`cycleContaining`: "uma compra feita NO
- * PRÓPRIO dia de fechamento já pertence ao PRÓXIMO ciclo") — é como
- * `cardService.buildInvoice`/`findExpensesInRange` consulta (`lt: periodEnd`).
- * `listFilterSchema.dateTo`, porém, é INCLUSIVO (`lte`, ver
- * `modules/transactions/repository.ts` `buildWhere`). Subtrai 1ms pra manter
- * a mesma fronteira de ciclo sem duplicar a regra de fechamento aqui — só
- * converte o formato entre os dois filtros.
- */
-function toInclusiveDateTo(periodEndIso: string): string {
-  return new Date(new Date(periodEndIso).getTime() - 1).toISOString();
-}
-
 /** 3ª ocorrência do fetch+merge de `installmentTotals` (`use-transactions-list.ts`, `use-account-transactions-list.ts`) — extrair é o próximo passo (rule 02-dry-kiss-yagni), fora do escopo desta task. */
 async function fetchInvoiceItemsList(filter: InvoiceItemsFilter): Promise<InvoiceItemsListData> {
   const result = await listTransactionsAction({
     cardId: filter.cardId,
     categoryId: filter.categoryId,
-    // `findExpensesInRange` só considera compras (`EXPENSE`) — sem este filtro,
-    // um `CARD_PAYMENT` do mesmo cartão dentro do ciclo (também tem `cardId`
-    // preenchido, ver `modules/cards/pay-invoice.ts`) vazaria pra esta lista.
+    // Só compras (`EXPENSE`) — sem este filtro, um `CARD_PAYMENT` do mesmo
+    // cartão dentro do período (também tem `cardId` preenchido, ver
+    // `modules/cards/pay-invoice.ts`) vazaria pra esta lista.
     type: TransactionType.EXPENSE,
     isPaid: true,
-    dateFrom: filter.periodStart,
-    dateTo: toInclusiveDateTo(filter.periodEnd),
+    dateFrom: filter.dateFrom,
+    dateTo: filter.dateTo,
     page: filter.page,
     pageSize: DEFAULT_PAGE_SIZE,
   });
@@ -71,10 +66,10 @@ async function fetchInvoiceItemsList(filter: InvoiceItemsFilter): Promise<Invoic
 }
 
 /**
- * Busca as compras da fatura ATUAL de UM cartão (docs/22-CREDIT_CARDS.md,
- * "Detalhe do Cartão") — mesma Server Action + formato de dados de
- * `useAccountTransactionsList` (`/accounts/[id]`), com filtro fixo em
- * `cardId` + range do ciclo atual em vez de `accountId` + período livre.
+ * Busca as compras de UM cartão dentro do período selecionado no segmented
+ * control acima da tabela (docs/22-CREDIT_CARDS.md, "Detalhe do Cartão") —
+ * mesma Server Action + formato de dados de `useAccountTransactionsList`
+ * (`/accounts/[id]`), com filtro fixo em `cardId` em vez de `accountId`.
  * Cache via TanStack Query, chave própria (`invoice-items`) — não
  * compartilha cache com `/transactions`/`/accounts/[id]`, `reload()`
  * invalida só esta tela.

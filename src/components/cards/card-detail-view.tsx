@@ -3,29 +3,25 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, CreditCard, Pencil, Plus, Receipt, Trash2, Wallet } from "lucide-react";
+import { ArrowLeft, Clock, CreditCard, Layers3, Plus, Receipt, ShoppingBag, Wallet } from "lucide-react";
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { formatBRL } from "@/lib/money/format";
 import { notifySuccess } from "@/lib/toast";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
 import { deleteCardAction } from "@/modules/cards/actions";
 import { TransactionType } from "@/generated/prisma/enums";
 import { useShell } from "@/components/providers/shell-provider";
-import {
-  CardLimitProgress,
-  computeUsagePercent,
-  usageToneForKpi,
-  usageToneTextClass,
-} from "./card-limit-progress";
-import { cardGradient } from "./card-color";
-import { CardFace } from "./card-face";
+import { CardLimitProgress, computeUsagePercent, usageToneTextClass } from "./card-limit-progress";
+import { CardDetailFacePanel } from "./card-detail-face-panel";
 import { CardFormModal } from "./card-form-modal";
 import { InvoiceSummaryCard } from "./invoice-summary-card";
 import { InvoiceItemsTable } from "./invoice-items-table";
 import { InvoiceHistoryList } from "./invoice-history-list";
+import { CardPeriodFilterBar } from "./card-period-filter-bar";
+import { useCardPeriodFilter } from "./use-card-period-filter";
 import type { CardSummaryView, InvoiceView, PastInvoiceView } from "./types";
 
 type CardDetailViewProps = {
@@ -35,9 +31,11 @@ type CardDetailViewProps = {
 };
 
 /**
- * Detalhe de `/cards/[id]` (fonte visual: `Personal Finance -
- * Cartoes.dc.html`, seção DETALHE) — hero com a face realista grande +
- * Editar/Excluir à esquerda, título/KPIs/uso/fatura à direita.
+ * Detalhe de `/cards/[id]` pra cartão CREDIT (fonte visual: `Personal
+ * Finance - Cartoes.dc.html`, seção DETALHE) — hero com a face realista
+ * grande + Editar/Excluir à esquerda, título/KPIs/uso/fatura à direita;
+ * compras da fatura com filtro de período segmentado; faixa de
+ * parcelamentos; histórico de faturas.
  */
 export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewProps) {
   const router = useRouter();
@@ -45,6 +43,7 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const percent = computeUsagePercent(card.outstandingBalance, card.limit);
+  const periodFilter = useCardPeriodFilter();
 
   async function handleDelete() {
     const result = await deleteCardAction(card.id);
@@ -63,31 +62,8 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
         Cartões
       </Link>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr] lg:items-start">
-        <div className="mx-auto flex w-full max-w-[380px] flex-col gap-3 lg:mx-0">
-          <CardFace
-            gradient={cardGradient(card.color)}
-            cardName={card.name}
-            brand={card.brand}
-            lastFour={card.lastFour}
-            holder={card.holderName}
-            type={card.type}
-          />
-          <div className="flex gap-2.5">
-            <Button type="button" onClick={() => setEditOpen(true)} className="flex-1 gap-1.5">
-              <Pencil className="size-4" aria-hidden="true" />
-              Editar cartão
-            </Button>
-            <button
-              type="button"
-              onClick={() => setDeleteOpen(true)}
-              aria-label={`Excluir ${card.name}`}
-              className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
-            >
-              <Trash2 className="size-4" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr] lg:items-start">
+        <CardDetailFacePanel card={card} onEdit={() => setEditOpen(true)} onDelete={() => setDeleteOpen(true)} />
 
         <div className="flex flex-col gap-4">
           <div>
@@ -99,13 +75,8 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <KPICard icon={CreditCard} title="Limite total" value={formatBRL(card.limit)} tone="neutral" />
-            <KPICard
-              icon={Receipt}
-              title="Limite usado"
-              value={formatBRL(card.outstandingBalance)}
-              tone={usageToneForKpi(percent)}
-            />
-            <KPICard icon={Wallet} title="Limite disponível" value={formatBRL(card.availableLimit)} tone="success" />
+            <KPICard icon={Receipt} title="Limite usado" value={formatBRL(card.outstandingBalance)} tone="warning" />
+            <KPICard icon={Wallet} title="Disponível" value={formatBRL(card.availableLimit)} tone="success" />
           </div>
 
           <div className={cn("rounded-xl border border-border bg-card p-[18px]", CARD_SHADOW_CLASS)}>
@@ -113,7 +84,7 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
               <span>Limite utilizado</span>
               <span className={usageToneTextClass(percent)}>{Math.round(percent)}%</span>
             </div>
-            <CardLimitProgress percent={percent} className="mt-2.5 h-2.5" />
+            <CardLimitProgress percent={percent} className="mt-2.5 h-2.5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500" />
           </div>
 
           <InvoiceSummaryCard
@@ -121,13 +92,18 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
             cardName={card.name}
             invoice={invoice}
             outstandingBalance={card.outstandingBalance}
+            closingDay={card.closingDay}
+            dueDay={card.dueDay}
           />
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-base font-extrabold text-foreground">Compras da fatura atual</h3>
+          <h3 className="inline-flex items-center gap-2 text-base font-extrabold text-foreground">
+            <ShoppingBag className="size-[17px] text-muted-foreground" aria-hidden="true" />
+            Compras da fatura atual
+          </h3>
           <Button
             type="button"
             variant="accent"
@@ -139,26 +115,43 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
             Compra
           </Button>
         </div>
-        <InvoiceItemsTable cardId={card.id} periodStart={invoice.periodStart} periodEnd={invoice.periodEnd} />
+
+        <CardPeriodFilterBar
+          mode={periodFilter.mode}
+          setMode={periodFilter.setMode}
+          customFrom={periodFilter.customFrom}
+          setCustomFrom={periodFilter.setCustomFrom}
+          customTo={periodFilter.customTo}
+          setCustomTo={periodFilter.setCustomTo}
+          idPrefix="card-invoice-period"
+        />
+
+        <InvoiceItemsTable cardId={card.id} dateFrom={periodFilter.range.dateFrom} dateTo={periodFilter.range.dateTo} />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
         <div>
-          <h3 className="text-base font-extrabold text-foreground">Parcelamentos deste cartão</h3>
-          <p className="text-sm font-medium text-muted-foreground">
-            Compras parceladas da fatura atual aparecem destacadas na tabela acima (&ldquo;Parcela N&rdquo;).
+          <h3 className="inline-flex items-center gap-2 text-base font-extrabold text-foreground">
+            <Layers3 className="size-[17px] text-accent" aria-hidden="true" />
+            Parcelamentos deste cartão
+          </h3>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">
+            Acompanhe aqui todas as compras que você dividiu em parcelas neste cartão — com o progresso de cada uma.
           </p>
         </div>
         <Link
           href={`/installments?cardId=${card.id}`}
-          className="inline-flex h-9 shrink-0 items-center rounded-[10px] border border-border bg-transparent px-3.5 text-[13px] font-bold text-muted-foreground transition-colors duration-100 ease-pf-out hover:border-muted-foreground"
+          className={cn(buttonVariants({ variant: "neutral" }), "shrink-0")}
         >
           Ver parcelamentos
         </Link>
       </div>
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-base font-extrabold text-foreground">Histórico de faturas</h3>
+        <h3 className="inline-flex items-center gap-2 text-base font-extrabold text-foreground">
+          <Clock className="size-[17px] text-muted-foreground" aria-hidden="true" />
+          Histórico de faturas
+        </h3>
         <InvoiceHistoryList invoices={pastInvoices} />
       </div>
 
