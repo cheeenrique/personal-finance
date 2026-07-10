@@ -145,9 +145,18 @@ export function AccountPeriodFilterBar({
             </SegmentButton>
           ))}
         </div>
+
+        <EntitySelect
+          aria-label="Filtrar por categoria"
+          options={[{ value: ALL_CATEGORIES_VALUE, label: "Todas as categorias" }, ...categoryOptions]}
+          value={categoryId ?? ALL_CATEGORIES_VALUE}
+          onValueChange={(value) => onCategoryIdChange(value === ALL_CATEGORIES_VALUE ? undefined : value)}
+          className="h-[38px] w-auto min-w-[170px]"
+          disabled={categoryOptionsLoading}
+        />
       </div>
 
-      {/* faixa 2 — tipo + categoria + (custom dates) */}
+      {/* faixa 2 — tipo + (custom dates) */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex h-[38px] items-center gap-1 rounded-[9px] border border-border bg-input p-1">
           {TYPE_SEGMENTS.map((segment) => (
@@ -160,15 +169,6 @@ export function AccountPeriodFilterBar({
             </SegmentButton>
           ))}
         </div>
-
-        <EntitySelect
-          aria-label="Filtrar por categoria"
-          options={[{ value: ALL_CATEGORIES_VALUE, label: "Todas as categorias" }, ...categoryOptions]}
-          value={categoryId ?? ALL_CATEGORIES_VALUE}
-          onValueChange={(value) => onCategoryIdChange(value === ALL_CATEGORIES_VALUE ? undefined : value)}
-          className="h-[38px] w-auto min-w-[170px]"
-          disabled={categoryOptionsLoading}
-        />
 
         {mode === "custom" && (
           <div className="flex flex-wrap items-center gap-3">
