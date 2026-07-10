@@ -52,7 +52,10 @@ export type InstallmentPurchaseResult = {
  * classe (decimal.js) e não sobrevive à serialização de Server Actions do
  * Next.js sem essa conversão explícita.
  */
-export type ClientTransaction = Omit<TransactionWithTags, "amount"> & { amount: string };
+export type ClientTransaction = Omit<TransactionWithTags, "amount" | "yieldPercentOfBenchmark"> & {
+  amount: string;
+  yieldPercentOfBenchmark: string | null;
+};
 
 /** Linha do preview "Últimas Transações" do Dashboard — nomes já resolvidos (docs/11-DASHBOARD.md). */
 export type RecentTransactionRow = {

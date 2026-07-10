@@ -61,10 +61,14 @@ function revalidateTransactionRoutes(): void {
 
 /** `Prisma.Decimal` → `string` na borda (ver types.ts `ClientTransaction`). */
 function toClientTransaction(transaction: TransactionWithTags): ClientTransaction {
-  return { ...transaction, amount: transaction.amount.toString() };
+  return {
+    ...transaction,
+    amount: transaction.amount.toString(),
+    yieldPercentOfBenchmark: transaction.yieldPercentOfBenchmark?.toString() ?? null,
+  };
 }
 
-export async function createTransactionAction(input: unknown): Promise<ActionResult<TransactionWithTags>> {
+export async function createTransactionAction(input: unknown): Promise<ActionResult<ClientTransaction>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
@@ -79,7 +83,7 @@ export async function createTransactionAction(input: unknown): Promise<ActionRes
   try {
     const transaction = await transactionService.createTransaction(userId, parsed.data);
     revalidateTransactionRoutes();
-    return { success: true, data: transaction };
+    return { success: true, data: toClientTransaction(transaction) };
   } catch (error) {
     return toActionError(error);
   }
@@ -88,7 +92,7 @@ export async function createTransactionAction(input: unknown): Promise<ActionRes
 export async function updateTransactionAction(
   id: string,
   input: unknown,
-): Promise<ActionResult<TransactionWithTags>> {
+): Promise<ActionResult<ClientTransaction>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
@@ -103,7 +107,7 @@ export async function updateTransactionAction(
   try {
     const transaction = await transactionService.updateTransaction(userId, id, parsed.data);
     revalidateTransactionRoutes();
-    return { success: true, data: transaction };
+    return { success: true, data: toClientTransaction(transaction) };
   } catch (error) {
     return toActionError(error);
   }
@@ -137,14 +141,14 @@ export async function deleteTransactionAction(id: string): Promise<ActionResult<
 
 export async function undoDeleteTransactionAction(
   id: string,
-): Promise<ActionResult<TransactionWithTags>> {
+): Promise<ActionResult<ClientTransaction>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
   try {
     const transaction = await transactionService.undoDeleteTransaction(userId, id);
     revalidateTransactionRoutes();
-    return { success: true, data: transaction };
+    return { success: true, data: toClientTransaction(transaction) };
   } catch (error) {
     return toActionError(error);
   }
@@ -189,7 +193,7 @@ export async function getInstallmentTotalsAction(
 
 export async function createInstallmentPurchaseAction(
   input: unknown,
-): Promise<ActionResult<InstallmentPurchaseResult>> {
+): Promise<ActionResult<{ installmentPurchaseId: string; transactions: ClientTransaction[] }>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
@@ -205,7 +209,13 @@ export async function createInstallmentPurchaseAction(
     const result = await createInstallmentPurchase(userId, parsed.data);
     revalidateTransactionRoutes();
     revalidatePath(INSTALLMENTS_PATH);
-    return { success: true, data: result };
+    return {
+      success: true,
+      data: {
+        installmentPurchaseId: result.installmentPurchaseId,
+        transactions: result.transactions.map(toClientTransaction),
+      },
+    };
   } catch (error) {
     return toActionError(error);
   }
