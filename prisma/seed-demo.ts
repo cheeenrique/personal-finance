@@ -1,5 +1,5 @@
 /**
- * Seed de DEMONSTRAÇÃO — usuário isolado `demo@personalfinance.app`, populado
+ * Seed de DEMONSTRAÇÃO — usuário isolado `demo@personalfinance.app` por padrão (ou o email de `SEED_EMAIL`, útil pra mirar uma conta já existente sem tocar credenciais), populado
  * com ~4 meses de dados fictícios realistas (contas, cartões, transações,
  * parcelamentos, orçamentos, patrimônio e alertas) para o dono navegar o app
  * cheio sem tocar nos usuários reais (`prisma/seed.ts`).
@@ -20,7 +20,17 @@ import bcrypt from "bcryptjs";
 import { addMonths } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/db/client";
-import { TransactionType, CategoryType, AccountType, AssetType, CardType } from "@/generated/prisma/enums";
+import {
+  TransactionType,
+  CategoryType,
+  AccountType,
+  AssetType,
+  CardType,
+  LoanKind,
+  AmortizationSystem,
+  InterestPeriod,
+  YieldBenchmark,
+} from "@/generated/prisma/enums";
 import type { User } from "@/generated/prisma/client";
 import { TIMEZONE, parseInSaoPaulo } from "@/lib/date/timezone";
 import { calendarPartsSP, daysInMonthSP } from "@/lib/date/calendar-sp";
@@ -32,14 +42,20 @@ import { createInstallmentPurchase } from "@/modules/transactions/installments";
 import { cardService } from "@/modules/cards/service";
 import { budgetService } from "@/modules/budgets/service";
 import { assetService } from "@/modules/assets/service";
+import { createLoan } from "@/modules/loans/installments";
+import { createFinancing } from "@/modules/loans/financing";
+import { investmentService } from "@/modules/investments/service";
 import { alertService } from "@/modules/alerts/service";
 import { settingsService } from "@/modules/settings/service";
 import { getClosedWeekWindow, getPrecedingWeekWindows, type WeekWindow } from "@/modules/alerts/week";
 import { BASELINE_WEEKS } from "@/modules/alerts/anomaly";
 
-const DEMO_EMAIL = "demo@personalfinance.app";
-const DEMO_PASSWORD = "demo1234";
-const DEMO_NAME = "Conta Demo";
+// Alvo do seed. Sem env = usuário demo isolado (comportamento original).
+// Com SEED_EMAIL = mira uma conta existente (ex.: real, local) — nesse caso
+// o usuário NUNCA tem senha/nome sobrescritos (ver upsertDemoUser).
+const SEED_EMAIL = process.env.SEED_EMAIL ?? "demo@personalfinance.app";
+const SEED_PASSWORD = process.env.SEED_PASSWORD ?? "demo1234";
+const SEED_NAME = process.env.SEED_NAME ?? "Conta Demo";
 const BCRYPT_SALT_ROUNDS = 10;
 
 /** Semanas extras ANTES da janela de baseline (8 semanas) — total ≈ EXTRA + 8 + 1 semanas de histórico (~4 meses). */
@@ -173,12 +189,13 @@ function monthsInRange(
 // ---------------------------------------------------------------------------
 
 async function upsertDemoUser(): Promise<User> {
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, BCRYPT_SALT_ROUNDS);
+  const existing = await prisma.user.findUnique({ where: { email: SEED_EMAIL } });
+  // Conta já existe (inclusive real) — preserva senha e nome; só repovoa os dados.
+  if (existing) return existing;
 
-  return prisma.user.upsert({
-    where: { email: DEMO_EMAIL },
-    update: { name: DEMO_NAME, passwordHash },
-    create: { name: DEMO_NAME, email: DEMO_EMAIL, passwordHash },
+  const passwordHash = await bcrypt.hash(SEED_PASSWORD, BCRYPT_SALT_ROUNDS);
+  return prisma.user.create({
+    data: { name: SEED_NAME, email: SEED_EMAIL, passwordHash },
   });
 }
 
@@ -192,7 +209,8 @@ async function wipeDemoData(userId: string): Promise<void> {
   await prisma.alert.deleteMany({ where: { userId } });
   await prisma.budget.deleteMany({ where: { userId } }); // referencia Category (Restrict)
   await prisma.recurringTransaction.deleteMany({ where: { userId } }); // referencia Category/Account (Restrict)
-  await prisma.transaction.deleteMany({ where: { userId } }); // referencia Category/Account/Card/InstallmentPurchase (Restrict); TransactionTag cascateia
+  await prisma.transaction.deleteMany({ where: { userId } }); // referencia Category/Account/Card/InstallmentPurchase/Loan (Restrict); TransactionTag cascateia
+  await prisma.loan.deleteMany({ where: { userId } }); // referencia Account/Category/Asset (Restrict) — depois das Transactions (que referenciam loanId), antes de Account/Asset/Category
   await prisma.installmentPurchase.deleteMany({ where: { userId } }); // referencia Card (Restrict)
   await prisma.card.deleteMany({ where: { userId } });
   await prisma.account.deleteMany({ where: { userId } });
@@ -683,6 +701,129 @@ async function seedInstallments(userId: string, cards: IdMap, categories: IdMap)
 }
 
 /**
+ * ~2 empréstimos (`kind=LOAN`, `modules/loans/installments.ts` `createLoan`)
+ * + ~2 financiamentos (`kind=FINANCING`, `modules/loans/financing.ts`
+ * `createFinancing`) — mesma API que `loans/actions.ts` usa. `firstDueDate`
+ * no passado (`monthsAgo`) dá algumas parcelas já vencidas na listagem, mas
+ * TODAS nascem `isPaid=false` (docs/03-DATABASE.md: parcela de empréstimo
+ * entra em "Previsto/A Pagar" até confirmação manual — diferente de compra
+ * parcelada de cartão, o service não expõe um jeito de nascer já paga, então
+ * o dataset demo reflete o comportamento real do produto em vez de forçar
+ * um estado que a API não produz).
+ */
+async function seedLoans(userId: string, accounts: IdMap, categories: IdMap): Promise<{ loans: number; financings: number }> {
+  await createLoan(userId, {
+    description: "Empréstimo pessoal - reforma",
+    lender: "Banco Inter",
+    principal: money(8000),
+    totalToPay: money(8976),
+    installmentsCount: 12,
+    installmentAmount: money(748),
+    firstDueDate: monthsAgo(5),
+    accountId: accounts.get("Conta Corrente")!,
+    categoryId: categories.get("Juros")!,
+  });
+  await createLoan(userId, {
+    description: "Empréstimo consignado",
+    lender: "Caixa",
+    principal: money(5000),
+    totalToPay: money(5400),
+    installmentsCount: 6,
+    installmentAmount: money(900),
+    firstDueDate: monthsAgo(4),
+    accountId: accounts.get("Conta PJ")!,
+    categoryId: categories.get("Juros")!,
+  });
+
+  await createFinancing(userId, {
+    description: "Financiamento de veículo - HB20",
+    lender: "Santander Financiamentos",
+    amortizationSystem: AmortizationSystem.PRICE,
+    principal: money(45000),
+    totalToPay: money(60000),
+    installmentsCount: 48,
+    installmentAmount: money(1250),
+    firstDueDate: monthsAgo(6),
+    interestRate: money(1.6),
+    interestPeriod: InterestPeriod.MONTHLY,
+    accountId: accounts.get("Conta Corrente")!,
+    categoryId: categories.get("Transporte")!,
+    downPayment: money(5000),
+    assetValue: money(50000),
+  });
+  await createFinancing(userId, {
+    description: "Financiamento imobiliário - Apartamento Centro",
+    lender: "Caixa Econômica Federal",
+    amortizationSystem: AmortizationSystem.SAC,
+    principal: money(200000),
+    installmentsCount: 24,
+    firstDueDate: monthsAgo(5),
+    interestRate: money(0.8),
+    interestPeriod: InterestPeriod.MONTHLY,
+    accountId: accounts.get("Conta Corrente")!,
+    categoryId: categories.get("Aluguel/Financiamento")!,
+    downPayment: money(50000),
+    assetValue: money(250000),
+  });
+
+  return { loans: 2, financings: 2 };
+}
+
+/**
+ * ~2 investimentos (Asset `type=INVESTMENT`, `modules/investments/contribute.ts`
+ * `createInvestmentWithOptionalContribution`) com aporte inicial + aportes
+ * adicionais via `investmentService.contribute` (mesma API que
+ * `investments/actions.ts` usa) — popula a tabela de aportes e a série de
+ * `AssetSnapshot` que alimenta a "Evolução" (docs/28-INVESTMENTS.md). Todo
+ * aporte debita a "Poupança" (saldo alto, quase não usada no resto do seed)
+ * — o service valida saldo em TEMPO REAL (`contribute.ts` `assertBalance`,
+ * saldo atual da conta, não o saldo na data do aporte), então os valores
+ * ficam modestos de propósito pra nunca estourar o saldo disponível.
+ */
+async function seedInvestments(userId: string, accounts: IdMap, categories: IdMap): Promise<{ investments: number; contributions: number }> {
+  const poupanca = accounts.get("Poupança")!;
+  const categoryId = categories.get("Investimento (aporte)")!;
+
+  const cofrinho = await investmentService.createInvestment(userId, {
+    name: "Cofrinho Nubank",
+    yieldPercentOfBenchmark: money(115),
+    initialContribution: { accountId: poupanca, amount: money(800), categoryId, date: monthsAgo(4) },
+  });
+  await investmentService.contribute(userId, cofrinho.id, {
+    accountId: poupanca,
+    amount: money(500),
+    categoryId,
+    date: monthsAgo(2),
+  });
+  await investmentService.contribute(userId, cofrinho.id, {
+    accountId: poupanca,
+    amount: money(300),
+    categoryId,
+    date: monthsAgo(1),
+  });
+
+  const cdb = await investmentService.createInvestment(userId, {
+    name: "CDB Liquidez XP",
+    yieldPercentOfBenchmark: money(102),
+    initialContribution: { accountId: poupanca, amount: money(1200), categoryId, date: monthsAgo(3) },
+  });
+  await investmentService.contribute(userId, cdb.id, {
+    accountId: poupanca,
+    amount: money(700),
+    categoryId,
+    date: monthsAgo(2),
+  });
+  await investmentService.contribute(userId, cdb.id, {
+    accountId: poupanca,
+    amount: money(400),
+    categoryId,
+    date: monthsAgo(1),
+  });
+
+  return { investments: 2, contributions: 6 };
+}
+
+/**
  * Orçamentos do mês atual tunados pra mostrar os 3 estados visuais
  * (docs/26-BUDGETS.md: Normal ≤80%, Atenção 80-100%, Estourado >100%):
  * cria com um `plannedAmount` placeholder, lê o `spentAmount` REAL já
@@ -832,20 +973,38 @@ async function seedAssets(userId: string): Promise<{ assets: number; snapshots: 
 // ---------------------------------------------------------------------------
 
 async function printSummary(userId: string): Promise<void> {
-  const [accounts, cards, categories, tags, transactions, unpaidTransactions, installmentPurchases, budgets, assets, assetSnapshots, alerts] =
-    await Promise.all([
-      prisma.account.count({ where: { userId } }),
-      prisma.card.count({ where: { userId } }),
-      prisma.category.count({ where: { userId } }),
-      prisma.tag.count({ where: { userId } }),
-      prisma.transaction.count({ where: { userId } }),
-      prisma.transaction.count({ where: { userId, isPaid: false } }),
-      prisma.installmentPurchase.count({ where: { userId } }),
-      prisma.budget.count({ where: { userId } }),
-      prisma.asset.count({ where: { userId } }),
-      prisma.assetSnapshot.count({ where: { asset: { userId } } }),
-      prisma.alert.count({ where: { userId } }),
-    ]);
+  const [
+    accounts,
+    cards,
+    categories,
+    tags,
+    transactions,
+    unpaidTransactions,
+    installmentPurchases,
+    loans,
+    financings,
+    budgets,
+    assets,
+    assetSnapshots,
+    investments,
+    alerts,
+  ] = await Promise.all([
+    prisma.account.count({ where: { userId } }),
+    prisma.card.count({ where: { userId } }),
+    prisma.category.count({ where: { userId } }),
+    prisma.tag.count({ where: { userId } }),
+    prisma.transaction.count({ where: { userId } }),
+    prisma.transaction.count({ where: { userId, isPaid: false } }),
+    prisma.installmentPurchase.count({ where: { userId } }),
+    prisma.loan.count({ where: { userId, kind: LoanKind.LOAN } }),
+    prisma.loan.count({ where: { userId, kind: LoanKind.FINANCING } }),
+    prisma.budget.count({ where: { userId } }),
+    prisma.asset.count({ where: { userId } }),
+    prisma.assetSnapshot.count({ where: { asset: { userId } } }),
+    // Assets INVESTMENT com yieldBenchmark configurado = investimentos da feature /investments (docs/28-INVESTMENTS.md), distintos de outros assets tipo INVESTMENT semeados por `seedAssets` (sem yield).
+    prisma.asset.count({ where: { userId, type: AssetType.INVESTMENT, yieldBenchmark: { not: YieldBenchmark.NONE }, deletedAt: null } }),
+    prisma.alert.count({ where: { userId } }),
+  ]);
 
   console.log("\n=== Resumo do seed demo ===");
   console.log(`Contas: ${accounts}`);
@@ -854,9 +1013,12 @@ async function printSummary(userId: string): Promise<void> {
   console.log(`Tags: ${tags}`);
   console.log(`Transações: ${transactions} (${unpaidTransactions} previstas/não pagas)`);
   console.log(`Compras parceladas: ${installmentPurchases}`);
+  console.log(`Empréstimos: ${loans}`);
+  console.log(`Financiamentos: ${financings}`);
   console.log(`Orçamentos: ${budgets}`);
   console.log(`Assets: ${assets}`);
   console.log(`AssetSnapshots: ${assetSnapshots}`);
+  console.log(`Investimentos: ${investments}`);
   console.log(`Alertas: ${alerts}`);
 }
 
@@ -885,6 +1047,12 @@ async function main(): Promise<void> {
   console.log("Semeando parcelamentos...");
   await seedInstallments(demoUser.id, cards, categories);
 
+  console.log("Semeando empréstimos e financiamentos...");
+  const loanResult = await seedLoans(demoUser.id, accounts, categories);
+
+  console.log("Semeando investimentos...");
+  const investmentResult = await seedInvestments(demoUser.id, accounts, categories);
+
   console.log("Semeando orçamentos...");
   await seedBudgets(demoUser.id, categories);
 
@@ -896,6 +1064,8 @@ async function main(): Promise<void> {
 
   console.log("\n--- Detalhes ---");
   console.log("Histórico de transações:", historyResult);
+  console.log("Empréstimos/financiamentos:", loanResult);
+  console.log("Investimentos:", investmentResult);
   console.log("Patrimônio:", assetResult);
   console.log("Alertas gerados nesta rodada:", alertResult);
 
