@@ -70,7 +70,7 @@ export function CardFace({ gradient, cardName, brand, lastFour, holder, type, cl
             {TYPE_LABEL[type]}
           </p>
         </div>
-        <Nfc className="size-5 shrink-0 rotate-90 text-white/75 sm:size-6" strokeWidth={1.8} />
+        <Nfc className="size-5 shrink-0 text-white/75 sm:size-6" strokeWidth={1.8} />
       </div>
 
       <div className="flex flex-col gap-2.5">
