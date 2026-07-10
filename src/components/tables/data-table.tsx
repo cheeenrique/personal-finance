@@ -250,7 +250,7 @@ export function DataTable<T>({
                       )}
                     >
                       {hasSelection && (
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3.5">
                           <Checkbox
                             checked={selection!.selectedIds.includes(id)}
                             onCheckedChange={() => toggleRow(id)}
@@ -261,13 +261,13 @@ export function DataTable<T>({
                       {columns.map((column) => (
                         <td
                           key={column.key}
-                          className={cn("px-4 py-3", column.align === "right" && "text-right")}
+                          className={cn("px-4 py-3.5", column.align === "right" && "text-right")}
                         >
                           {column.render(row)}
                         </td>
                       ))}
                       {rowActions && (
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3.5 text-right">
                           <div className="flex justify-end gap-1.5">{rowActions(row)}</div>
                         </td>
                       )}
@@ -304,7 +304,7 @@ function SkeletonRows({ columnCount }: { columnCount: number }) {
       {Array.from({ length: 5 }).map((_, rowIndex) => (
         <tr key={rowIndex} className="border-t border-border">
           {Array.from({ length: columnCount }).map((_, cellIndex) => (
-            <td key={cellIndex} className="px-4 py-3">
+            <td key={cellIndex} className="px-4 py-3.5">
               <Skeleton className="h-4 w-full max-w-32" />
             </td>
           ))}

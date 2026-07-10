@@ -35,7 +35,7 @@ type LoanInstallmentsTableProps = {
 };
 
 /**
- * `<td>` de `DataTable` já vem com `px-4 py-3` fixo (arquivo fora do escopo
+ * `<td>` de `DataTable` já vem com `px-4 py-3.5` fixo (arquivo fora do escopo
  * deste redesign — não pode ganhar uma prop `rowClassName`). Espelhando o
  * mesmo padding com margem negativa igual, este wrapper pinta o fundo da
  * célula INTEIRA (não só o texto) sem editar `DataTable`, o que dá o efeito
@@ -43,7 +43,7 @@ type LoanInstallmentsTableProps = {
  * fora da lista permitida.
  */
 function InstallmentCell({ highlighted, children }: { highlighted: boolean; children: ReactNode }) {
-  return <div className={cn("-mx-4 -my-3 px-4 py-3", highlighted && "bg-warning/[0.07]")}>{children}</div>;
+  return <div className={cn("-mx-4 -my-3.5 px-4 py-3.5", highlighted && "bg-warning/[0.07]")}>{children}</div>;
 }
 
 /**
