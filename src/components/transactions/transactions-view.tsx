@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftRight, Layers3, Receipt } from "lucide-react";
 
@@ -34,7 +34,7 @@ export function TransactionsView() {
   const { openTransactionModal, duplicateTransaction } = useShell();
   const filters = useTransactionFilters();
   const referenceData = useTransactionsReferenceData();
-  const { page, installmentTotals, loading, error, reload } = useTransactionsList(filters.state);
+  const { page, summary, installmentTotals, loading, error, reload } = useTransactionsList(filters.state);
   const mutations = useTransactionMutations(reload);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -70,6 +70,28 @@ export function TransactionsView() {
     filters.setSort({ column, direction });
   }
 
+  /**
+   * Linha inteira clicável abre o detalhe (docs/06-SCREENS.md, "Transações")
+   * — via delegação de clique no wrapper em vez de `onClick` no `<tr>`
+   * (`DataTable` é compartilhado por toda a app e está fora do escopo desta
+   * mudança, ver docs/99-CLAUDE.md "Regra de Ouro"/restrição de API estável
+   * de `buildTransactionColumns`). Ignora cliques em botão/checkbox (seleção
+   * e "Ver"/"Editar" continuam com o próprio comportamento, sem duplo
+   * disparo) e mapeia o `<tr>` clicado de volta pra `page.items` pela posição
+   * dentro do `tbody` — mesma ordem em que `DataTable` renderiza `data`.
+   */
+  function handleTableClick(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, [data-slot='checkbox']")) return;
+
+    const rowEl = target.closest("tbody > tr");
+    if (!(rowEl instanceof HTMLTableRowElement) || !rowEl.parentElement) return;
+
+    const index = Array.prototype.indexOf.call(rowEl.parentElement.children, rowEl);
+    const transaction = page.items[index];
+    if (transaction) setViewing(transaction);
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -97,79 +119,85 @@ export function TransactionsView() {
         </button>
       </div>
 
-      <DataTable
-        data={page.items}
-        columns={columns}
-        getRowId={(row) => row.id}
-        loading={loading}
-        error={error}
-        onRetry={reload}
-        fillHeight
-        emptyState={{
-          icon: Receipt,
-          title: "Nenhuma transação encontrada.",
-          description: hasNoOrigins
-            ? "Cadastre uma conta ou cartão antes de lançar sua primeira transação."
-            : filters.hasActiveFilters
-              ? "Ajuste os filtros ou crie uma nova transação."
-              : "Comece registrando sua primeira transação.",
-          actionLabel: hasNoOrigins ? "Criar primeira conta" : "Criar transação",
-          onAction: () => (hasNoOrigins ? router.push("/accounts") : openTransactionModal()),
-        }}
-        search={{ value: filters.state.q, onChange: filters.setQuery, placeholder: "Buscar por descrição…" }}
-        filters={
-          <TransactionFiltersBar
-            type={filters.state.type}
-            onTypeChange={filters.setType}
-            categoryId={filters.state.categoryId}
-            onCategoryIdChange={filters.setCategoryId}
-            origin={filters.state.origin}
-            onOriginChange={filters.setOrigin}
-            period={filters.state.period}
-            onPeriodChange={filters.setPeriod}
-            customFrom={filters.state.customFrom}
-            onCustomFromChange={filters.setCustomFrom}
-            customTo={filters.state.customTo}
-            onCustomToChange={filters.setCustomTo}
-            tagId={filters.state.tagId}
-            onTagIdChange={filters.setTagId}
-            isPaid={filters.state.isPaid}
-            onIsPaidChange={filters.setIsPaid}
-            referenceData={referenceData}
-            hasActiveFilters={filters.hasActiveFilters}
-            onClear={filters.clearAll}
-          />
-        }
-        sort={filters.state.sort}
-        onSortChange={handleSortChange}
-        selection={{ selectedIds, onChange: setSelectedIds }}
-        rowActions={(row) => (
-          <TransactionRowActions
-            row={row}
-            onView={() => setViewing(row)}
-            onMarkPaid={() => void mutations.markPaid(row)}
-            onEdit={() => setEditing(row)}
-            onDuplicate={() => duplicateTransaction(buildTransactionDraft(row))}
-            onDelete={() => setDeleting(row)}
-          />
-        )}
-        bulkActions={() => (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void mutations.bulkMarkPaid(selectedRows).then(() => setSelectedIds([]))}
-            >
-              Marcar como pagas
-            </Button>
-            <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
-              Excluir selecionadas
-            </Button>
-          </>
-        )}
-        pagination={{ page: page.page, pageSize: page.pageSize, total: page.total, onPageChange: filters.setPage }}
-      />
+      {/* `contents`: wrapper só existe pra delegar o clique de linha (ver `handleTableClick`) sem interferir no layout flex que `DataTable`/`fillHeight` espera do pai direto. */}
+      <div onClick={handleTableClick} className="contents">
+        <DataTable
+          data={page.items}
+          columns={columns}
+          getRowId={(row) => row.id}
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          fillHeight
+          emptyState={{
+            icon: Receipt,
+            title: "Nenhuma transação encontrada.",
+            description: hasNoOrigins
+              ? "Cadastre uma conta ou cartão antes de lançar sua primeira transação."
+              : filters.hasActiveFilters
+                ? "Ajuste os filtros ou crie uma nova transação."
+                : "Comece registrando sua primeira transação.",
+            actionLabel: hasNoOrigins ? "Criar primeira conta" : "Criar transação",
+            onAction: () => (hasNoOrigins ? router.push("/accounts") : openTransactionModal()),
+          }}
+          filters={
+            <TransactionFiltersBar
+              search={filters.state.q}
+              onSearchChange={filters.setQuery}
+              type={filters.state.type}
+              onTypeChange={filters.setType}
+              categoryId={filters.state.categoryId}
+              onCategoryIdChange={filters.setCategoryId}
+              origin={filters.state.origin}
+              onOriginChange={filters.setOrigin}
+              period={filters.state.period}
+              onPeriodChange={filters.setPeriod}
+              customFrom={filters.state.customFrom}
+              onCustomFromChange={filters.setCustomFrom}
+              customTo={filters.state.customTo}
+              onCustomToChange={filters.setCustomTo}
+              tagId={filters.state.tagId}
+              onTagIdChange={filters.setTagId}
+              isPaid={filters.state.isPaid}
+              onIsPaidChange={filters.setIsPaid}
+              referenceData={referenceData}
+              hasActiveFilters={filters.hasActiveFilters}
+              onClear={filters.clearAll}
+              summary={summary}
+              summaryLoading={loading}
+            />
+          }
+          sort={filters.state.sort}
+          onSortChange={handleSortChange}
+          selection={{ selectedIds, onChange: setSelectedIds }}
+          rowActions={(row) => (
+            <TransactionRowActions
+              row={row}
+              onView={() => setViewing(row)}
+              onMarkPaid={() => void mutations.markPaid(row)}
+              onEdit={() => setEditing(row)}
+              onDuplicate={() => duplicateTransaction(buildTransactionDraft(row))}
+              onDelete={() => setDeleting(row)}
+            />
+          )}
+          bulkActions={() => (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void mutations.bulkMarkPaid(selectedRows).then(() => setSelectedIds([]))}
+              >
+                Marcar como pagas
+              </Button>
+              <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+                Excluir selecionadas
+              </Button>
+            </>
+          )}
+          pagination={{ page: page.page, pageSize: page.pageSize, total: page.total, onPageChange: filters.setPage }}
+        />
+      </div>
 
       <EditTransactionModal
         transaction={editing}

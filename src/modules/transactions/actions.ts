@@ -20,8 +20,7 @@ import type {
   ActionResult,
   Category,
   ClientTransaction,
-  InstallmentPurchaseResult,
-  PaginatedResult,
+  TransactionListResult,
   TransactionWithTags,
 } from "./types";
 
@@ -156,7 +155,7 @@ export async function undoDeleteTransactionAction(
 
 export async function listTransactionsAction(
   input: unknown,
-): Promise<ActionResult<PaginatedResult<ClientTransaction>>> {
+): Promise<ActionResult<TransactionListResult<ClientTransaction, string>>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
@@ -170,7 +169,19 @@ export async function listTransactionsAction(
 
   try {
     const result = await transactionService.list(userId, parsed.data);
-    return { success: true, data: { ...result, items: result.items.map(toClientTransaction) } };
+    // `income`/`expense`/`net` cruzam a fronteira Server Action → Client
+    // Component como string (mesma razão de `toClientTransaction.amount`,
+    // `Prisma.Decimal` não sobrevive à serialização sem essa conversão).
+    return {
+      success: true,
+      data: {
+        ...result,
+        items: result.items.map(toClientTransaction),
+        income: result.income.toString(),
+        expense: result.expense.toString(),
+        net: result.net.toString(),
+      },
+    };
   } catch (error) {
     return toActionError(error);
   }

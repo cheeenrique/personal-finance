@@ -20,8 +20,8 @@ import type {
   InstallmentPurchaseWithProgress,
   KnownMerchant,
   Money,
-  PaginatedResult,
   RecentTransactionRow,
+  TransactionListResult,
   TransactionWithTags,
 } from "./types";
 
@@ -252,13 +252,26 @@ async function getTransaction(userId: string, id: string): Promise<TransactionWi
   return transaction;
 }
 
+/** Tipos que compõem "Saídas" no resumo filtrado — compra/gasto normal (EXPENSE) e pagamento de fatura (CARD_PAYMENT, cartão saindo da conta). Perna de transferência conta no lado que seu `type` indica (mesma leitura da coluna "Valor" da tabela, `amountAppearance`). */
+const EXPENSE_LIKE_TYPES = [TransactionType.EXPENSE, TransactionType.CARD_PAYMENT] as const;
+
 async function list(
   userId: string,
   filters: ListFilterInput,
-): Promise<PaginatedResult<TransactionWithTags>> {
+): Promise<TransactionListResult<TransactionWithTags>> {
   const { page, pageSize, sort, ...where } = filters;
-  const { items, total } = await transactionRepository.list(userId, where, { page, pageSize, sort });
-  return { items, total, page, pageSize };
+  const [{ items, total }, typeSums] = await Promise.all([
+    transactionRepository.list(userId, where, { page, pageSize, sort }),
+    transactionRepository.sumByType(userId, where),
+  ]);
+
+  const sumFor = (type: TransactionType) =>
+    typeSums.find((row) => row.type === type)?.total ?? new Prisma.Decimal(0);
+
+  const income = sumFor(TransactionType.INCOME);
+  const expense = EXPENSE_LIKE_TYPES.reduce((sum, type) => sum.plus(sumFor(type)), new Prisma.Decimal(0));
+
+  return { items, total, page, pageSize, income, expense, net: income.minus(expense), count: total };
 }
 
 /** Default do cadastro rápido (docs/05-UX_RULES.md): categoria mais RECENTEMENTE usada para o tipo, não a mais frequente. */

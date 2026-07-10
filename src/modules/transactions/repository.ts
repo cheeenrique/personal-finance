@@ -316,6 +316,30 @@ async function list(
   return { items: orderedItems, total };
 }
 
+/**
+ * Soma de `amount` por `type`, no MESMO filtro (`buildListConditions`) da
+ * listagem paginada — nunca diverge do WHERE de `list` porque reaproveita o
+ * mesmo builder. Insumo do resumo "N lançamentos · Entradas · Saídas ·
+ * Resultado líquido" da Faixa 3 do card de filtros (`TransactionFiltersBar`),
+ * calculado sobre TODO o resultado filtrado, não só a página carregada.
+ */
+async function sumByType(
+  userId: string,
+  filters: TransactionListFilter,
+): Promise<{ type: TransactionType; total: Prisma.Decimal }[]> {
+  const conditions = buildListConditions(userId, filters);
+  const whereSql = Prisma.join(conditions, " AND ");
+
+  const rows = await prisma.$queryRaw<{ type: TransactionType; total: Prisma.Decimal | string | number }[]>`
+    SELECT "type", COALESCE(SUM("amount"), 0) AS total
+    FROM "Transaction"
+    WHERE ${whereSql}
+    GROUP BY "type"
+  `;
+
+  return rows.map((row) => ({ type: row.type, total: new Prisma.Decimal(row.total) }));
+}
+
 /** Transação mais recente (por `date`, depois `createdAt`) de um tipo — base do default de cadastro rápido (docs/05-UX_RULES.md). */
 async function findMostRecentByType(
   userId: string,
@@ -670,6 +694,7 @@ export const transactionRepository = {
   restore,
   restoreByTransferId,
   list,
+  sumByType,
   findMostRecentByType,
   findDescriptionSuggestions,
   findDescriptionFrequencies,

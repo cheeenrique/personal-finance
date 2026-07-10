@@ -1,26 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import {
-  ArrowUpRight,
-  CalendarCheck2,
-  CalendarClock,
-  CalendarPlus,
-  CircleDashed,
-  Receipt,
-  type LucideIcon,
-} from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { TransactionTypeBadge, TransactionInlineBadges } from "@/components/shared/badges/transaction-type-badge";
 import { resolveCategoryDotColor } from "@/components/categories/category-config";
-import { amountAppearance } from "./transaction-columns";
-import { isCardTransaction } from "./use-transaction-mutations";
-import { formatBRL } from "@/lib/money/format";
+import { effectiveTransactionDate } from "./transaction-columns";
+import { TransactionDetailHero } from "./transaction-detail-hero";
+import { TransactionDetailTimeline, resolveStatusPill, STATUS_PILL_CLASSES } from "./transaction-detail-timeline";
 import { formatDateSaoPaulo } from "@/lib/date/format";
-import { calendarPartsSP, startOfDaySP } from "@/lib/date/calendar-sp";
-import { TransactionType, CategoryType, LoanKind } from "@/generated/prisma/enums";
+import { CategoryType } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 import type { ClientTransaction } from "@/modules/transactions/types";
 import type { TransactionsReferenceData } from "./use-transactions-reference-data";
@@ -32,141 +20,19 @@ type TransactionDetailModalProps = {
   installmentTotals: Map<string, number>;
 };
 
-type TimelineTone = "neutral" | "structural" | "success" | "warning";
-
-/** Mesma paleta de "Cores Financeiras"/badges do resto do app — estrutural (primary) pro vencimento, success/warning pro status de pagamento. */
-const TONE_CLASSES: Record<TimelineTone, string> = {
-  neutral: "bg-secondary text-muted-foreground",
-  structural: "bg-primary/16 text-on-primary",
-  success: "bg-success/16 text-on-success",
-  warning: "bg-warning/16 text-on-warning",
-};
-
-type TimelineStep = { icon: LucideIcon; label: string; value: string; hint?: string; tone: TimelineTone };
-
-/** Diferença em dias corridos (calendário America/Sao_Paulo) entre `date` e `reference` — positivo quando `date` é depois de `reference`. */
-function diffCalendarDaysSP(date: Date, reference: Date): number {
-  const dateParts = calendarPartsSP(date);
-  const referenceParts = calendarPartsSP(reference);
-  const dateStart = startOfDaySP(dateParts.year, dateParts.month, dateParts.day).getTime();
-  const referenceStart = startOfDaySP(referenceParts.year, referenceParts.month, referenceParts.day).getTime();
-  return Math.round((dateStart - referenceStart) / 86_400_000);
-}
-
-/** "Pago 5 dias antes/depois do vencimento" — só chamado com um `paidAt` EXATO, nunca com o fallback aproximado (ver `resolvePaidStep`). */
-function paymentTimingHint(paidAt: Date, dueDate: Date): string {
-  const diff = diffCalendarDaysSP(paidAt, dueDate);
-  if (diff === 0) return "Pago no dia do vencimento";
-  const days = Math.abs(diff);
-  const unit = days === 1 ? "dia" : "dias";
-  return diff < 0 ? `Pago ${days} ${unit} antes do vencimento` : `Pago ${days} ${unit} depois do vencimento`;
-}
-
-/**
- * Passo "Pago em" da timeline — 4 estados possíveis:
- * - Transação de CARTÃO (`isCardTransaction`): nunca fala "pago"/"pendente"
- *   por linha — mostra "Faturado", deixando explícito que o pagamento real é
- *   o da fatura (`payInvoiceAction`), não desta linha (decisão confirmada
- *   pelo dono do produto, mesma regra de `TransactionRowActions`/
- *   `EditTransactionModal` escondendo o controle de marcar paga pra cartão).
- * - Pendente (`!isPaid`, transação de CONTA): sem data, tom warning (mesma
- *   cor da pill "Pendente" de `TransactionInlineBadges`).
- * - Pago com `paidAt` exato: mostra a data + "adiantado/atrasado/no dia"
- *   comparado com o vencimento (docs/03-DATABASE.md, `Transaction.paidAt`).
- * - Pago sem `paidAt` (lançamento anterior a este campo existir, ou nasceu
- *   pago e nunca passou pela transição pendente→paga — ver
- *   `modules/transactions/service.ts` `resolvePaidAtOnUpdate`): cai em
- *   `updatedAt` como melhor aproximação disponível, marcado como tal — nunca
- *   apresenta uma data de pagamento como exata sem ela realmente ser.
- */
-function resolvePaidStep(transaction: ClientTransaction): TimelineStep {
-  if (isCardTransaction(transaction)) {
-    return {
-      icon: Receipt,
-      label: "Faturado",
-      value: "Cobrança confirmada",
-      hint: "Pagamento controlado pela fatura do cartão, não por esta linha",
-      tone: "structural",
-    };
-  }
-
-  if (!transaction.isPaid) {
-    return { icon: CircleDashed, label: "Pago em", value: "Pendente", hint: "Ainda não foi paga", tone: "warning" };
-  }
-
-  if (transaction.paidAt) {
-    return {
-      icon: CalendarCheck2,
-      label: "Pago em",
-      value: formatDateSaoPaulo(transaction.paidAt),
-      hint: paymentTimingHint(transaction.paidAt, transaction.date),
-      tone: "success",
-    };
-  }
-
-  return {
-    icon: CalendarCheck2,
-    label: "Pago em",
-    value: `≈ ${formatDateSaoPaulo(transaction.updatedAt)}`,
-    hint: "Data aproximada — lançamento anterior a este registro",
-    tone: "success",
-  };
-}
-
-function TimelineRow({ step, isLast }: { step: TimelineStep; isLast: boolean }) {
-  const Icon = step.icon;
-
-  return (
-    <div className={cn("relative flex gap-3", !isLast && "pb-5")}>
-      {!isLast && <div className="absolute top-8 bottom-0 left-4 w-px bg-border" aria-hidden="true" />}
-      <div
-        className={cn(
-          "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full",
-          TONE_CLASSES[step.tone],
-        )}
-      >
-        <Icon className="size-4" aria-hidden="true" />
-      </div>
-      <div className="flex flex-col gap-0.5">
-        <span className="text-[11px] font-extrabold tracking-wide text-muted-foreground uppercase">
-          {step.label}
-        </span>
-        <span className="font-mono text-sm font-semibold text-foreground">{step.value}</span>
-        {step.hint && <span className="text-[12px] font-medium text-muted-foreground">{step.hint}</span>}
-      </div>
-    </div>
-  );
-}
-
-/** Tipo de exibição — perna de transferência mostra badge "Transferência" mesmo persistida como EXPENSE/INCOME (mesma regra de `recent-transactions-table.tsx`). */
-function displayType(transaction: ClientTransaction): TransactionType {
-  return transaction.transferId ? TransactionType.TRANSFER : transaction.type;
-}
-
-/**
- * Rota + rótulo do link "Ver empréstimo/financiamento" — LOAN e FINANCING são
- * o mesmo model `Loan` (docs/50-AUDITORIA-BACKLOG.md, `Loan.kind`), mas cada
- * um tem sua própria tela (`/loans/[id]` vs. `/financings/[id]`). `null`
- * quando a transação não é parcela/desembolso de empréstimo (`loanId` nulo).
- */
-function resolveLoanLink(transaction: ClientTransaction): { href: string; label: string } | null {
-  if (!transaction.loanId) return null;
-
-  const isFinancing = transaction.loan?.kind === LoanKind.FINANCING;
-  return {
-    href: isFinancing ? `/financings/${transaction.loanId}` : `/loans/${transaction.loanId}`,
-    label: isFinancing ? "Ver financiamento" : "Ver empréstimo",
-  };
-}
-
 type DetailContentProps = {
   transaction: ClientTransaction;
   referenceData: TransactionsReferenceData;
   installmentTotals: Map<string, number>;
 };
 
+/**
+ * Conteúdo do modal de detalhe, em blocos com hierarquia clara
+ * (docs/06-SCREENS.md, "Transações"): hero de valor (`TransactionDetailHero`)
+ * → grid 2×2 (Categoria/Conta-Cartão/Data efetiva/Situação) → Tags +
+ * Observações (só quando existem) → linha do tempo (`TransactionDetailTimeline`).
+ */
 function DetailContent({ transaction, referenceData, installmentTotals }: DetailContentProps) {
-  const { className: amountClassName, sign } = amountAppearance(transaction);
   const category = transaction.categoryId ? referenceData.categoryById.get(transaction.categoryId) : undefined;
   const originName =
     (transaction.accountId && referenceData.accountNameById.get(transaction.accountId)) ||
@@ -175,49 +41,11 @@ function DetailContent({ transaction, referenceData, installmentTotals }: Detail
   const tags = referenceData.tags.filter((tag) =>
     transaction.transactionTags.some((link) => link.tagId === tag.id),
   );
-  const loanLink = resolveLoanLink(transaction);
-
-  const steps: TimelineStep[] = [
-    { icon: CalendarPlus, label: "Criado em", value: formatDateSaoPaulo(transaction.createdAt), tone: "neutral" },
-    { icon: CalendarClock, label: "Vencimento", value: formatDateSaoPaulo(transaction.date), tone: "structural" },
-    resolvePaidStep(transaction),
-  ];
+  const statusPill = resolveStatusPill(transaction);
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <TransactionTypeBadge type={displayType(transaction)} />
-        <TransactionInlineBadges
-          row={{
-            type: transaction.type,
-            transferId: transaction.transferId,
-            isPaid: transaction.isPaid,
-            installmentNumber: transaction.installmentPurchaseId ? transaction.installmentNumber : null,
-            installmentsCount: transaction.installmentPurchaseId
-              ? (installmentTotals.get(transaction.installmentPurchaseId) ?? transaction.installmentNumber)
-              : null,
-            loanId: transaction.loanId,
-            loanKind: transaction.loan?.kind,
-          }}
-        />
-        {loanLink && (
-          <Link
-            href={loanLink.href}
-            className="inline-flex h-[18px] shrink-0 items-center gap-1 rounded-full border border-border px-1.5 text-[10px] font-extrabold whitespace-nowrap text-muted-foreground transition-colors hover:border-muted-foreground hover:text-foreground"
-          >
-            {loanLink.label}
-            <ArrowUpRight className="size-2.5" aria-hidden="true" />
-          </Link>
-        )}
-      </div>
-
-      <div>
-        <p className={cn("font-mono text-2xl font-semibold", amountClassName)}>
-          {sign}
-          {formatBRL(transaction.amount)}
-        </p>
-        <p className="text-sm font-bold text-foreground">{transaction.description}</p>
-      </div>
+      <TransactionDetailHero transaction={transaction} installmentTotals={installmentTotals} />
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-[10px] border border-border p-3">
         <div className="flex flex-col gap-0.5">
@@ -241,6 +69,25 @@ function DetailContent({ transaction, referenceData, installmentTotals }: Detail
         <div className="flex flex-col gap-0.5">
           <span className="text-[11px] font-bold text-muted-foreground uppercase">Conta / Cartão</span>
           <span className="text-sm font-semibold text-foreground">{originName}</span>
+        </div>
+
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[11px] font-bold text-muted-foreground uppercase">Data efetiva</span>
+          <span className="font-mono text-sm font-semibold text-foreground">
+            {formatDateSaoPaulo(effectiveTransactionDate(transaction))}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[11px] font-bold text-muted-foreground uppercase">Situação</span>
+          <span
+            className={cn(
+              "inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-[11px] font-extrabold",
+              STATUS_PILL_CLASSES[statusPill.tone],
+            )}
+          >
+            {statusPill.label}
+          </span>
         </div>
       </div>
 
@@ -268,14 +115,7 @@ function DetailContent({ transaction, referenceData, installmentTotals }: Detail
         </div>
       )}
 
-      <div className="flex flex-col border-t border-border pt-4">
-        <span className="mb-3 text-[11px] font-extrabold tracking-wide text-muted-foreground uppercase">
-          Linha do tempo
-        </span>
-        {steps.map((step, index) => (
-          <TimelineRow key={step.label} step={step} isLast={index === steps.length - 1} />
-        ))}
-      </div>
+      <TransactionDetailTimeline transaction={transaction} />
     </div>
   );
 }

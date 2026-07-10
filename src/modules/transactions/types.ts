@@ -27,6 +27,28 @@ export type PaginatedResult<T> = {
   pageSize: number;
 };
 
+/**
+ * Agregado do resultado FILTRADO (todas as páginas, não só a carregada) —
+ * insumo do resumo "N lançamentos · Entradas · Saídas · Resultado líquido" da
+ * Faixa 3 do card de filtros de Transações (`TransactionFiltersBar`).
+ * `income` = soma de `type=INCOME`; `expense` = soma de `EXPENSE` +
+ * `CARD_PAYMENT`; `net` = `income - expense`; `count` = mesmo valor de
+ * `PaginatedResult.total` (exposto aqui pra o consumidor não precisar
+ * reconciliar os dois nomes). `M` genérico pelo mesmo motivo de
+ * `ClientTransaction.amount`: no server é `Money` (`Prisma.Decimal`), na
+ * borda pro client vira `string` (`Decimal` não sobrevive à serialização de
+ * Server Actions).
+ */
+export type TransactionListSummary<M = Money> = {
+  income: M;
+  expense: M;
+  net: M;
+  count: number;
+};
+
+/** `listTransactionsAction` retorna a paginação + o agregado acima, mesmos filtros. */
+export type TransactionListResult<T, M = Money> = PaginatedResult<T> & TransactionListSummary<M>;
+
 /** Insumo do gráfico "gastos por categoria" do dashboard (ver docs/24-CATEGORIES.md). */
 export type CategoryExpenseTotal = {
   categoryId: string;
