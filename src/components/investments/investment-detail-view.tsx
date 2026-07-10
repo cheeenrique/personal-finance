@@ -3,11 +3,17 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Trash2, TrendingUp } from "lucide-react";
+import { Loader2, MoreVertical, Pencil, Plus, Trash2, TrendingUp } from "lucide-react";
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/forms/form-field";
 import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
@@ -22,6 +28,7 @@ import { formatDateSaoPaulo } from "@/lib/date/format";
 import { notifySuccess } from "@/lib/toast";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
 import { ContributeModal } from "./contribute-modal";
+import { InvestmentFormModal } from "./investment-form-modal";
 import type {
   AccountOptionView,
   InvestmentContributionView,
@@ -47,6 +54,7 @@ export function InvestmentDetailView({ investment, accounts }: InvestmentDetailV
   const queryClient = useQueryClient();
   const [contributeOpen, setContributeOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [horizonDays, setHorizonDays] = useState(30);
   const [manualCdi, setManualCdi] = useState("");
   const [projection, setProjection] = useState<{
@@ -158,26 +166,41 @@ export function InvestmentDetailView({ investment, accounts }: InvestmentDetailV
               : ""}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Button
             type="button"
-            variant="neutral"
-            className="h-9 gap-[7px] rounded-[10px] px-3.5 text-[13px] font-bold"
+            variant="default"
+            size="lg"
             onClick={() => setContributeOpen(true)}
           >
-            <Plus className="size-[15px]" aria-hidden="true" />
+            <Plus className="size-4" aria-hidden="true" />
             Aportar
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setDeleteOpen(true)}
-            className="text-destructive"
-          >
-            <Trash2 className="size-4" aria-hidden="true" />
-            Excluir
-          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="neutral"
+                  size="icon-md"
+                  aria-label={`Mais ações para ${investment.name}`}
+                />
+              }
+            >
+              <MoreVertical className="size-4" aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <Pencil className="size-4" aria-hidden="true" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="size-4" aria-hidden="true" />
+                Excluir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -308,6 +331,18 @@ export function InvestmentDetailView({ investment, accounts }: InvestmentDetailV
           invalidateAllTransactionLists(queryClient);
           router.refresh();
         }}
+      />
+
+      <InvestmentFormModal
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        accounts={accounts}
+        investment={{
+          id: investment.id,
+          name: investment.name,
+          yieldPercentOfBenchmark: investment.yieldPercentOfBenchmark,
+        }}
+        onSaved={() => router.refresh()}
       />
 
       <ConfirmDialog

@@ -586,3 +586,53 @@ Toda decisão visual deve favorecer:
 * consistência
 * clareza
 * conforto de leitura
+
+## Padrão de ações — cards de lista e detail views
+
+Regra estrita. Toda página de entidade (parcelamentos, empréstimos, financiamentos, investimentos, …) segue exatamente isto. Divergência = bug de DS.
+
+### Card de lista — botão único (navegação ou ação)
+
+`variant="neutral"` + `className="mt-1 h-9 w-full gap-[7px] rounded-[10px] px-3.5 text-[13px] font-bold"`, ícone `Eye` `size-[15px]` `strokeWidth={2}`.
+
+- **Navega** pra `/x/[id]`: `<Link className={buttonVariants({ variant: "neutral", className: "…" })}>`.
+- **Abre modal** (client): `<Button variant="neutral" className="…">`.
+
+Referência: `installment-purchase-card.tsx`, `loan-card.tsx`, `financing-card.tsx`, `investment-card.tsx` (todos idênticos).
+
+### Detail view (`/x/[id]`) — header de ações
+
+Exatamente **uma** ação primária visível + **kebab `⋯`** pro resto. Nunca botão destrutivo ou `outline` solto no header.
+
+- **Primária**: `<Button variant="default" size="lg">` + ícone. O verbo principal da entidade (Quitar / Simular antecipação / Aportar). Pode ser condicional (só aparece quando faz sentido).
+- **Kebab**:
+
+```tsx
+<DropdownMenu>
+  <DropdownMenuTrigger
+    render={<Button variant="neutral" size="icon-md" aria-label={`Mais ações para ${nome}`} />}
+  >
+    <MoreVertical className="size-4" aria-hidden="true" />
+  </DropdownMenuTrigger>
+  <DropdownMenuContent align="end">
+    <DropdownMenuItem onClick={…}>
+      <Pencil className="size-4" aria-hidden="true" />
+      Editar
+    </DropdownMenuItem>
+    <DropdownMenuItem variant="destructive" onClick={…}>
+      <Trash2 className="size-4" aria-hidden="true" />
+      Excluir
+    </DropdownMenuItem>
+  </DropdownMenuContent>
+</DropdownMenu>
+```
+
+- **Excluir** sempre `variant="destructive"` no item + `ConfirmDialog` antes de executar.
+
+Referência canônica: `loan-detail-view.tsx`, `financing-detail-view.tsx`.
+
+### Proibido
+
+- Botão destrutivo visível solto no header → usar kebab.
+- `size="sm"` + `text-destructive` como atalho de "Excluir".
+- Tratar `neutral` e `default` como mesma hierarquia. `default` = primária única; `neutral` = secundária/navegação/trigger de kebab.

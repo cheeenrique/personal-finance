@@ -12,7 +12,7 @@ import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity
 import { FormField } from "@/components/forms/form-field";
 import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
-import { createInvestmentAction } from "@/modules/investments/actions";
+import { createInvestmentAction, updateInvestmentAction } from "@/modules/investments/actions";
 import { listCategoryTreeAction } from "@/modules/categories/actions";
 import { CategoryType } from "@/generated/prisma/enums";
 import type { CategoryTreeNode } from "@/modules/categories/types";
@@ -28,6 +28,8 @@ type InvestmentFormModalProps = {
   onOpenChange: (open: boolean) => void;
   accounts: AccountOptionView[];
   onSaved?: () => void;
+  /** Presente = modo edição (só nome + % CDI; sem aporte). Ausente = criação. */
+  investment?: { id: string; name: string; yieldPercentOfBenchmark: string | null };
 };
 
 type FormState = {
@@ -77,6 +79,7 @@ export function InvestmentFormModal({
   onOpenChange,
   accounts,
   onSaved,
+  investment,
 }: InvestmentFormModalProps) {
   const [form, setForm] = useState<FormState>(emptyForm());
   const [categoryOptions, setCategoryOptions] = useState<EntitySelectOption[]>([]);
@@ -84,12 +87,22 @@ export function InvestmentFormModal({
   const [formError, setFormError] = useState<string | null>(null);
   const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
+  const isEdit = Boolean(investment);
 
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setForm(emptyForm());
+      setForm(
+        investment
+          ? {
+              ...emptyForm(),
+              name: investment.name,
+              yieldPercentOfBenchmark: investment.yieldPercentOfBenchmark ?? "",
+              withContribution: false,
+            }
+          : emptyForm(),
+      );
       setFormError(null);
       setFieldErrors({});
     }
@@ -133,7 +146,7 @@ export function InvestmentFormModal({
     if (isBlank(form.name)) errors.name = "Nome é obrigatório.";
     if (isBlank(form.yieldPercentOfBenchmark)) errors.yieldPercentOfBenchmark = "Informe o % do CDI.";
 
-    if (form.withContribution) {
+    if (!isEdit && form.withContribution) {
       if (!form.accountId) errors.accountId = "Selecione a conta.";
       if (isBlank(form.amount)) errors.amount = "Informe o valor do aporte.";
       if (!form.categoryId) errors.categoryId = "Selecione a categoria.";
@@ -146,27 +159,32 @@ export function InvestmentFormModal({
     if (Object.keys(errors).length > 0) return;
 
     startTransition(async () => {
-      const result = await createInvestmentAction({
-        name: form.name,
-        yieldPercentOfBenchmark: form.yieldPercentOfBenchmark,
-        ...(form.withContribution && form.accountId && form.categoryId
-          ? {
-              initialContribution: {
-                accountId: form.accountId,
-                amount: form.amount,
-                categoryId: form.categoryId,
-                date: form.date,
-              },
-            }
-          : {}),
-      });
+      const result = isEdit
+        ? await updateInvestmentAction(investment!.id, {
+            name: form.name,
+            yieldPercentOfBenchmark: form.yieldPercentOfBenchmark,
+          })
+        : await createInvestmentAction({
+            name: form.name,
+            yieldPercentOfBenchmark: form.yieldPercentOfBenchmark,
+            ...(form.withContribution && form.accountId && form.categoryId
+              ? {
+                  initialContribution: {
+                    accountId: form.accountId,
+                    amount: form.amount,
+                    categoryId: form.categoryId,
+                    date: form.date,
+                  },
+                }
+              : {}),
+          });
 
       if (!result.success) {
         setFormError(result.error.message);
         return;
       }
 
-      notifySuccess("Investimento criado");
+      notifySuccess(isEdit ? "Investimento atualizado" : "Investimento criado");
       onOpenChange(false);
       onSaved?.();
     });
@@ -176,8 +194,12 @@ export function InvestmentFormModal({
     <FormModal
       open={open}
       onOpenChange={onOpenChange}
-      title="Novo investimento"
-      description="Produto com % do CDI. O aporte inicial debita o saldo da conta escolhida."
+      title={isEdit ? "Editar investimento" : "Novo investimento"}
+      description={
+        isEdit
+          ? "Atualize o nome e o % do CDI deste investimento."
+          : "Produto com % do CDI. O aporte inicial debita o saldo da conta escolhida."
+      }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField label="Nome" htmlFor="investment-name" required error={fieldErrors.name}>
@@ -217,18 +239,20 @@ export function InvestmentFormModal({
           />
         </FormField>
 
-        <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <input
-            type="checkbox"
-            checked={form.withContribution}
-            onChange={(event) => setForm((prev) => ({ ...prev, withContribution: event.target.checked }))}
-            disabled={isPending}
-            className="size-4 rounded border-border"
-          />
-          Aportar agora (debita a conta)
-        </label>
+        {!isEdit && (
+          <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <input
+              type="checkbox"
+              checked={form.withContribution}
+              onChange={(event) => setForm((prev) => ({ ...prev, withContribution: event.target.checked }))}
+              disabled={isPending}
+              className="size-4 rounded border-border"
+            />
+            Aportar agora (debita a conta)
+          </label>
+        )}
 
-        {form.withContribution && (
+        {!isEdit && form.withContribution && (
           <>
             <FormField label="Conta" htmlFor="investment-account" required error={fieldErrors.accountId}>
               <EntitySelect
@@ -301,7 +325,7 @@ export function InvestmentFormModal({
           </Button>
           <Button type="submit" disabled={isPending}>
             {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Criar
+            {isEdit ? "Salvar" : "Criar"}
           </Button>
         </div>
       </form>
