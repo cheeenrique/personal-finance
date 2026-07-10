@@ -233,7 +233,7 @@ export function InstallmentDetailsModal({ purchase, onOpenChange }: InstallmentD
             {hasFutureInstallments && (
               <Button type="button" variant="destructive" size="sm" onClick={() => setCancelOpen(true)}>
                 <Ban className="size-4" aria-hidden="true" />
-                Cancelar parcelamento
+                Cancelar
               </Button>
             )}
           </div>
