@@ -44,6 +44,25 @@ const holderNameSchema = z
   .optional();
 
 /**
+ * Validade impressa no cartão, formato "MM/AA" (`prisma/schema.prisma`
+ * `Card.expiry`) — só exibição, sem cálculo de vencimento real. Mesmo
+ * tratamento de `lastFourSchema`: string vazia (campo limpo pelo usuário)
+ * vira `null`.
+ */
+const expirySchema = z
+  .string()
+  .trim()
+  .nullable()
+  .optional()
+  .transform((value) => {
+    if (value === null || value === undefined) return value;
+    return value === "" ? null : value;
+  })
+  .refine((value) => value == null || /^(0[1-9]|1[0-2])\/\d{2}$/.test(value), {
+    message: "Validade deve estar no formato MM/AA",
+  });
+
+/**
  * `type` decide se `limit`/`closingDay`/`dueDay` são exigidos:
  * - CREDIT (default): os 3 campos são obrigatórios (comportamento atual, zero regressão).
  * - MEAL: os 3 campos são opcionais — cartão pré-pago não tem fatura/ciclo/limite de
@@ -64,6 +83,7 @@ export const createCardSchema = z
     icon: z.string().trim().max(60).optional(),
     lastFour: lastFourSchema,
     holderName: holderNameSchema,
+    expiry: expirySchema,
   })
   .refine((data) => data.type !== CardType.CREDIT || data.limit !== undefined, {
     message: "Limite é obrigatório para cartão de crédito",
@@ -94,6 +114,7 @@ export const updateCardSchema = z.object({
   icon: z.string().trim().max(60).nullable().optional(),
   lastFour: lastFourSchema,
   holderName: holderNameSchema,
+  expiry: expirySchema,
   isActive: z.boolean().optional(),
 });
 

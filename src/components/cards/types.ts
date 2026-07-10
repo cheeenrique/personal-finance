@@ -24,6 +24,8 @@ export type CardSummaryView = {
   /** Só exibição — NUNCA o número completo (ver `prisma/schema.prisma` `Card.lastFour`). */
   lastFour: string | null;
   holderName: string | null;
+  /** Validade impressa "MM/AA" — só exibição (ver `prisma/schema.prisma` `Card.expiry`). */
+  expiry: string | null;
   isActive: boolean;
   createdAt: string;
   currentInvoiceTotal: string;

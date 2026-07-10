@@ -34,6 +34,8 @@ export type CardFormState = {
   /** Só os 4 últimos dígitos, nunca o número completo (`lastFourSchema` filtra/valida no backend). */
   lastFour: string;
   holderName: string;
+  /** Validade impressa "MM/AA" — vazio cai no fallback `••/••` da `CardFace` (`expirySchema` valida o formato no backend). */
+  expiry: string;
 };
 
 function emptyFormState(): CardFormState {
@@ -47,6 +49,7 @@ function emptyFormState(): CardFormState {
     color: null,
     lastFour: "",
     holderName: "",
+    expiry: "",
   };
 }
 
@@ -61,6 +64,7 @@ function formStateFromCard(card: CardSummaryView): CardFormState {
     color: card.color,
     lastFour: card.lastFour ?? "",
     holderName: card.holderName ?? "",
+    expiry: card.expiry ?? "",
   };
 }
 
@@ -111,6 +115,9 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
     if (form.lastFour && form.lastFour.length !== 4) {
       errors.lastFour = "Informe os 4 dígitos ou deixe em branco.";
     }
+    if (form.expiry && !/^(0[1-9]|1[0-2])\/\d{2}$/.test(form.expiry)) {
+      errors.expiry = "Informe no formato MM/AA ou deixe em branco.";
+    }
     if (!isMeal) {
       if (isBlank(form.limit)) errors.limit = "Informe um valor.";
       if (isBlank(form.closingDay)) errors.closingDay = "Dia de fechamento é obrigatório.";
@@ -126,6 +133,7 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
       color: form.color,
       lastFour: form.lastFour,
       holderName: form.holderName,
+      expiry: form.expiry,
       ...(isMeal
         ? {}
         : { limit: form.limit, closingDay: Number(form.closingDay), dueDay: Number(form.dueDay) }),
@@ -167,6 +175,7 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
             brand={form.brand}
             lastFour={form.lastFour || null}
             holder={form.holderName || null}
+            expiry={form.expiry || null}
             type={form.type}
           />
           <p className="mt-3 text-center text-[11px] font-medium text-muted-foreground">

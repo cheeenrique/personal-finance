@@ -21,6 +21,8 @@ export type CreateCardData = {
   /** Só exibição — NUNCA o número completo (ver `prisma/schema.prisma` `Card.lastFour`). */
   lastFour?: string | null;
   holderName?: string | null;
+  /** Validade impressa "MM/AA" — só exibição (ver `prisma/schema.prisma` `Card.expiry`). */
+  expiry?: string | null;
 };
 
 export type UpdateCardData = Partial<CreateCardData> & { isActive?: boolean };
@@ -75,6 +77,7 @@ async function create(userId: string, data: CreateCardData): Promise<Card> {
       icon: data.icon ?? null,
       lastFour: data.lastFour ?? null,
       holderName: data.holderName ?? null,
+      expiry: data.expiry ?? null,
     },
   });
 }
@@ -158,6 +161,7 @@ async function update(userId: string, id: string, data: UpdateCardData): Promise
         ...(data.icon !== undefined && { icon: data.icon }),
         ...(data.lastFour !== undefined && { lastFour: data.lastFour }),
         ...(data.holderName !== undefined && { holderName: data.holderName }),
+        ...(data.expiry !== undefined && { expiry: data.expiry }),
         ...(data.isActive !== undefined && { isActive: data.isActive }),
       },
     });

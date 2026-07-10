@@ -12,6 +12,8 @@ type CardFaceProps = {
   /** Só os 4 últimos dígitos (`CardSummaryView.lastFour`) — NUNCA o número completo do cartão. */
   lastFour: string | null;
   holder: string | null;
+  /** Validade impressa "MM/AA" (`CardSummaryView.expiry`) — `null`/vazio cai no fallback `••/••`. */
+  expiry: string | null;
   type: CardType;
   className?: string;
 };
@@ -51,7 +53,7 @@ function ChipIcon({ className }: { className?: string }) {
  * detalhe). NUNCA renderiza o número completo — só os 4 últimos dígitos
  * mascarados atrás de `••••` (mesma regra de `types.ts`, `lastFour`).
  */
-export function CardFace({ gradient, cardName, brand, lastFour, holder, type, className }: CardFaceProps) {
+export function CardFace({ gradient, cardName, brand, lastFour, holder, expiry, type, className }: CardFaceProps) {
   const holderLabel = (holder || cardName || "SEU NOME").toUpperCase();
 
   return (
@@ -91,7 +93,7 @@ export function CardFace({ gradient, cardName, brand, lastFour, holder, type, cl
           <p className="text-[8.5px] font-bold tracking-[0.12em] text-white/55 uppercase sm:text-[9px]">
             Validade
           </p>
-          <p className="mt-0.5 font-mono text-[10.5px] font-semibold sm:text-xs">••/••</p>
+          <p className="mt-0.5 font-mono text-[10.5px] font-semibold sm:text-xs">{expiry || "••/••"}</p>
         </div>
         <BrandMark brand={brand} className="ml-1 shrink-0" />
       </div>

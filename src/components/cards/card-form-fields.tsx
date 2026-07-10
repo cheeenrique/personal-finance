@@ -20,6 +20,18 @@ const CARD_TYPE_OPTIONS: { value: CardType; label: string }[] = [
 /** Atalhos de bandeira do form — mesmo texto que `BrandMark` (`brand-mark.tsx`) sabe detectar. */
 const BRAND_SHORTCUTS = ["Visa", "Mastercard", "Elo", "Amex", "Hipercard", "Diners", "Discover"];
 
+/**
+ * Máscara leve de validade (MM/AA): aceita só dígitos e barra digitados,
+ * reconstrói a partir dos dígitos pra sempre chegar em "MM/AA" (funciona
+ * tanto digitando quanto colando "1228"). `expirySchema` (`modules/cards/schemas.ts`)
+ * valida o formato final no backend — esta máscara só melhora a digitação.
+ */
+function formatExpiryInput(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
 type CardFormFieldsProps = {
   form: CardFormState;
   setForm: Dispatch<SetStateAction<CardFormState>>;
@@ -141,15 +153,34 @@ export function CardFormFields({
         </FormField>
       </div>
 
-      <FormField label="Nome impresso (titular)" htmlFor="card-holder-name">
-        <Input
-          id="card-holder-name"
-          value={form.holderName}
-          onChange={(event) => setForm((prev) => ({ ...prev, holderName: event.target.value }))}
-          placeholder="ANA SILVA"
-          disabled={isPending}
-        />
-      </FormField>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_110px]">
+        <FormField label="Nome impresso (titular)" htmlFor="card-holder-name">
+          <Input
+            id="card-holder-name"
+            value={form.holderName}
+            onChange={(event) => setForm((prev) => ({ ...prev, holderName: event.target.value }))}
+            placeholder="ANA SILVA"
+            disabled={isPending}
+          />
+        </FormField>
+
+        <FormField label="Validade (MM/AA)" htmlFor="card-expiry" error={fieldErrors.expiry}>
+          <Input
+            id="card-expiry"
+            value={form.expiry}
+            onChange={(event) => {
+              setForm((prev) => ({ ...prev, expiry: formatExpiryInput(event.target.value) }));
+              clearFieldError("expiry");
+            }}
+            inputMode="numeric"
+            maxLength={5}
+            placeholder="MM/AA"
+            aria-invalid={Boolean(fieldErrors.expiry)}
+            disabled={isPending}
+            className="font-mono tracking-[0.1em]"
+          />
+        </FormField>
+      </div>
 
       {/* Limite/fechamento/vencimento não existem pra MEAL — saldo pré-pago, sem fatura/ciclo (`modules/cards/service.ts` `assertCreditCard`). */}
       {!isMeal && (

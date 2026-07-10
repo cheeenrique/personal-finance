@@ -49,6 +49,7 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
           brand={card.brand}
           lastFour={card.lastFour}
           holder={card.holderName}
+          expiry={card.expiry}
           type={card.type}
         />
       </Link>

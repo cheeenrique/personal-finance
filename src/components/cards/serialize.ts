@@ -17,6 +17,7 @@ export function serializeCardSummary(card: CardWithSummary): CardSummaryView {
     icon: card.icon,
     lastFour: card.lastFour,
     holderName: card.holderName,
+    expiry: card.expiry,
     isActive: card.isActive,
     createdAt: card.createdAt.toISOString(),
     currentInvoiceTotal: card.currentInvoiceTotal.toString(),

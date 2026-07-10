@@ -31,6 +31,7 @@ export function CardDetailFacePanel({ card, onEdit, onDelete }: CardDetailFacePa
         brand={card.brand}
         lastFour={card.lastFour}
         holder={card.holderName}
+        expiry={card.expiry}
         type={card.type}
       />
       <div className="flex gap-2.5">
