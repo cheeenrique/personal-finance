@@ -97,9 +97,10 @@ export function InstallmentDetailsModal({ purchase, onOpenChange }: InstallmentD
   const hasFutureInstallments = purchase?.installments.some((installment) => !installment.isPaid) ?? false;
   const categoryDirty = Boolean(purchase && categoryId && categoryId !== purchase.categoryId);
 
-  const [syncedPurchaseId, setSyncedPurchaseId] = useState(purchase?.id ?? null);
-  if (purchase?.id !== syncedPurchaseId) {
-    setSyncedPurchaseId(purchase?.id ?? null);
+  const currentPurchaseId = purchase?.id ?? null;
+  const [syncedPurchaseId, setSyncedPurchaseId] = useState(currentPurchaseId);
+  if (currentPurchaseId !== syncedPurchaseId) {
+    setSyncedPurchaseId(currentPurchaseId);
     setCategoryId(purchase?.categoryId ?? undefined);
     setCategoryError(null);
   }

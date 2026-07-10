@@ -1,7 +1,7 @@
 # Sessão 2026-07-09 — Investimentos, Parcelamentos e Telegram
 
 Data: 2026-07-09  
-Status: implementado (commit `b78e380`)  
+Status: implementado e aplicado em produção (deploy `cae1501`, 2026-07-10)  
 Docs canônicos: `28-INVESTMENTS.md`, `23-INSTALLMENTS.md`, `30-TELEGRAM.md`, `27-ASSETS.md`, `03-DATABASE.md`, `06-SCREENS.md`
 
 Este documento consolida **tudo o que foi planejado e entregue nesta sessão**,
@@ -169,9 +169,12 @@ Doc: seções em **`docs/30-TELEGRAM.md`** + ponte em **`docs/28-INVESTMENTS.md`
 
 ## 6. Pendências operacionais
 
-* Aplicar migration no ambiente com DB:  
-  `npx prisma migrate deploy`  
-  (requer `DATABASE_URL` / `POSTGRES_URL_NON_POOLING`)
+* ~~Aplicar migration no ambiente com DB (`npx prisma migrate deploy`)~~ —
+  **resolvido**. Migration `20260709160000_investments` aplicada em produção no
+  deploy `cae1501` (2026-07-10). `vercel.json` passou a rodar
+  `prisma migrate deploy && next build` no `buildCommand`, então migrations
+  agora aplicam automaticamente em todo deploy (drift do `_prisma_migrations`
+  reconciliado na mesma leva).
 * Resgate de investimento e rendimento automático de `currentValue` —
   **não** planejados nesta sessão (backlog consciente).
 
