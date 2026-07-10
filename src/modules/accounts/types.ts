@@ -55,3 +55,17 @@ export type InsufficientBalanceReport = {
   deficitTotal: string;
   items: InsufficientBalanceItem[];
 };
+
+/**
+ * Agregado INCOME/EXPENSE de UMA conta num range de datas — insumo dos KPIs
+ * "Entradas/Saídas do período" e do resumo de fluxo do detalhe de conta
+ * (`AccountKpiRow`/`AccountFlowSummary`, service.ts `accountPeriodSummary`).
+ * Já client-ready (`income`/`expense` como string) — mesmo motivo de
+ * `InsufficientBalanceItem`: nenhum outro consumidor além dessa tela.
+ */
+export type AccountPeriodSummary = {
+  income: string;
+  expense: string;
+  incomeCount: number;
+  expenseCount: number;
+};

@@ -1,3 +1,5 @@
+import { TransactionType } from "@/generated/prisma/enums";
+import type { ImportPreviewItem } from "@/modules/imports/types";
 import type { ImportFileEntry } from "./import-types";
 
 /** Extensões aceitas pelo dropzone — espelha `modules/imports/parsers/index.ts` (`.xls` é aceito e enviado; o backend devolve erro claro pro binário legado, não bloqueamos no client). */
@@ -64,7 +66,17 @@ export function formatFileSize(bytes: number): string {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
-/** Totais agregados de todos os arquivos já analisados — usado no KPI do step preview. */
+/** Soma de `novos` de UM tipo (INCOME/EXPENSE) — insumo dos 2 blocos "Entradas/Saídas a importar" (`import-preview.tsx`). */
+function sumNovosByType(novos: ImportPreviewItem[], type: TransactionType): number {
+  return novos.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.amount), 0);
+}
+
+/**
+ * Totais agregados de todos os arquivos já analisados — usado nos KPIs do
+ * step preview (total/novos/duplicados, handoff "Step preview") + nos 2
+ * blocos "Entradas/Saídas a importar" (soma de `novos` por tipo, mesmo motivo
+ * de exibir de antemão o impacto no fluxo de caixa antes de confirmar).
+ */
 export function aggregatePreview(entries: ImportFileEntry[]) {
   return entries.reduce(
     (totals, entry) => {
@@ -73,9 +85,11 @@ export function aggregatePreview(entries: ImportFileEntry[]) {
         total: totals.total + entry.preview.total,
         novos: totals.novos + entry.preview.novos.length,
         duplicados: totals.duplicados + entry.preview.duplicados,
+        incomeTotal: totals.incomeTotal + sumNovosByType(entry.preview.novos, TransactionType.INCOME),
+        expenseTotal: totals.expenseTotal + sumNovosByType(entry.preview.novos, TransactionType.EXPENSE),
       };
     },
-    { total: 0, novos: 0, duplicados: 0 },
+    { total: 0, novos: 0, duplicados: 0, incomeTotal: 0, expenseTotal: 0 },
   );
 }
 

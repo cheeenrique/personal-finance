@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { accountService } from "./service";
 import { createTransfer } from "./transfer";
-import { createAccountSchema, updateAccountSchema, transferSchema } from "./schemas";
+import { createAccountSchema, updateAccountSchema, transferSchema, accountPeriodSummarySchema } from "./schemas";
 import { AccountDomainError } from "./errors";
-import type { Account, AccountWithBalance, ActionResult, TransferResult } from "./types";
+import type { Account, AccountPeriodSummary, AccountWithBalance, ActionResult, TransferResult } from "./types";
 
 const ACCOUNTS_PATH = "/accounts";
 const DASHBOARD_PATH = "/dashboard";
@@ -120,6 +120,34 @@ export async function createTransferAction(input: unknown): Promise<ActionResult
     const result = await createTransfer(userId, parsed.data);
     revalidateAccountRoutes();
     return { success: true, data: result };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/**
+ * Agregado INCOME/EXPENSE do período selecionado no detalhe de conta (KPIs
+ * "Entradas/Saídas do período" + resumo de fluxo) — só leitura, sem
+ * `revalidatePath` (mesmo padrão de `listAccountsAction`).
+ */
+export async function accountPeriodSummaryAction(input: unknown): Promise<ActionResult<AccountPeriodSummary>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  const parsed = accountPeriodSummarySchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Dados inválidos." },
+    };
+  }
+
+  try {
+    const summary = await accountService.accountPeriodSummary(userId, parsed.data.accountId, {
+      dateFrom: parsed.data.dateFrom,
+      dateTo: parsed.data.dateTo,
+    });
+    return { success: true, data: summary };
   } catch (error) {
     return toActionError(error);
   }

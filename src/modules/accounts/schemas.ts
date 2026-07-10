@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AccountType } from "@/generated/prisma/enums";
 import { decimalStringSchema, positiveDecimalSchema } from "@/lib/money/schema";
+import { dateInputSchema } from "@/lib/date/schema";
 
 const ACCOUNT_TYPE_VALUES = Object.values(AccountType) as [AccountType, ...AccountType[]];
 
@@ -34,6 +35,14 @@ export const transferSchema = z
     path: ["toAccountId"],
   });
 
+/** Input de `accountPeriodSummaryAction` — mesmo `dateInputSchema` do filtro de período de `/transactions` (`YYYY-MM-DD` ou `Date`). */
+export const accountPeriodSummarySchema = z.object({
+  accountId: z.string().min(1, "Conta é obrigatória"),
+  dateFrom: dateInputSchema.optional(),
+  dateTo: dateInputSchema.optional(),
+});
+
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;
 export type TransferInput = z.infer<typeof transferSchema>;
+export type AccountPeriodSummaryInput = z.infer<typeof accountPeriodSummarySchema>;

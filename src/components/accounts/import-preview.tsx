@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatBRL } from "@/lib/money/format";
 import { aggregatePreview } from "./import-file-utils";
 import { ImportPreviewPanel } from "./import-preview-panel";
 import type { ImportFileEntry } from "./import-types";
@@ -32,6 +33,18 @@ export function ImportPreview({ entries }: ImportPreviewProps) {
         <div>
           <p className="text-lg font-extrabold text-muted-foreground">{totals.duplicados}</p>
           <p className="text-xs font-semibold text-muted-foreground">Já importados</p>
+        </div>
+      </div>
+
+      {/* Impacto no caixa dos "novos" — mesmo par entradas/saídas do resumo de fluxo da tela (`AccountFlowSummary`), pra confirmar o efeito ANTES de gravar. */}
+      <div className="flex gap-3">
+        <div className="flex-1 rounded-xl border border-success/30 bg-success/10 p-3">
+          <p className="text-xs font-bold text-muted-foreground">Entradas a importar</p>
+          <p className="mt-1 font-mono text-base font-semibold text-on-success">+ {formatBRL(totals.incomeTotal)}</p>
+        </div>
+        <div className="flex-1 rounded-xl border border-destructive/30 bg-destructive/10 p-3">
+          <p className="text-xs font-bold text-muted-foreground">Saídas a importar</p>
+          <p className="mt-1 font-mono text-base font-semibold text-on-danger">- {formatBRL(totals.expenseTotal)}</p>
         </div>
       </div>
 

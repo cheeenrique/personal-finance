@@ -8,7 +8,12 @@ import {
   type UnpaidExpenseRow,
 } from "./repository";
 import { AccountNotFoundError } from "./errors";
-import type { AccountWithBalance, InsufficientBalanceItem, InsufficientBalanceReport } from "./types";
+import type {
+  AccountPeriodSummary,
+  AccountWithBalance,
+  InsufficientBalanceItem,
+  InsufficientBalanceReport,
+} from "./types";
 
 /**
  * Sinal de cada tipo de Transaction no saldo da conta. INCOME soma, EXPENSE e
@@ -191,6 +196,33 @@ async function getInsufficientBalanceReport(
   return { deficitTotal: deficitTotal.toString(), items };
 }
 
+/**
+ * Agregado INCOME/EXPENSE de uma conta num range de datas (docs/21-ACCOUNTS.md,
+ * "Detalhe da Conta": KPIs "Entradas/Saídas do período" + resumo de fluxo) —
+ * independente da paginação do histórico (`listTransactionsAction`), consulta
+ * própria via `accountRepository.sumAmountsByTypeInRange`. `range` vazio (sem
+ * `dateFrom`/`dateTo`) soma TODO o histórico da conta.
+ */
+async function accountPeriodSummary(
+  userId: string,
+  accountId: string,
+  range: { dateFrom?: Date; dateTo?: Date },
+): Promise<AccountPeriodSummary> {
+  const account = await accountRepository.findById(userId, accountId);
+  if (!account) throw new AccountNotFoundError(accountId);
+
+  const rows = await accountRepository.sumAmountsByTypeInRange(userId, accountId, range);
+  const income = rows.find((row) => row.type === TransactionType.INCOME);
+  const expense = rows.find((row) => row.type === TransactionType.EXPENSE);
+
+  return {
+    income: (income?.sum ?? new Prisma.Decimal(0)).toString(),
+    expense: (expense?.sum ?? new Prisma.Decimal(0)).toString(),
+    incomeCount: income?.count ?? 0,
+    expenseCount: expense?.count ?? 0,
+  };
+}
+
 export const accountService = {
   getBalance,
   listWithBalances,
@@ -199,4 +231,5 @@ export const accountService = {
   updateAccount,
   deleteAccount,
   getInsufficientBalanceReport,
+  accountPeriodSummary,
 };

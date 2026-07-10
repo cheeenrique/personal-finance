@@ -151,6 +151,55 @@ async function listUnpaidExpensesByAccount(
   return rows.filter((row): row is typeof row & { accountId: string } => row.accountId !== null);
 }
 
+/** Soma + contagem por tipo (INCOME/EXPENSE) de uma conta num range de datas — ver `sumAmountsByTypeInRange`. */
+export type AccountTypeRangeSum = { type: string; sum: Prisma.Decimal; count: number };
+
+/**
+ * Soma + contagem de INCOME/EXPENSE de UMA conta num range de datas — insumo
+ * dos KPIs "Entradas/Saídas do período" e do resumo de fluxo do detalhe de
+ * conta (ver service.ts `accountPeriodSummary`). Mesma regra de "fluxo de
+ * caixa correto" já usada no resto do app (`reports/repository.ts`
+ * `buildCashflowConditions`, docs/28-REPORTS.md "Exclusão de Transfer e
+ * Pagamento de Fatura"): exclui pernas de transferência (`transferId IS
+ * NULL`) e pagamento de fatura (`cardId IS NULL`) — só INCOME/EXPENSE "puros"
+ * contam como entrada/saída de caixa da conta. Considera só pagas (`isPaid`),
+ * data EFETIVA (`COALESCE("paidAt", "date")`, mesma semântica de
+ * `buildListConditions`/`sumAmountByTypeInRange`). `$queryRaw` (não
+ * `groupBy`) porque o Prisma não expressa COALESCE no filtro.
+ */
+async function sumAmountsByTypeInRange(
+  userId: string,
+  accountId: string,
+  range: { dateFrom?: Date; dateTo?: Date },
+): Promise<AccountTypeRangeSum[]> {
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`"userId" = ${userId}`,
+    Prisma.sql`"accountId" = ${accountId}`,
+    Prisma.sql`"deletedAt" IS NULL`,
+    Prisma.sql`"isPaid" = true`,
+    Prisma.sql`"transferId" IS NULL`,
+    Prisma.sql`"cardId" IS NULL`,
+    Prisma.sql`"type" IN ('INCOME', 'EXPENSE')`,
+  ];
+  if (range.dateFrom) conditions.push(Prisma.sql`COALESCE("paidAt", "date") >= ${range.dateFrom}`);
+  if (range.dateTo) conditions.push(Prisma.sql`COALESCE("paidAt", "date") <= ${range.dateTo}`);
+
+  const rows = await prisma.$queryRaw<
+    { type: string; total: Prisma.Decimal | string | number; count: bigint | number }[]
+  >`
+    SELECT "type", COALESCE(SUM("amount"), 0) AS total, COUNT(*) AS count
+    FROM "Transaction"
+    WHERE ${Prisma.join(conditions, " AND ")}
+    GROUP BY "type"
+  `;
+
+  return rows.map((row) => ({
+    type: row.type,
+    sum: new Prisma.Decimal(row.total ?? 0),
+    count: Number(row.count),
+  }));
+}
+
 export const accountRepository = {
   findById,
   list,
@@ -159,4 +208,5 @@ export const accountRepository = {
   softDelete,
   sumAmountsByType,
   listUnpaidExpensesByAccount,
+  sumAmountsByTypeInRange,
 };

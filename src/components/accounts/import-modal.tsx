@@ -14,6 +14,8 @@ import { ImportDropzone } from "./import-dropzone";
 import { STEP_TRANSITION, stepVariants } from "./import-motion";
 import { ImportPreview } from "./import-preview";
 import { ImportResult } from "./import-result";
+import { ImportStepper } from "./import-stepper";
+import { ACCOUNT_PERIOD_SUMMARY_QUERY_KEY } from "./use-account-period-summary";
 import { useImportFiles } from "./use-import-files";
 
 type ImportModalProps = {
@@ -54,6 +56,12 @@ export function ImportModal({ open, onOpenChange, accountId }: ImportModalProps)
     const totals = aggregateCommit(nextEntries);
 
     invalidateAllTransactionLists(queryClient);
+    // `invalidateAllTransactionLists` cobre "account-transactions" mas não
+    // este prefixo (adicionado depois, fora do arquivo compartilhado
+    // `transaction-query-keys.ts` — ver "Improvement Suggestions" no resumo
+    // da tarefa) — invalida manualmente aqui, o único ponto de commit do
+    // import.
+    void queryClient.invalidateQueries({ queryKey: [ACCOUNT_PERIOD_SUMMARY_QUERY_KEY] });
     router.refresh();
     if (totals.imported > 0 || totals.duplicados > 0) notifySuccess("Extrato importado");
   }
@@ -73,6 +81,8 @@ export function ImportModal({ open, onOpenChange, accountId }: ImportModalProps)
     >
       <MotionConfig reducedMotion="user">
         <div className="flex flex-col gap-4">
+          <ImportStepper step={step} />
+
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={step} variants={stepVariants} initial="enter" animate="center" exit="exit" transition={STEP_TRANSITION}>
               {step === "select" && (
