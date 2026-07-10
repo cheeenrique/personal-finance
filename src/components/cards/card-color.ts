@@ -100,3 +100,43 @@ export function cardSwatchClass(color: string | null | undefined): string {
 export function cardTintClass(color: string | null | undefined): string {
   return isCardColorValue(color) ? TINT_CLASSES[color] : "bg-primary/16 text-primary";
 }
+
+/**
+ * Gradiente 135° (cor do token → versão mais escura da mesma cor) usado como
+ * fundo da face realista do cartão (`CardFace`, ver `card-face.tsx`) — tile
+ * da grid, detalhe e preview ao vivo do form. Recebido via `style={{
+ * background }}` (não classe Tailwind): a face precisa refletir a cor
+ * selecionada ao vivo a cada tecla no form, e JIT do Tailwind não resolve
+ * `bg-[${var}]` dinâmico — por isso strings literais aqui, nunca hex
+ * interpolado em runtime. Par claro→escuro calculado a ~42% de luminância do
+ * tom base de cada token em `globals.css` (`:root, .dark`), mesma lógica dos
+ * `GRADIENTS` do protótipo-fonte (`Personal Finance - Cartoes.dc.html`).
+ */
+const GRADIENT_VALUES: Record<CardColorValue, string> = {
+  primary: "linear-gradient(135deg, #1e40af, #0d1b4a)",
+  accent: "linear-gradient(135deg, #ea580c, #622505)",
+  success: "linear-gradient(135deg, #16a34a, #09441f)",
+  warning: "linear-gradient(135deg, #f59e0b, #674205)",
+  destructive: "linear-gradient(135deg, #ef4444, #641d1d)",
+  transfer: "linear-gradient(135deg, #38bdf8, #184f68)",
+  asset: "linear-gradient(135deg, #a855f7, #472468)",
+  graphite: "linear-gradient(135deg, #3b4252, #191c22)",
+  midnight: "linear-gradient(135deg, #1e293b, #0d1119)",
+  rose: "linear-gradient(135deg, #e0a9a0, #5e4743)",
+  teal: "linear-gradient(135deg, #14b8a6, #084d46)",
+  indigo: "linear-gradient(135deg, #6366f1, #2a2b65)",
+  pink: "linear-gradient(135deg, #ec4899, #631e40)",
+  nubank: "linear-gradient(135deg, #820ad1, #370458)",
+  itau: "linear-gradient(135deg, #ec7000, #632f00)",
+  inter: "linear-gradient(135deg, #ff7a00, #6b3300)",
+  c6: "linear-gradient(135deg, #242424, #0f0f0f)",
+  bradesco: "linear-gradient(135deg, #cc092f, #560414)",
+  santander: "linear-gradient(135deg, #ec0000, #630000)",
+  bb: "linear-gradient(135deg, #0033a0, #001543)",
+  caixa: "linear-gradient(135deg, #005ca9, #002747)",
+};
+
+/** Fundo pra `CardFace` — mesmo fallback de `cardTintClass` (sem cor escolhida = tom `primary`). */
+export function cardGradient(color: string | null | undefined): string {
+  return isCardColorValue(color) ? GRADIENT_VALUES[color] : GRADIENT_VALUES.primary;
+}

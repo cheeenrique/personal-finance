@@ -5,17 +5,14 @@ import { Loader2 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { CurrencyInput } from "@/components/forms/currency-input";
-import { FormField } from "@/components/forms/form-field";
 import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
+import { useIsDesktop } from "@/hooks/use-media-query";
 import { notifySuccess } from "@/lib/toast";
-import { cn } from "@/lib/utils";
 import { CardType } from "@/generated/prisma/enums";
-import { CARD_COLOR_OPTIONS, cardSwatchClass } from "./card-color";
-import { CARD_ICON_OPTIONS } from "./card-icon";
+import { cardGradient } from "./card-color";
+import { CardFace } from "./card-face";
+import { CardFormFields } from "./card-form-fields";
 import { createCardForClient, updateCardForClient } from "./ui-actions";
 import type { CardSummaryView } from "./types";
 
@@ -26,13 +23,7 @@ type CardFormModalProps = {
   card: CardSummaryView | null;
 };
 
-/** `type` é imutável após a criação (`modules/cards/schemas.ts` `updateCardSchema` não aceita o campo) — só aparece como seletor no fluxo de criação. */
-const CARD_TYPE_OPTIONS: { value: CardType; label: string }[] = [
-  { value: CardType.CREDIT, label: "Crédito" },
-  { value: CardType.MEAL, label: "Alimentação" },
-];
-
-type FormState = {
+export type CardFormState = {
   name: string;
   brand: string;
   type: CardType;
@@ -40,10 +31,12 @@ type FormState = {
   closingDay: string;
   dueDay: string;
   color: string | null;
-  icon: string | null;
+  /** Só os 4 últimos dígitos, nunca o número completo (`lastFourSchema` filtra/valida no backend). */
+  lastFour: string;
+  holderName: string;
 };
 
-function emptyFormState(): FormState {
+function emptyFormState(): CardFormState {
   return {
     name: "",
     brand: "",
@@ -52,11 +45,12 @@ function emptyFormState(): FormState {
     closingDay: "1",
     dueDay: "10",
     color: null,
-    icon: null,
+    lastFour: "",
+    holderName: "",
   };
 }
 
-function formStateFromCard(card: CardSummaryView): FormState {
+function formStateFromCard(card: CardSummaryView): CardFormState {
   return {
     name: card.name,
     brand: card.brand,
@@ -65,17 +59,23 @@ function formStateFromCard(card: CardSummaryView): FormState {
     closingDay: String(card.closingDay),
     dueDay: String(card.dueDay),
     color: card.color,
-    icon: card.icon,
+    lastFour: card.lastFour ?? "",
+    holderName: card.holderName ?? "",
   };
 }
 
 /**
  * Criação/edição de cartão (docs/22-CREDIT_CARDS.md, "Criação de Cartão").
- * Mesmo componente pros dois fluxos — `card` presente = edição.
+ * Mesmo componente pros dois fluxos — `card` presente = edição. Preview ao
+ * vivo (`CardFace`) ligado direto no `useState` do form: cada tecla já é o
+ * próximo render, sem debounce nem estado espelhado (fonte visual:
+ * `Personal Finance - Cartoes.dc.html`, seção MODAL). Campos extraídos em
+ * `CardFormFields` — este arquivo só orquestra estado/validação/submit.
  */
 export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) {
   const isEditing = Boolean(card);
-  const [form, setForm] = useState<FormState>(() => (card ? formStateFromCard(card) : emptyFormState()));
+  const isDesktop = useIsDesktop();
+  const [form, setForm] = useState<CardFormState>(() => (card ? formStateFromCard(card) : emptyFormState()));
   const [formError, setFormError] = useState<string | null>(null);
   const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
@@ -108,6 +108,9 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
     const errors: Record<string, string> = {};
     if (isBlank(form.name)) errors.name = "Nome é obrigatório.";
     if (isBlank(form.brand)) errors.brand = "Bandeira é obrigatória.";
+    if (form.lastFour && form.lastFour.length !== 4) {
+      errors.lastFour = "Informe os 4 dígitos ou deixe em branco.";
+    }
     if (!isMeal) {
       if (isBlank(form.limit)) errors.limit = "Informe um valor.";
       if (isBlank(form.closingDay)) errors.closingDay = "Dia de fechamento é obrigatório.";
@@ -121,7 +124,8 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
       name: form.name,
       brand: form.brand,
       color: form.color,
-      icon: form.icon,
+      lastFour: form.lastFour,
+      holderName: form.holderName,
       ...(isMeal
         ? {}
         : { limit: form.limit, closingDay: Number(form.closingDay), dueDay: Number(form.dueDay) }),
@@ -147,6 +151,7 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
     <FormModal
       open={open}
       onOpenChange={onOpenChange}
+      size="wide"
       title={isEditing ? "Editar cartão" : "Novo cartão"}
       description={
         isEditing
@@ -154,191 +159,48 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
           : "Tipo, nome, bandeira e demais dados do cartão."
       }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {/* `type` é imutável após a criação (`updateCardSchema` não aceita o campo) — seletor só aparece criando um cartão novo. */}
-        {!isEditing && (
-          <div className="flex flex-col gap-1.5">
-            <Label>Tipo</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {CARD_TYPE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setForm((prev) => ({ ...prev, type: option.value }))}
-                  aria-pressed={form.type === option.value}
-                  disabled={isPending}
-                  className={cn(
-                    "flex h-10 items-center justify-center gap-2 rounded-[10px] border text-sm font-bold transition-colors",
-                    form.type === option.value
-                      ? "border-primary bg-primary/16 text-primary"
-                      : "border-border text-muted-foreground",
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <FormField label="Nome" htmlFor="card-name" required error={fieldErrors.name}>
-          <Input
-            id="card-name"
-            value={form.name}
-            onChange={(event) => {
-              setForm((prev) => ({ ...prev, name: event.target.value }));
-              clearFieldError("name");
-            }}
-            placeholder="Ex.: Nubank, XP Visa…"
-            aria-invalid={Boolean(fieldErrors.name)}
-            autoFocus
-            disabled={isPending}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6 xl:flex-row xl:items-start">
+        {/* preview ao vivo — sempre no topo no mobile, à esquerda no desktop (mesmo breakpoint que troca Sheet↔Dialog em FormModal, ver useIsDesktop) */}
+        <div className="mx-auto w-full max-w-[240px] xl:sticky xl:top-0 xl:mx-0 xl:w-[210px] xl:shrink-0">
+          <CardFace
+            gradient={cardGradient(form.color)}
+            cardName={form.name}
+            brand={form.brand}
+            lastFour={form.lastFour || null}
+            holder={form.holderName || null}
+            type={form.type}
           />
-        </FormField>
-
-        <FormField label="Bandeira" htmlFor="card-brand" required error={fieldErrors.brand}>
-          <Input
-            id="card-brand"
-            value={form.brand}
-            onChange={(event) => {
-              setForm((prev) => ({ ...prev, brand: event.target.value }));
-              clearFieldError("brand");
-            }}
-            placeholder="Ex.: Visa, Mastercard, Elo…"
-            aria-invalid={Boolean(fieldErrors.brand)}
-            disabled={isPending}
-          />
-        </FormField>
-
-        {/* Limite/fechamento/vencimento não existem pra MEAL — saldo pré-pago, sem fatura/ciclo (`modules/cards/service.ts` `assertCreditCard`). */}
-        {!isMeal && (
-          <>
-            <FormField label="Limite" htmlFor="card-limit" required error={fieldErrors.limit}>
-              <CurrencyInput
-                id="card-limit"
-                value={form.limit}
-                onValueChange={(value) => {
-                  setForm((prev) => ({ ...prev, limit: value }));
-                  clearFieldError("limit");
-                }}
-                aria-invalid={Boolean(fieldErrors.limit)}
-                disabled={isPending}
-              />
-            </FormField>
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                label="Dia de fechamento"
-                htmlFor="card-closing-day"
-                required
-                error={fieldErrors.closingDay}
-              >
-                <Input
-                  id="card-closing-day"
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={form.closingDay}
-                  onChange={(event) => {
-                    setForm((prev) => ({ ...prev, closingDay: event.target.value }));
-                    clearFieldError("closingDay");
-                  }}
-                  aria-invalid={Boolean(fieldErrors.closingDay)}
-                  disabled={isPending}
-                />
-              </FormField>
-              <FormField label="Dia de vencimento" htmlFor="card-due-day" required error={fieldErrors.dueDay}>
-                <Input
-                  id="card-due-day"
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={form.dueDay}
-                  onChange={(event) => {
-                    setForm((prev) => ({ ...prev, dueDay: event.target.value }));
-                    clearFieldError("dueDay");
-                  }}
-                  aria-invalid={Boolean(fieldErrors.dueDay)}
-                  disabled={isPending}
-                />
-              </FormField>
-            </div>
-          </>
-        )}
-
-        <div className="flex flex-col gap-1.5">
-          <Label>Cor</Label>
-          <div className="flex flex-wrap gap-2">
-            {CARD_COLOR_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() =>
-                  setForm((prev) => ({
-                    ...prev,
-                    color: prev.color === option.value ? null : option.value,
-                  }))
-                }
-                aria-label={option.label}
-                aria-pressed={form.color === option.value}
-                disabled={isPending}
-                className={cn(
-                  "size-8 rounded-full ring-offset-2 ring-offset-background transition-all",
-                  cardSwatchClass(option.value),
-                  form.color === option.value ? "ring-2 ring-foreground" : "opacity-60 hover:opacity-100",
-                )}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label>Ícone</Label>
-          <div className="flex flex-wrap gap-2">
-            {CARD_ICON_OPTIONS.map((option) => {
-              const Icon = option.icon;
-              const active = form.icon === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() =>
-                    setForm((prev) => ({
-                      ...prev,
-                      icon: prev.icon === option.value ? null : option.value,
-                    }))
-                  }
-                  aria-label={option.label}
-                  aria-pressed={active}
-                  disabled={isPending}
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-[10px] border transition-colors",
-                    active
-                      ? "border-primary bg-primary/16 text-primary"
-                      : "border-border text-muted-foreground hover:border-primary/40",
-                  )}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {formError && (
-          <p role="alert" className="text-sm font-medium text-destructive">
-            {formError}
+          <p className="mt-3 text-center text-[11px] font-medium text-muted-foreground xl:text-left">
+            Pré-visualização ao vivo — atualiza conforme você edita.
           </p>
-        )}
+        </div>
 
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <CardFormFields
+            form={form}
+            setForm={setForm}
+            isEditing={isEditing}
+            isPending={isPending}
+            isDesktop={isDesktop}
+            fieldErrors={fieldErrors}
+            clearFieldError={clearFieldError}
+          />
+
+          {formError && (
+            <p role="alert" className="text-sm font-medium text-destructive">
+              {formError}
+            </p>
+          )}
+
+          <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              Salvar
+            </Button>
+          </div>
         </div>
       </form>
     </FormModal>

@@ -18,6 +18,9 @@ export type CreateCardData = {
   dueDay: number;
   color?: string | null;
   icon?: string | null;
+  /** Só exibição — NUNCA o número completo (ver `prisma/schema.prisma` `Card.lastFour`). */
+  lastFour?: string | null;
+  holderName?: string | null;
 };
 
 export type UpdateCardData = Partial<CreateCardData> & { isActive?: boolean };
@@ -70,6 +73,8 @@ async function create(userId: string, data: CreateCardData): Promise<Card> {
       dueDay: data.dueDay,
       color: data.color ?? null,
       icon: data.icon ?? null,
+      lastFour: data.lastFour ?? null,
+      holderName: data.holderName ?? null,
     },
   });
 }
@@ -151,6 +156,8 @@ async function update(userId: string, id: string, data: UpdateCardData): Promise
         ...(data.dueDay !== undefined && { dueDay: data.dueDay }),
         ...(data.color !== undefined && { color: data.color }),
         ...(data.icon !== undefined && { icon: data.icon }),
+        ...(data.lastFour !== undefined && { lastFour: data.lastFour }),
+        ...(data.holderName !== undefined && { holderName: data.holderName }),
         ...(data.isActive !== undefined && { isActive: data.isActive }),
       },
     });

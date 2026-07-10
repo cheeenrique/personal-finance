@@ -16,6 +16,34 @@ const MEAL_PLACEHOLDER_LIMIT = "0";
 const MEAL_PLACEHOLDER_DAY = 1;
 
 /**
+ * 4 últimos dígitos do cartão — só exibição (`prisma/schema.prisma`
+ * `Card.lastFour`), NUNCA o número completo. Filtra tudo que não for dígito
+ * antes de validar (aceita "1234" ou "**** 1234" colado do usuário); depois
+ * de filtrar, string vazia vira `null` (limpa o campo), qualquer contagem de
+ * dígito diferente de 4 é rejeitada.
+ */
+const lastFourSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((value) => {
+    if (value === null || value === undefined) return value;
+    const digits = value.replace(/\D/g, "");
+    return digits === "" ? null : digits;
+  })
+  .refine((value) => value == null || /^\d{4}$/.test(value), {
+    message: "Últimos 4 dígitos devem ter exatamente 4 números",
+  });
+
+/** Nome impresso no cartão — opcional, mesmo limite de caractere de um cartão físico real. */
+const holderNameSchema = z
+  .string()
+  .trim()
+  .max(26, "Nome impresso deve ter no máximo 26 caracteres")
+  .nullable()
+  .optional();
+
+/**
  * `type` decide se `limit`/`closingDay`/`dueDay` são exigidos:
  * - CREDIT (default): os 3 campos são obrigatórios (comportamento atual, zero regressão).
  * - MEAL: os 3 campos são opcionais — cartão pré-pago não tem fatura/ciclo/limite de
@@ -34,6 +62,8 @@ export const createCardSchema = z
     dueDay: dayOfMonthSchema.optional(),
     color: z.string().trim().max(30).optional(),
     icon: z.string().trim().max(60).optional(),
+    lastFour: lastFourSchema,
+    holderName: holderNameSchema,
   })
   .refine((data) => data.type !== CardType.CREDIT || data.limit !== undefined, {
     message: "Limite é obrigatório para cartão de crédito",
@@ -62,6 +92,8 @@ export const updateCardSchema = z.object({
   dueDay: dayOfMonthSchema.optional(),
   color: z.string().trim().max(30).nullable().optional(),
   icon: z.string().trim().max(60).nullable().optional(),
+  lastFour: lastFourSchema,
+  holderName: holderNameSchema,
   isActive: z.boolean().optional(),
 });
 

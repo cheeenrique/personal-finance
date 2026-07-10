@@ -3,22 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import {
-  ArrowLeft,
-  CreditCard,
-  Pencil,
-  Plus,
-  Receipt,
-  Trash2,
-  Wallet,
-} from "lucide-react";
+import { ArrowLeft, CreditCard, Pencil, Plus, Receipt, Trash2, Wallet } from "lucide-react";
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { formatBRL } from "@/lib/money/format";
 import { notifySuccess } from "@/lib/toast";
-import { cn } from "@/lib/utils";
+import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
 import { deleteCardAction } from "@/modules/cards/actions";
 import { TransactionType } from "@/generated/prisma/enums";
 import { useShell } from "@/components/providers/shell-provider";
@@ -26,9 +18,10 @@ import {
   CardLimitProgress,
   computeUsagePercent,
   usageToneForKpi,
+  usageToneTextClass,
 } from "./card-limit-progress";
-import { cardTintClass } from "./card-color";
-import { CARD_ICON_MAP, DEFAULT_CARD_ICON } from "./card-icon";
+import { cardGradient } from "./card-color";
+import { CardFace } from "./card-face";
 import { CardFormModal } from "./card-form-modal";
 import { InvoiceSummaryCard } from "./invoice-summary-card";
 import { InvoiceItemsTable } from "./invoice-items-table";
@@ -41,14 +34,17 @@ type CardDetailViewProps = {
   pastInvoices: PastInvoiceView[];
 };
 
-/** Composição do detalhe de `/cards/[id]` (docs/22-CREDIT_CARDS.md, "Detalhe do Cartão"). */
+/**
+ * Detalhe de `/cards/[id]` (fonte visual: `Personal Finance -
+ * Cartoes.dc.html`, seção DETALHE) — hero com a face realista grande +
+ * Editar/Excluir à esquerda, título/KPIs/uso/fatura à direita.
+ */
 export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewProps) {
   const router = useRouter();
   const { openTransactionModal } = useShell();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const percent = computeUsagePercent(card.outstandingBalance, card.limit);
-  const Icon = (card.icon && CARD_ICON_MAP[card.icon]) || DEFAULT_CARD_ICON;
 
   async function handleDelete() {
     const result = await deleteCardAction(card.id);
@@ -67,81 +63,71 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
         Cartões
       </Link>
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span
-            className={cn(
-              "flex size-11 shrink-0 items-center justify-center rounded-[12px]",
-              cardTintClass(card.color),
-            )}
-          >
-            <Icon className="size-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="truncate text-lg font-extrabold text-foreground">
-              {card.name}
-            </h2>
-            <p className="truncate text-sm font-medium text-muted-foreground">
-              {card.brand}
-            </p>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr] lg:items-start">
+        <div className="mx-auto flex w-full max-w-[380px] flex-col gap-3 lg:mx-0">
+          <CardFace
+            gradient={cardGradient(card.color)}
+            cardName={card.name}
+            brand={card.brand}
+            lastFour={card.lastFour}
+            holder={card.holderName}
+            type={card.type}
+          />
+          <div className="flex gap-2.5">
+            <Button type="button" onClick={() => setEditOpen(true)} className="flex-1 gap-1.5">
+              <Pencil className="size-4" aria-hidden="true" />
+              Editar cartão
+            </Button>
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              aria-label={`Excluir ${card.name}`}
+              className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+            </button>
           </div>
         </div>
 
-        <div className="flex shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={() => setEditOpen(true)}
-            aria-label={`Editar ${card.name}`}
-            className="flex size-9 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-          >
-            <Pencil className="size-4" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setDeleteOpen(true)}
-            aria-label={`Excluir ${card.name}`}
-            className="flex size-9 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-4" aria-hidden="true" />
-          </button>
+        <div className="flex flex-col gap-4">
+          <div>
+            <h2 className="text-xl font-extrabold text-foreground sm:text-2xl">{card.name}</h2>
+            <p className="mt-1 text-sm font-semibold text-muted-foreground">
+              {card.brand} · final {card.lastFour ?? "----"} · vence dia {card.dueDay}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <KPICard icon={CreditCard} title="Limite total" value={formatBRL(card.limit)} tone="neutral" />
+            <KPICard
+              icon={Receipt}
+              title="Limite usado"
+              value={formatBRL(card.outstandingBalance)}
+              tone={usageToneForKpi(percent)}
+            />
+            <KPICard icon={Wallet} title="Limite disponível" value={formatBRL(card.availableLimit)} tone="success" />
+          </div>
+
+          <div className={cn("rounded-xl border border-border bg-card p-[18px]", CARD_SHADOW_CLASS)}>
+            <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
+              <span>Limite utilizado</span>
+              <span className={usageToneTextClass(percent)}>{Math.round(percent)}%</span>
+            </div>
+            <CardLimitProgress percent={percent} className="mt-2.5 h-2.5" />
+          </div>
+
+          <InvoiceSummaryCard
+            cardId={card.id}
+            cardName={card.name}
+            invoice={invoice}
+            outstandingBalance={card.outstandingBalance}
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <KPICard
-          icon={CreditCard}
-          title="Limite total"
-          value={formatBRL(card.limit)}
-          tone="neutral"
-        />
-        <KPICard
-          icon={Receipt}
-          title="Limite usado"
-          value={formatBRL(card.outstandingBalance)}
-          tone={usageToneForKpi(percent)}
-        />
-        <KPICard
-          icon={Wallet}
-          title="Limite disponível"
-          value={formatBRL(card.availableLimit)}
-          tone="success"
-        />
-      </div>
-
-      <CardLimitProgress percent={percent} className="h-2.5" />
-
-      <InvoiceSummaryCard
-        cardId={card.id}
-        cardName={card.name}
-        invoice={invoice}
-        outstandingBalance={card.outstandingBalance}
-      />
-
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-base font-extrabold text-foreground">
-            Compras da fatura atual
-          </h3>
+          <h3 className="text-base font-extrabold text-foreground">Compras da fatura atual</h3>
           <Button
             type="button"
             variant="accent"
@@ -153,21 +139,14 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
             Compra
           </Button>
         </div>
-        <InvoiceItemsTable
-          cardId={card.id}
-          periodStart={invoice.periodStart}
-          periodEnd={invoice.periodEnd}
-        />
+        <InvoiceItemsTable cardId={card.id} periodStart={invoice.periodStart} periodEnd={invoice.periodEnd} />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
         <div>
-          <h3 className="text-base font-extrabold text-foreground">
-            Parcelamentos deste cartão
-          </h3>
+          <h3 className="text-base font-extrabold text-foreground">Parcelamentos deste cartão</h3>
           <p className="text-sm font-medium text-muted-foreground">
-            Compras parceladas da fatura atual aparecem destacadas na tabela acima
-            (&ldquo;Parcela N&rdquo;).
+            Compras parceladas da fatura atual aparecem destacadas na tabela acima (&ldquo;Parcela N&rdquo;).
           </p>
         </div>
         <Link

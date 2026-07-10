@@ -21,6 +21,9 @@ export type CardSummaryView = {
   dueDay: number;
   color: string | null;
   icon: string | null;
+  /** Só exibição — NUNCA o número completo (ver `prisma/schema.prisma` `Card.lastFour`). */
+  lastFour: string | null;
+  holderName: string | null;
   isActive: boolean;
   createdAt: string;
   currentInvoiceTotal: string;

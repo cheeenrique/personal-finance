@@ -72,7 +72,7 @@ export function CardsGrid({ cards, loadError }: CardsGridProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 sm:grid-cols-2">
         {cards.map((card) => (
           <CardTile key={card.id} card={card} onEdit={openEdit} onDelete={setDeletingCard} />
         ))}
