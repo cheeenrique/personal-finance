@@ -175,7 +175,7 @@ export function RecentTransactionsTable({ transactions }: RecentTransactionsTabl
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-extrabold text-foreground">Últimas transações</h3>
-        <Link href="/transactions" className={buttonVariants({ variant: "neutral", size: "sm" })}>
+        <Link href="/transactions" className={cn(buttonVariants({ variant: "neutral", size: "sm" }))}>
           Ver todas
         </Link>
       </div>

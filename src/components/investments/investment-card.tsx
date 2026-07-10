@@ -46,10 +46,12 @@ export function InvestmentCard({ investment }: InvestmentCardProps) {
 
       <Link
         href={`/investments/${investment.id}`}
-        className={buttonVariants({
-          variant: "neutral",
-          className: "mt-1 h-9 w-full gap-[7px] rounded-[10px] px-3.5 text-[13px] font-bold",
-        })}
+        className={cn(
+          buttonVariants({
+            variant: "neutral",
+            className: "mt-1 h-9 w-full gap-[7px] rounded-[10px] px-3.5 text-[13px] font-bold",
+          }),
+        )}
       >
         <Eye className="size-[15px]" strokeWidth={2} aria-hidden="true" />
         Detalhes

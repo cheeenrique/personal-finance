@@ -23,7 +23,7 @@ export function SectionCard({ title, action, children, className }: SectionCardP
       <div className="flex items-center justify-between gap-3 border-b border-border px-[18px] py-[15px]">
         <h3 className="text-sm font-extrabold text-foreground">{title}</h3>
         {action && (
-          <Link href={action.href} className={buttonVariants({ variant: "neutral", size: "sm" })}>
+          <Link href={action.href} className={cn(buttonVariants({ variant: "neutral", size: "sm" }))}>
             {action.label}
           </Link>
         )}
