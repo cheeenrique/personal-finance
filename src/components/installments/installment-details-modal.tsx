@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Ban, Layers3, Loader2 } from "lucide-react";
@@ -31,30 +31,37 @@ type InstallmentDetailsModalProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-const COLUMNS: DataTableColumn<InstallmentLineItemView>[] = [
-  { key: "installmentNumber", header: "Parcela", render: (item) => `${item.installmentNumber}` },
-  { key: "date", header: "Vencimento", render: (item) => formatDateSaoPaulo(item.date) },
-  {
-    key: "amount",
-    header: "Valor",
-    align: "right",
-    render: (item) => <span className="font-mono font-semibold text-foreground">{formatBRL(item.amount)}</span>,
-  },
-  {
-    key: "status",
-    header: "Status",
-    render: (item) => (
-      <span
-        className={cn(
-          "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap",
-          item.isPaid ? "bg-success/16 text-success" : "bg-secondary text-muted-foreground",
-        )}
-      >
-        {item.isPaid ? "Paga" : "Futura"}
-      </span>
-    ),
-  },
-];
+/** Colunas da lista de parcelas — Parcela mostra `N/total` (docs/23-INSTALLMENTS.md). */
+function buildInstallmentColumns(installmentsCount: number): DataTableColumn<InstallmentLineItemView>[] {
+  return [
+    {
+      key: "installmentNumber",
+      header: "Parcela",
+      render: (item) => `${item.installmentNumber}/${installmentsCount}`,
+    },
+    { key: "date", header: "Vencimento", render: (item) => formatDateSaoPaulo(item.date) },
+    {
+      key: "amount",
+      header: "Valor",
+      align: "right",
+      render: (item) => <span className="font-mono font-semibold text-foreground">{formatBRL(item.amount)}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (item) => (
+        <span
+          className={cn(
+            "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap",
+            item.isPaid ? "bg-success/16 text-success" : "bg-secondary text-muted-foreground",
+          )}
+        >
+          {item.isPaid ? "Paga" : "Futura"}
+        </span>
+      ),
+    },
+  ];
+}
 
 /** Achata a árvore de categorias EXPENSE — mesmo padrão de `installment-form-modal.tsx`. */
 function flattenExpenseCategories(nodes: CategoryTreeNode[], depth = 0): EntitySelectOption[] {
@@ -96,6 +103,10 @@ export function InstallmentDetailsModal({ purchase, onOpenChange }: InstallmentD
   const open = purchase !== null;
   const hasFutureInstallments = purchase?.installments.some((installment) => !installment.isPaid) ?? false;
   const categoryDirty = Boolean(purchase && categoryId && categoryId !== purchase.categoryId);
+  const columns = useMemo(
+    () => buildInstallmentColumns(purchase?.installmentsCount ?? 0),
+    [purchase?.installmentsCount],
+  );
 
   const currentPurchaseId = purchase?.id ?? null;
   const [syncedPurchaseId, setSyncedPurchaseId] = useState(currentPurchaseId);
@@ -163,6 +174,29 @@ export function InstallmentDetailsModal({ purchase, onOpenChange }: InstallmentD
       size="wide"
     >
       <div className="flex flex-col gap-3">
+        {purchase && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="flex flex-col gap-1 rounded-xl border border-border bg-secondary p-4">
+              <span className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Valor total</span>
+              <span className="font-mono text-[22px] font-bold text-foreground">
+                {formatBRL(purchase.totalAmount)}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1 rounded-xl border border-border bg-secondary p-4">
+              <span className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Pago</span>
+              <span className="font-mono text-[22px] font-bold text-on-success">
+                {formatBRL(purchase.paidAmount)}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1 rounded-xl border border-border bg-secondary p-4">
+              <span className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Restante</span>
+              <span className="font-mono text-[22px] font-bold text-on-warning">
+                {formatBRL(purchase.remainingAmount)}
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0 flex-1">
             <FormField
@@ -207,7 +241,7 @@ export function InstallmentDetailsModal({ purchase, onOpenChange }: InstallmentD
 
         <DataTable
           data={purchase?.installments ?? []}
-          columns={COLUMNS}
+          columns={columns}
           getRowId={(item) => String(item.installmentNumber)}
           emptyState={{
             icon: Layers3,

@@ -1,32 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Banknote,
-  Coins,
-  Landmark,
-  MoreVertical,
-  Pencil,
-  ShieldCheck,
-  Sparkles,
-  Trash2,
-  TrendingDown,
-  Wallet,
-} from "lucide-react";
+import { useReducedMotion } from "framer-motion";
+import { Banknote, Landmark, TrendingDown, Wallet } from "lucide-react";
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { ProgressBar } from "@/components/dashboard/progress-bar";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { deleteLoanAction } from "@/modules/loans/actions";
 import { updateTransactionAction } from "@/modules/transactions/actions";
 import { EarlyPaymentDialog, type EarlyPaymentInstallment } from "@/components/loans/early-payment-dialog";
@@ -36,6 +18,7 @@ import { invalidateAllTransactionLists } from "@/components/transactions/transac
 import { formatBRL } from "@/lib/money/format";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { notifyError, notifySuccess } from "@/lib/toast";
+import { FinancingDetailHeader } from "./financing-detail-header";
 import { FinancingFormModal } from "./financing-form-modal";
 import { FinancingSimulateModal } from "./financing-simulate-modal";
 import { FinancingContractSummary } from "./financing-contract-summary";
@@ -85,6 +68,22 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
   const unpaidRows = financing.installments.filter((row) => !row.isPaid);
   const nextDueDate = unpaidRows[0]?.date ?? null;
 
+  /**
+   * Mesma técnica de `LoanDetailView`: barra começa em 0 e anima até
+   * `percent` no load, pulando direto pro valor final com
+   * `prefers-reduced-motion`.
+   */
+  const prefersReducedMotion = useReducedMotion();
+  const [animatedPercent, setAnimatedPercent] = useState(prefersReducedMotion ? percent : 0);
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setAnimatedPercent(percent);
+      return;
+    }
+    const frame = requestAnimationFrame(() => setAnimatedPercent(percent));
+    return () => cancelAnimationFrame(frame);
+  }, [percent, prefersReducedMotion]);
+
   const settleDiscount =
     financing.settleTodayAmount !== null
       ? Number(financing.remainingAmount) - Number(financing.settleTodayAmount)
@@ -125,75 +124,16 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-primary/18 text-on-primary">
-            <Landmark className="size-5" aria-hidden="true" />
-          </span>
-          <div>
-            <h2 className="text-lg font-extrabold text-foreground">{financing.description}</h2>
-            {financing.lender && <p className="text-[13px] font-semibold text-muted-foreground">{financing.lender}</p>}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {/*
-            Desabilitado a pedido do dono: o simulador atual só cobre o modelo
-            C6 (por quantidade de parcelas), que não serve pro financiamento
-            por valor/prazo (Caixa etc.) — ver docs/52-FINANCING-ANTECIPACAO.md.
-            Código do modal/simulador mantido intacto (`FinancingSimulateModal`
-            abaixo) pra reabilitar quando o 2º modelo estiver pronto — só o
-            gatilho fica bloqueado.
-          */}
-          {unpaidRows.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger render={<Button type="button" variant="default" size="lg" disabled />}>
-                <Sparkles className="size-4" aria-hidden="true" />
-                Simular antecipação
-              </TooltipTrigger>
-              <TooltipContent>Em breve — simulação em revisão para este tipo de financiamento.</TooltipContent>
-            </Tooltip>
-          )}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="neutral"
-                  size="icon-md"
-                  aria-label={`Mais ações para ${financing.description}`}
-                />
-              }
-            >
-              <MoreVertical className="size-4" aria-hidden="true" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {unpaidRows.length > 0 && (
-                <DropdownMenuItem onClick={() => setSettleOpen(true)}>
-                  <ShieldCheck className="size-4" aria-hidden="true" />
-                  Quitar
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => setEditOpen(true)}>
-                <Pencil className="size-4" aria-hidden="true" />
-                Editar
-              </DropdownMenuItem>
-              {unpaidRows.length > 0 && (
-                <DropdownMenuItem onClick={() => setUpdateInstallmentOpen(true)}>
-                  <Coins className="size-4" aria-hidden="true" />
-                  Atualizar valor da parcela
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-                <Trash2 className="size-4" aria-hidden="true" />
-                Excluir
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      <FinancingDetailHeader
+        description={financing.description}
+        lender={financing.lender}
+        hasUnpaid={unpaidRows.length > 0}
+        onSettle={() => setSettleOpen(true)}
+        onEdit={() => setEditOpen(true)}
+        onUpdateInstallment={() => setUpdateInstallmentOpen(true)}
+        onDelete={() => setDeleteOpen(true)}
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard icon={Wallet} title="Valor financiado" value={formatBRL(financing.principal)} tone="neutral" />
@@ -208,10 +148,10 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
       </div>
 
       {financing.settleTodayAmount !== null && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-5">
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-5">
           <div>
             <p className="text-[13px] font-semibold text-muted-foreground">Quitar hoje (valor presente)</p>
-            <p className="font-mono text-lg font-semibold text-foreground">{formatBRL(financing.settleTodayAmount)}</p>
+            <p className="font-mono text-xl font-semibold text-foreground">{formatBRL(financing.settleTodayAmount)}</p>
           </div>
           {settleDiscount > 0 && (
             <span className="rounded-full bg-success/16 px-2.5 py-1 text-xs font-bold text-on-success">
@@ -223,7 +163,7 @@ export function FinancingDetailView({ financing }: FinancingDetailViewProps) {
 
       <div className="rounded-xl border border-border bg-card p-5">
         <ProgressBar
-          percent={percent}
+          percent={animatedPercent}
           tone="neutral"
           label={`${financing.paidCount}/${financing.installmentsCount} parcelas pagas · ${formatBRL(financing.paidAmount)} de ${formatBRL(financing.totalToPay)}`}
         />

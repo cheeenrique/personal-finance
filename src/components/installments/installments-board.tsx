@@ -97,7 +97,7 @@ export function InstallmentsBoard({ purchases, initialOpenId, cardOptions, selec
       options={[{ value: ALL_CARDS_VALUE, label: "Todos os cartões" }, ...cardOptions.map((card) => ({ value: card.id, label: card.name }))]}
       value={selectedCardId ?? ALL_CARDS_VALUE}
       onValueChange={handleCardFilterChange}
-      className="h-[38px] w-auto min-w-[200px]"
+      className="h-[38px] w-full sm:w-[240px]"
     />
   );
 
@@ -125,7 +125,7 @@ export function InstallmentsBoard({ purchases, initialOpenId, cardOptions, selec
     <div className="flex flex-col gap-4">
       {filterBar}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 sm:grid-cols-2 lg:grid-cols-3">
         {pageItems.map((purchase) => (
           <InstallmentPurchaseCard
             key={purchase.id}

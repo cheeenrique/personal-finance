@@ -47,7 +47,7 @@ export function FinancingContractSummary({ fields }: { fields: FinancingContract
   const hasCosts = Boolean(fields.financedTaxes || fields.financedInsurance || fields.financedFees);
 
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
       <ContractItem label="Sistema" value={AMORTIZATION_SYSTEM_LABELS[fields.amortizationSystem]} />
 
       {fields.downPayment && <ContractItem label="Entrada" value={formatBRL(fields.downPayment)} />}
@@ -59,7 +59,7 @@ export function FinancingContractSummary({ fields }: { fields: FinancingContract
             fields.assetId ? (
               <Link
                 href={`/assets/${fields.assetId}`}
-                className="inline-flex items-center gap-1 text-primary hover:underline"
+                className="inline-flex items-center gap-1 text-on-primary hover:underline"
               >
                 {formatBRL(fields.assetValue)}
                 <ExternalLink className="size-3" aria-hidden="true" />
@@ -75,7 +75,7 @@ export function FinancingContractSummary({ fields }: { fields: FinancingContract
         <ContractItem
           label="Bem financiado"
           value={
-            <Link href={`/assets/${fields.assetId}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+            <Link href={`/assets/${fields.assetId}`} className="inline-flex items-center gap-1 text-on-primary hover:underline">
               {fields.assetName}
               <ExternalLink className="size-3" aria-hidden="true" />
             </Link>

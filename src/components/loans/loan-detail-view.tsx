@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useReducedMotion } from "framer-motion";
 import {
   ArrowDownToLine,
   Banknote,
@@ -77,6 +78,25 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
 
   const unpaidRows = loan.installments.filter((row) => !row.isPaid);
 
+  /**
+   * Barra de progresso começa em 0 e anima até `percent` no load (docs da
+   * tarefa, "Progresso em CARD próprio") — `ProgressBar` já tem
+   * `transition-all` (fora do escopo deste redesign), então só precisamos
+   * disparar a mudança de valor um frame depois do mount pra CSS transition
+   * pegar. Pula direto pro valor final quando o usuário prefere menos
+   * movimento (`prefers-reduced-motion`).
+   */
+  const prefersReducedMotion = useReducedMotion();
+  const [animatedPercent, setAnimatedPercent] = useState(prefersReducedMotion ? percent : 0);
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setAnimatedPercent(percent);
+      return;
+    }
+    const frame = requestAnimationFrame(() => setAnimatedPercent(percent));
+    return () => cancelAnimationFrame(frame);
+  }, [percent, prefersReducedMotion]);
+
   async function markPaidInFull(installmentId: string) {
     setPendingId(installmentId);
     const result = await updateTransactionAction(installmentId, { isPaid: true });
@@ -118,14 +138,14 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-primary/18 text-on-primary">
-            <HandCoins className="size-5" aria-hidden="true" />
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-[14px] bg-primary/18 text-on-primary">
+            <HandCoins className="size-6" aria-hidden="true" />
           </span>
           <div>
-            <h2 className="text-lg font-extrabold text-foreground">{loan.description}</h2>
+            <h2 className="text-[22px] font-black text-foreground">{loan.description}</h2>
             {loan.lender && <p className="text-[13px] font-semibold text-muted-foreground">{loan.lender}</p>}
           </div>
         </div>
@@ -179,14 +199,14 @@ export function LoanDetailView({ loan }: LoanDetailViewProps) {
 
       <div className="rounded-xl border border-border bg-card p-5">
         <ProgressBar
-          percent={percent}
+          percent={animatedPercent}
           tone="neutral"
           label={`${loan.paidCount}/${loan.installmentsCount} parcelas pagas · ${formatBRL(loan.paidAmount)} de ${formatBRL(loan.totalToPay)}`}
         />
       </div>
 
       {loan.disbursement && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-5">
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-success/16 text-on-success">
               <ArrowDownToLine className="size-5" aria-hidden="true" />

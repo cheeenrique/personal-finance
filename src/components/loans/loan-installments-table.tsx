@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { DataTable, type DataTableColumn } from "@/components/tables/data-table";
 import { IconActionButton } from "@/components/shared/icon-action-button";
@@ -34,6 +35,18 @@ type LoanInstallmentsTableProps = {
 };
 
 /**
+ * `<td>` de `DataTable` já vem com `px-4 py-3` fixo (arquivo fora do escopo
+ * deste redesign — não pode ganhar uma prop `rowClassName`). Espelhando o
+ * mesmo padding com margem negativa igual, este wrapper pinta o fundo da
+ * célula INTEIRA (não só o texto) sem editar `DataTable`, o que dá o efeito
+ * de "linha destacada" pra próxima parcela pendente sem tocar em arquivo
+ * fora da lista permitida.
+ */
+function InstallmentCell({ highlighted, children }: { highlighted: boolean; children: ReactNode }) {
+  return <div className={cn("-mx-4 -my-3 px-4 py-3", highlighted && "bg-warning/[0.07]")}>{children}</div>;
+}
+
+/**
  * Tabela de parcelas compartilhada por `/loans/[id]` e `/financings/[id]`
  * (mesmas colunas/linha nos dois, antes duplicadas em `LoanDetailView`/
  * `FinancingDetailView`) — paginação CLIENT-SIDE (20/página, mesmo visual de
@@ -61,29 +74,50 @@ export function LoanInstallmentsTable({
     ...installment,
     number: index + 1,
   }));
+  // Primeira pendente na lista COMPLETA (não só a página atual) — só destaca
+  // visualmente quando ela estiver na página exibida.
+  const nextUnpaidId = rows.find((row) => !row.isPaid)?.id ?? null;
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const columns: DataTableColumn<LoanInstallmentRow>[] = [
-    { key: "number", header: "Parcela", render: (row) => `${row.number}/${installmentsCount}` },
-    { key: "date", header: "Vencimento", render: (row) => formatDateSaoPaulo(row.date) },
+    {
+      key: "number",
+      header: "Parcela",
+      render: (row) => (
+        <InstallmentCell highlighted={row.id === nextUnpaidId}>{`${row.number}/${installmentsCount}`}</InstallmentCell>
+      ),
+    },
+    {
+      key: "date",
+      header: "Vencimento",
+      render: (row) => (
+        <InstallmentCell highlighted={row.id === nextUnpaidId}>{formatDateSaoPaulo(row.date)}</InstallmentCell>
+      ),
+    },
     {
       key: "amount",
       header: "Valor",
       align: "right",
-      render: (row) => <span className="font-mono font-semibold text-foreground">{formatBRL(row.amount)}</span>,
+      render: (row) => (
+        <InstallmentCell highlighted={row.id === nextUnpaidId}>
+          <span className="font-mono font-semibold text-foreground">{formatBRL(row.amount)}</span>
+        </InstallmentCell>
+      ),
     },
     {
       key: "status",
       header: "Status",
       render: (row) => (
-        <span
-          className={cn(
-            "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap",
-            row.isPaid ? "bg-success/16 text-on-success" : "bg-warning/16 text-on-warning",
-          )}
-        >
-          {row.isPaid ? "Paga" : "Pendente"}
-        </span>
+        <InstallmentCell highlighted={row.id === nextUnpaidId}>
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-extrabold whitespace-nowrap",
+              row.isPaid ? "bg-success/16 text-on-success" : "bg-warning/16 text-on-warning",
+            )}
+          >
+            {row.isPaid ? "Paga" : "Pendente"}
+          </span>
+        </InstallmentCell>
       ),
     },
   ];
@@ -100,6 +134,7 @@ export function LoanInstallmentsTable({
           row.isPaid ? null : (
             <IconActionButton
               icon={Check}
+              tone="success"
               label="Marcar como paga"
               onClick={() => onMarkPaid(row)}
               disabled={pendingId === row.id}
