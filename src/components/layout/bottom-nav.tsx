@@ -24,7 +24,7 @@ export function BottomNav() {
 
   return (
     <>
-      {/* `pb-[env(...)]` cobre a home indicator do iOS (safe-area-inset-bottom);
+      {/* `pb-[env(safe-area-inset-bottom)]` cobre a home indicator do iOS;
           `pb-28` do `<main>` do shell já compensa a altura extra
           (docs/50-AUDITORIA-BACKLOG.md, D4). */}
       <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-center justify-between border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
