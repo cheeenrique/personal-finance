@@ -151,7 +151,6 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
     <FormModal
       open={open}
       onOpenChange={onOpenChange}
-      size="wide"
       title={isEditing ? "Editar cartão" : "Novo cartão"}
       description={
         isEditing
@@ -159,9 +158,9 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
           : "Tipo, nome, bandeira e demais dados do cartão."
       }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6 xl:flex-row xl:items-start">
-        {/* preview ao vivo — sempre no topo no mobile, à esquerda no desktop (mesmo breakpoint que troca Sheet↔Dialog em FormModal, ver useIsDesktop) */}
-        <div className="mx-auto w-full max-w-[240px] xl:sticky xl:top-0 xl:mx-0 xl:w-[210px] xl:shrink-0">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        {/* preview ao vivo — cartão no topo, campos distribuídos abaixo */}
+        <div className="mx-auto w-full max-w-[260px]">
           <CardFace
             gradient={cardGradient(form.color)}
             cardName={form.name}
@@ -170,12 +169,12 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
             holder={form.holderName || null}
             type={form.type}
           />
-          <p className="mt-3 text-center text-[11px] font-medium text-muted-foreground xl:text-left">
+          <p className="mt-3 text-center text-[11px] font-medium text-muted-foreground">
             Pré-visualização ao vivo — atualiza conforme você edita.
           </p>
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <CardFormFields
             form={form}
             setForm={setForm}

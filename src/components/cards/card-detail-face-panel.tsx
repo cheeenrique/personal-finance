@@ -34,7 +34,7 @@ export function CardDetailFacePanel({ card, onEdit, onDelete }: CardDetailFacePa
         type={card.type}
       />
       <div className="flex gap-2.5">
-        <Button type="button" onClick={onEdit} className="flex-1 gap-1.5">
+        <Button type="button" size="lg" onClick={onEdit} className="flex-1 gap-1.5">
           <Pencil className="size-4" aria-hidden="true" />
           Editar cartão
         </Button>
