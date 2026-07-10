@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
 import { CATEGORY_TYPE_LABELS } from "./category-config";
 
 const TYPE_CONFIG: Record<CategoryType, { icon: typeof TrendingUp; className: string }> = {
-  [CategoryType.INCOME]: { icon: TrendingUp, className: "bg-success text-success-foreground" },
-  [CategoryType.EXPENSE]: { icon: TrendingDown, className: "bg-destructive text-destructive-foreground" },
+  [CategoryType.INCOME]: { icon: TrendingUp, className: "bg-success text-white" },
+  [CategoryType.EXPENSE]: { icon: TrendingDown, className: "bg-destructive text-white" },
 };
 
 /**

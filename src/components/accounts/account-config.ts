@@ -7,6 +7,17 @@ import {
   CreditCard,
   Coins,
   CircleDollarSign,
+  Vault,
+  HandCoins,
+  BadgeDollarSign,
+  DollarSign,
+  Bitcoin,
+  TrendingUp,
+  ChartLine,
+  Briefcase,
+  Receipt,
+  Gem,
+  Smartphone,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,6 +56,17 @@ export const ACCOUNT_ICON_OPTIONS: { value: string; label: string; icon: LucideI
   { value: "credit-card", label: "Cartão", icon: CreditCard },
   { value: "coins", label: "Moedas", icon: Coins },
   { value: "circle-dollar-sign", label: "Cifrão", icon: CircleDollarSign },
+  { value: "vault", label: "Cofre", icon: Vault },
+  { value: "hand-coins", label: "Recebimento", icon: HandCoins },
+  { value: "badge-dollar-sign", label: "Selo de valor", icon: BadgeDollarSign },
+  { value: "dollar-sign", label: "Dólar", icon: DollarSign },
+  { value: "bitcoin", label: "Cripto", icon: Bitcoin },
+  { value: "trending-up", label: "Investimento", icon: TrendingUp },
+  { value: "chart-line", label: "Rendimentos", icon: ChartLine },
+  { value: "briefcase", label: "Empresarial", icon: Briefcase },
+  { value: "receipt", label: "Fatura", icon: Receipt },
+  { value: "gem", label: "Reserva de valor", icon: Gem },
+  { value: "smartphone", label: "Banco digital", icon: Smartphone },
 ];
 
 export const ACCOUNT_ICON_MAP: Record<string, LucideIcon> = Object.fromEntries(

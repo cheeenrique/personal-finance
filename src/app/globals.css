@@ -42,6 +42,32 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* Paleta ampliada de cor de cartão (genéricos + marcas de banco) —
+   * `src/components/cards/card-color.ts`. `on-*` só existe pros tokens cuja
+   * cor base não lê bem como `text-*` direto sobre `--card` escuro (ver
+   * comentário no bloco `:root, .dark`). */
+  --color-graphite: var(--graphite);
+  --color-on-graphite: var(--on-graphite);
+  --color-midnight: var(--midnight);
+  --color-on-midnight: var(--on-midnight);
+  --color-rose: var(--rose);
+  --color-teal: var(--teal);
+  --color-indigo: var(--indigo);
+  --color-pink: var(--pink);
+  --color-nubank: var(--nubank);
+  --color-on-nubank: var(--on-nubank);
+  --color-itau: var(--itau);
+  --color-inter: var(--inter);
+  --color-c6: var(--c6);
+  --color-on-c6: var(--on-c6);
+  --color-bradesco: var(--bradesco);
+  --color-on-bradesco: var(--on-bradesco);
+  --color-santander: var(--santander);
+  --color-bb: var(--bb);
+  --color-on-bb: var(--on-bb);
+  --color-caixa: var(--caixa);
+  --color-on-caixa: var(--on-caixa);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -120,6 +146,41 @@
   --on-warning: #fbbf24;
   --on-primary: #8fabff;
   --on-accent: #fb923c;
+
+  /* Paleta ampliada de cor de cartão — genéricos + marcas de banco (pedido
+   * do usuário, mais opções no seletor de cor de `Card`). Fixos nos 2 temas
+   * (mesma lógica de `--installment`: cor de marca não muda com tema).
+   * `on-*` é uma variante mais clara da mesma matiz, usada como `text-on-*`
+   * no ícone tintado (`cardTintClass`) só quando a cor base é escura/
+   * saturada demais pra ler como texto direto sobre `--card` escuro
+   * (contraste medido <3:1 — WCAG 1.4.11 pra objeto gráfico/ícone); as
+   * demais reaproveitam a própria cor base como `text-*`, igual
+   * primary/accent/success/warning/destructive. Todas as bases passam AA
+   * (>=3:1) com texto branco por cima — pré-requisito pro futuro "verso do
+   * cartão" — exceto rose/teal/inter, que são claras demais pra texto
+   * branco e usariam texto navy (`--foreground` escuro) se algum dia
+   * precisarem de fill sólido com texto. */
+  --graphite: #3b4252;
+  --on-graphite: #7684a6;
+  --midnight: #1e293b;
+  --on-midnight: #6a89bb;
+  --rose: #e0a9a0;
+  --teal: #14b8a6;
+  --indigo: #6366f1;
+  --pink: #ec4899;
+  --nubank: #820ad1;
+  --on-nubank: #bb5afc;
+  --itau: #ec7000;
+  --inter: #ff7a00;
+  --c6: #242424;
+  --on-c6: #908484;
+  --bradesco: #cc092f;
+  --on-bradesco: #fb355c;
+  --santander: #ec0000;
+  --bb: #0033a0;
+  --on-bb: #4480ff;
+  --caixa: #005ca9;
+  --on-caixa: #0088fb;
 }
 
 /*
