@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth";
 import { loanService } from "@/modules/loans/service";
 import { simulateAmortization } from "@/modules/loans/simulate";
 import { assetService } from "@/modules/assets/service";
-import { LoanNotFoundError } from "@/modules/loans/errors";
+import { LoanNotFoundError, LoanPaymentDateAfterNextDueDateError } from "@/modules/loans/errors";
 import { LoanKind, AmortizationSystem } from "@/generated/prisma/enums";
 import { FinancingDetailView } from "@/components/financings/financing-detail-view";
 import type { FinancingDetailData } from "@/components/financings/types";
@@ -45,10 +45,21 @@ export default async function FinancingDetailPage({ params }: FinancingDetailPag
   if (loan.kind !== LoanKind.FINANCING) redirect(`/loans/${id}`);
 
   const unpaidInstallments = loan.installments.filter((installment) => !installment.isPaid);
-  const settleTodayAmount =
-    unpaidInstallments.length > 0
-      ? simulateAmortization(loan, loan.installments, { type: "full", paymentDate: new Date() }).totalToPayToday.toString()
-      : null;
+  // "Quitar hoje" é preview passivo (paymentDate=hoje). Se a próxima parcela já
+  // venceu, o simulador recusa a data (regra do C6) — aqui isso não é erro de
+  // negócio, só significa "sem preview de antecipação"; não pode derrubar a
+  // página (antes 500 no load com financiamento em atraso).
+  let settleTodayAmount: string | null = null;
+  if (unpaidInstallments.length > 0) {
+    try {
+      settleTodayAmount = simulateAmortization(loan, loan.installments, {
+        type: "full",
+        paymentDate: new Date(),
+      }).totalToPayToday.toString();
+    } catch (error) {
+      if (!(error instanceof LoanPaymentDateAfterNextDueDateError)) throw error;
+    }
+  }
 
   let assetName: string | null = null;
   if (loan.assetId) {
