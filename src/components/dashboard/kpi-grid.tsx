@@ -40,7 +40,12 @@ export function KPIGrid({ data, period }: KPIGridProps) {
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <KPICard icon={Wallet} title="Saldo atual" value={formatBRL(data.totalBalance)} tone="neutral" />
+      <KPICard
+        icon={Wallet}
+        title="Saldo atual"
+        value={formatBRL(data.totalBalance)}
+        tone={data.totalBalance < 0 ? "danger" : "neutral"}
+      />
       <KPICard icon={TrendingUp} title={incomeTitle} value={formatBRL(data.monthlyIncome)} tone="success" />
       <KPICard icon={TrendingDown} title={expenseTitle} value={formatBRL(data.monthlyExpense)} tone="danger" />
       <KPICard icon={Clock3} title={unpaidTitle} value={formatBRL(data.unpaidExpense)} tone="warning" />
