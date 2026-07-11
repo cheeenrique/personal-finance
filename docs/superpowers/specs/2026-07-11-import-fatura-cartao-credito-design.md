@@ -38,10 +38,12 @@ Fatura: import flat (1 linha = 1 lançamento). Agrupar em parcelamento = **fase 
 
 1. **Camada de IA provider-agnóstica** (port/adapter, SOLID) — NVIDIA NIM
    primário, Gemini opcional/fallback. Registry central de modelos.
-2. **NVIDIA substitui o Gemini neste feature** (free tier do Gemini é pequeno):
-   texto = `deepseek-ai/deepseek-v4-pro`; visão = `qwen/qwen3.5-397b-a17b`;
-   texto-com-raciocínio (opcional) = `nvidia/nemotron-3-nano-30b-a3b`. Voz do
-   Telegram (áudio) fica no Gemini — migração à parte, fora deste spec.
+2. **NVIDIA primário, Gemini FALLBACK** (free tier do Gemini é pequeno, mas
+   não desabilitar): texto = `deepseek-ai/deepseek-v4-pro`; visão =
+   `qwen/qwen3.5-397b-a17b`; texto-com-raciocínio (opcional) =
+   `nvidia/nemotron-3-nano-30b-a3b`. Se o NVIDIA falhar (rate-limit/timeout/JSON
+   inválido), `extractStructured` cai no **GeminiExtractor** antes de desistir.
+   Voz do Telegram (áudio) fica no Gemini — migração à parte, fora deste spec.
 3. **deepseek é text-only** → PDF com text layer → extrai TEXTO → deepseek;
    foto/PDF escaneado (sem text layer) → fallback VISÃO no qwen VLM.
 4. **PDF com senha = extração de texto** (pdfjs/unpdf abre com a senha).
@@ -88,10 +90,10 @@ interface StructuredExtractor {
 
 ```ts
 type AiRole = "document-text" | "document-text-reasoning" | "document-vision";
-// role -> { provider: "nvidia" | "gemini", model, modality, params }
-// document-text          -> nvidia, deepseek-ai/deepseek-v4-pro,  thinking:false
+// role -> { provider: "nvidia" | "gemini", model, modality, params, fallback? }
+// document-text          -> nvidia, deepseek-ai/deepseek-v4-pro,  thinking:false, fallback: gemini
 // document-text-reasoning-> nvidia, nvidia/nemotron-3-nano-30b-a3b, reasoning_budget:N
-// document-vision        -> nvidia, qwen/qwen3.5-397b-a17b
+// document-vision        -> nvidia, qwen/qwen3.5-397b-a17b, fallback: gemini
 ```
 
 Trocar de modelo/provider = editar o registry, sem tocar em parser (OCP).
@@ -111,9 +113,11 @@ Trocar de modelo/provider = editar o registry, sem tocar em parser (OCP).
 ### Facade (`extractStructured`)
 
 `extractStructured(role, input, schema, parse, opts)`:
-1. resolve `{provider, model, params}` do registry pela `role`;
-2. chama o adapter; **valida com zod** (nunca confia em JSON de LLM); **1 retry**
-   em falha de parse; `null` no fim → erro-como-dado.
+1. resolve `{provider, model, params, fallback}` do registry pela `role`;
+2. chama o adapter primário (NVIDIA); **valida com zod** (nunca confia em JSON de
+   LLM); **1 retry** em falha de parse;
+3. ainda `null` (falha/rate-limit) → tenta o adapter de **fallback**
+   (`GeminiExtractor`) antes de desistir; `null` no fim → erro-como-dado.
 
 Parsers só chamam isto com role + prompt + schema + parse. Não conhecem provider,
 modelo, nem quirk de request (SRP/DIP/DRY).
