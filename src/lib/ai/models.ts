@@ -20,10 +20,11 @@ import type { AiModelConfig, AiRole } from "./types";
 const REGISTRY: Record<AiRole, AiModelConfig> = {
   "document-text": {
     provider: "nvidia",
-    // nemotron-3-nano-30b: deepseek-v4-flash foi DEPRECIADO (404 no NIM); o -pro enfileira/
-    // estoura timeout em doc grande no free tier. nemotron extrai fatura E contrato real em
-    // ~2s (spike medido) e está disponível. (`nvidia.ts` remove `<think>` da resposta.)
-    model: "nvidia/nemotron-3-nano-30b-a3b",
+    // nemotron-3-super-120b: o -nano-30b era rápido (~2s) mas FRACO (alucinava principal,
+    // pegava só 1 parcela). O super-120b é honesto (deixa null em vez de inventar) e pega o
+    // cronograma completo em ~16s — melhor qualidade pro caso "form/preview que o user revisa"
+    // (deepseek-v4-flash morreu 404). (`nvidia.ts` remove `<think>` da resposta.)
+    model: "nvidia/nemotron-3-super-120b-a12b",
     modality: "text",
     params: { thinking: false },
     fallback: "gemini",
@@ -36,9 +37,12 @@ const REGISTRY: Record<AiRole, AiModelConfig> = {
   },
   "document-vision": {
     provider: "nvidia",
-    model: "qwen/qwen3.5-397b-a17b",
+    // nemotron-nano-12b-v2-vl: rápido (~2-4s) e detecta 1 OU VÁRIAS transações num print de
+    // notificação (spike medido) — qwen-397b acerta mas enfileira 11-60s; llama-3.2-vision
+    // falha em notificação (devolve texto cru). Rápido importa (caminho de imagem do Telegram).
+    model: "nvidia/nemotron-nano-12b-v2-vl",
     modality: "vision",
-    params: { temperature: 0.6, topP: 0.95 },
+    params: {},
     fallback: "gemini",
   },
 };

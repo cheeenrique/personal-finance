@@ -2,21 +2,21 @@ import { describe, expect, it } from "vitest";
 import { resolveAiModel } from "./models";
 
 describe("resolveAiModel", () => {
-  it("document-text resolve pra nvidia deepseek com thinking desligado + fallback gemini", () => {
+  it("document-text resolve pra nvidia nemotron-super com thinking desligado + fallback gemini", () => {
     const config = resolveAiModel("document-text");
     expect(config).toEqual({
       provider: "nvidia",
-      model: "nvidia/nemotron-3-nano-30b-a3b",
+      model: "nvidia/nemotron-3-super-120b-a12b",
       modality: "text",
       params: { thinking: false },
       fallback: "gemini",
     });
   });
 
-  it("document-vision resolve pra nvidia qwen + fallback gemini", () => {
+  it("document-vision resolve pra nvidia nemotron-nano-vl + fallback gemini", () => {
     const config = resolveAiModel("document-vision");
     expect(config.provider).toBe("nvidia");
-    expect(config.model).toBe("qwen/qwen3.5-397b-a17b");
+    expect(config.model).toBe("nvidia/nemotron-nano-12b-v2-vl");
     expect(config.modality).toBe("vision");
     expect(config.fallback).toBe("gemini");
   });

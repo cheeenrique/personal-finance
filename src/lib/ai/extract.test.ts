@@ -35,7 +35,7 @@ describe("extractStructured", () => {
     expect(result).toEqual({ ok: true });
     expect(nvidiaExtractMock).toHaveBeenCalledTimes(1);
     const [, , , , model] = nvidiaExtractMock.mock.calls[0];
-    expect(model.model).toBe("nvidia/nemotron-3-nano-30b-a3b");
+    expect(model.model).toBe("nvidia/nemotron-3-super-120b-a12b");
     expect(geminiExtractMock).not.toHaveBeenCalled();
   });
 
