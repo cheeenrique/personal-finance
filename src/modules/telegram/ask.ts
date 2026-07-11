@@ -19,7 +19,6 @@ import { resolvePeriodRange } from "./query";
  */
 
 const TOP_CATEGORIES_LIMIT = 5;
-const RISING_CATEGORIES_LIMIT = 3;
 
 const askResponseSchema = z.object({ answer: z.string().min(1) });
 
@@ -45,22 +44,21 @@ type AskContext = {
   thisMonthTopCategories: CategoryAmount[];
   lastMonthTopCategories: CategoryAmount[];
   healthScoreValue: number;
-  risingCategories: Array<{ name: string; deltaPct: number }>;
 };
 
 /**
  * Números-base pra ancorar a resposta: caixa (mesma base de
  * `reportService.cashflow`/`executeTelegramQuery`) deste mês vs. mês
  * passado, top categorias de ambos os períodos (accrual, `categoryTotals` —
- * mesma leitura de `/reports`), saldo atual e sinais do módulo `insights`
- * (score de saúde + categorias em alta). Contexto pequeno de propósito —
- * poucos números, não um dump de transações.
+ * mesma leitura de `/reports`), saldo atual e o score de saúde financeira do
+ * módulo `insights`. Contexto pequeno de propósito — poucos números, não um
+ * dump de transações.
  */
 async function buildAskContext(userId: string): Promise<AskContext> {
   const thisMonth = resolvePeriodRange("this_month");
   const lastMonth = resolvePeriodRange("last_month");
 
-  const [balance, thisMonthCashflow, lastMonthCashflow, thisMonthCategories, lastMonthCategories, health, trends] =
+  const [balance, thisMonthCashflow, lastMonthCashflow, thisMonthCategories, lastMonthCategories, health] =
     await Promise.all([
       accountService.totalBalance(userId),
       reportService.cashflow(userId, thisMonth.dateFrom, thisMonth.dateTo),
@@ -68,7 +66,6 @@ async function buildAskContext(userId: string): Promise<AskContext> {
       reportService.categoryTotals(userId, thisMonth.dateFrom, thisMonth.dateTo),
       reportService.categoryTotals(userId, lastMonth.dateFrom, lastMonth.dateTo),
       insightsService.healthScore(userId),
-      insightsService.categoryTrends(userId),
     ]);
 
   return {
@@ -84,9 +81,6 @@ async function buildAskContext(userId: string): Promise<AskContext> {
       .slice(0, TOP_CATEGORIES_LIMIT)
       .map((category) => ({ name: category.categoryName, total: category.total.toString() })),
     healthScoreValue: health.score,
-    risingCategories: trends.rising
-      .slice(0, RISING_CATEGORIES_LIMIT)
-      .map((trend) => ({ name: trend.categoryName, deltaPct: Math.round(trend.deltaPct) })),
   };
 }
 
@@ -106,13 +100,6 @@ function buildNumbersText(ctx: AskContext): string {
     ...categoryLines("Top categorias de gasto deste mês", ctx.thisMonthTopCategories),
     ...categoryLines("Top categorias de gasto do mês passado", ctx.lastMonthTopCategories),
   ];
-
-  if (ctx.risingCategories.length > 0) {
-    lines.push(
-      "Categorias com gasto em alta (vs. média dos meses anteriores):",
-      ...ctx.risingCategories.map((category) => `- ${category.name}: +${category.deltaPct}%`),
-    );
-  }
 
   return lines.join("\n");
 }

@@ -5,7 +5,7 @@
  * ~/.claude/rules/06-composition-errors.md. Mapeamento para HTTP/mensagem de
  * UI acontece no boundary (Server Component/Action), não aqui.
  *
- * Sem subclasses hoje: `healthScore`/`categoryTrends` são leitura pura (sem
+ * Sem subclasses hoje: `healthScore` é leitura pura (sem
  * "not found" possível — sempre há um resultado, mesmo que zerado) e
  * `monthlyNarrative` já modela falha como `null` (erro-como-dado), não como
  * exceção. Classe base fica pronta pro 1º caso concreto que precisar de um

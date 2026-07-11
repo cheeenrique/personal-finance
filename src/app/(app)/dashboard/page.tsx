@@ -9,7 +9,6 @@ import { assetService } from "@/modules/assets/service";
 import { cardService } from "@/modules/cards/service";
 import { loanService } from "@/modules/loans/service";
 import { reportService } from "@/modules/reports/service";
-import { projectionService } from "@/modules/projections/service";
 import { insightsService } from "@/modules/insights/service";
 import { goalService } from "@/modules/goals/service";
 import { nowInSaoPaulo } from "@/lib/date/timezone";
@@ -31,8 +30,6 @@ import { MonthlyEvolutionChart } from "@/components/dashboard/monthly-evolution-
 import { RecentTransactionsTable } from "@/components/dashboard/recent-transactions-table";
 import { HealthScoreCard } from "@/components/dashboard/health-score-card";
 import { MonthlyNarrativeCard } from "@/components/dashboard/monthly-narrative-card";
-import { CashflowProjectionChart } from "@/components/dashboard/cashflow-projection-chart";
-import { CategoryTrendsCard } from "@/components/dashboard/category-trends-card";
 import { GoalsSummary } from "@/components/dashboard/goals-summary";
 
 const RECENT_TRANSACTIONS_LIMIT = 5;
@@ -115,9 +112,7 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     expenseByCardTree,
     monthlyCashflow,
     recentTransactions,
-    cashflowProjection,
     healthScoreResult,
-    categoryTrendsResult,
     monthlyNarrativeResult,
     goalsWithProgress,
   ] = await Promise.all([
@@ -149,12 +144,8 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     // tela mostrando dois números pro mesmo mês confundia (parecia bug).
     reportService.cashflowByMonth(userId, year),
     transactionService.listRecentForDashboard(userId, RECENT_TRANSACTIONS_LIMIT),
-    // "Projeção de saldo (30 dias)" — já retorna number puro (sem Decimal).
-    projectionService.forecast(userId, 30),
     // "Saúde financeira" — score 0-100 + breakdown, sempre do mês corrente.
     insightsService.healthScore(userId),
-    // "Tendências" — categorias com gasto subindo vs. média móvel.
-    insightsService.categoryTrends(userId),
     // "Resumo do mês" via IA — mês CORRENTE (`currentYear`/`currentMonth`),
     // não o mês do filtro de período selecionado.
     insightsService.monthlyNarrative(userId, currentYear, currentMonth),
@@ -241,11 +232,6 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
         <MonthlyEvolutionChart points={monthlyEvolutionPoints} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <CashflowProjectionChart projection={cashflowProjection} />
-        <CategoryTrendsCard rising={categoryTrendsResult.rising} />
-      </div>
-
       <GoalsSummary goals={goalsWithProgress} />
 
       <RecentTransactionsTable
@@ -287,11 +273,6 @@ function DashboardSkeleton() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Skeleton className="h-72 w-full rounded-xl" />
         <Skeleton className="h-72 w-full rounded-xl" />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Skeleton className="h-72 w-full rounded-xl" />
-        <Skeleton className="h-56 w-full rounded-xl" />
       </div>
 
       <Skeleton className="h-56 w-full rounded-xl" />

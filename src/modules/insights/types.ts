@@ -1,8 +1,8 @@
 /**
- * Tipos do módulo insights — score de saúde financeira (`score.ts`), tendência
- * de categorias (`trends.ts`) e narrativa mensal via IA (`narrative.ts`).
- * Sem persistência própria (tudo derivado on-demand de outros módulos), ver
- * docs/99-CLAUDE.md "Regra de Ouro".
+ * Tipos do módulo insights — score de saúde financeira (`score.ts`) e
+ * narrativa mensal via IA (`narrative.ts`). Sem persistência própria (tudo
+ * derivado on-demand de outros módulos), ver docs/99-CLAUDE.md "Regra de
+ * Ouro".
  */
 
 /** Faixa de leitura do score — mesma semântica em toda a UI (badge verde/amarelo/vermelho). */
@@ -26,27 +26,6 @@ export type HealthScore = {
   score: number;
   tone: ScoreTone;
   breakdown: ScoreBreakdown[];
-};
-
-/**
- * Categoria com gasto do mês atual vs. média móvel dos meses anteriores
- * (`trends.ts` `categoryTrends`). `current`/`avgPrevious` já convertidos de
- * `Prisma.Decimal` para `number` — este módulo só lê e resume, não soma
- * dinheiro (regra de precisão fica nos módulos de origem, `reports`).
- */
-export type CategoryTrend = {
-  categoryId: string;
-  categoryName: string;
-  current: number;
-  avgPrevious: number;
-  deltaPct: number;
-  rising: boolean;
-};
-
-/** Categorias com gasto subindo (`rising=true`), ordenadas por `deltaPct` desc. */
-export type TrendsResult = {
-  rising: CategoryTrend[];
-  window: number;
 };
 
 /**
