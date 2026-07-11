@@ -1,4 +1,4 @@
-import type { ImportPreview, ImportCommitResult } from "@/modules/imports/types";
+import type { ImportPreview, ImportCommitResult, ParsedTransaction } from "@/modules/imports/types";
 
 export type ImportFileReadStatus = "reading" | "ready" | "error";
 
@@ -7,9 +7,9 @@ export type ImportFileReadStatus = "reading" | "ready" | "error";
  * commit. O front itera as Server Actions por arquivo (1 preview + 1 commit
  * cada — sem action batch nova, decisão do coordenador) e agrega os
  * resultados na UI (`import-file-utils.ts`, `aggregatePreview`/
- * `aggregateCommit`). `content` guarda o texto/base64 já lido do arquivo — o
- * commit reparseia do zero, então precisa ser reenviado (não dá pra
- * reaproveitar só o resultado da prévia).
+ * `aggregateCommit`). `content` guarda o texto/base64 já lido do arquivo (só a
+ * prévia usa — o commit reaproveita `parsed`, as transações já extraídas pela
+ * prévia, sem reparsear o arquivo).
  */
 export type ImportFileEntry = {
   id: string;
@@ -23,6 +23,8 @@ export type ImportFileEntry = {
   error: string | null;
   /** Preenchido depois de "Analisar arquivos" (`previewImportAction`). */
   preview: ImportPreview | null;
+  /** Transações extraídas na prévia — reaproveitadas no commit (evita 2º parse/chamada Gemini). */
+  parsed: ParsedTransaction[] | null;
   previewError: string | null;
   /** Preenchido depois de "Confirmar importação" (`commitImportAction`). */
   commit: ImportCommitResult | null;

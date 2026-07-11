@@ -5,7 +5,13 @@ import { calendarPartsSP } from "@/lib/date/calendar-sp";
 import { parseImportFile } from "./parsers";
 import { importRepository, type FallbackRow } from "./repository";
 import { AccountNotFoundError } from "./errors";
-import type { ImportCommitResult, ImportPreview, ImportPreviewItem, ParsedTransaction } from "./types";
+import type {
+  ImportCommitResult,
+  ImportParseError,
+  ImportPreviewItem,
+  ImportPreviewResult,
+  ParsedTransaction,
+} from "./types";
 
 async function assertAccountOwnership(userId: string, accountId: string): Promise<void> {
   const account = await accountRepository.findById(userId, accountId);
@@ -113,7 +119,7 @@ async function previewImport(
   accountId: string,
   fileName: string,
   fileContent: string,
-): Promise<ImportPreview> {
+): Promise<ImportPreviewResult> {
   await assertAccountOwnership(userId, accountId);
 
   const { transactions, errors } = await parseImportFile(fileName, fileContent);
@@ -153,33 +159,42 @@ async function previewImport(
   );
 
   return {
-    total: transactions.length + errors.length,
-    novos,
-    duplicados,
-    erros: errors,
+    preview: {
+      total: transactions.length + errors.length,
+      novos,
+      duplicados,
+      erros: errors,
+    },
+    transactions,
   };
 }
 
 /**
- * Confirma a importação — reparseia o arquivo (idempotente: sem estado
- * guardado entre preview e commit) e grava só os itens ainda não existentes
- * na conta. Categorização resolvida ANTES do `$transaction` interativo
- * (mantém a janela da transação curta — mesmo cuidado de
- * `modules/cards/pay-invoice.ts`); dedup + insert acontecem dentro dela.
- * Concorrência (duplo clique no Confirmar): o snapshot de dedup NÃO enxerga
- * inserts ainda não commitados do concorrente (READ COMMITTED) — quem segura
- * é o índice único parcial em (accountId, fitId) + `skipDuplicates` no insert
- * (ver `repository.insertMany` e a migration `transaction_fitid_unique`).
+ * Confirma a importação — grava só os itens ainda não existentes na conta.
+ * Recebe as `transactions` JÁ parseadas pela prévia (`previewImport`), NÃO
+ * reparseia o arquivo: PDF é extraído por LLM (`parsers/pdf-parser.ts`), então
+ * reparsear no commit gastaria uma 2ª chamada Gemini — lenta e não
+ * determinística (o gravado poderia divergir da prévia que o usuário
+ * confirmou). As transações chegam do client (produzidas pelo parser do
+ * servidor na prévia, revalidadas por `commitImportSchema` na action); isso
+ * não amplia poder — o usuário já pode criar lançamentos manuais na própria
+ * conta, e ownership + dedup continuam valendo aqui.
+ * Categorização resolvida ANTES do `$transaction` interativo (mantém a janela
+ * da transação curta — mesmo cuidado de `modules/cards/pay-invoice.ts`); dedup
+ * + insert acontecem dentro dela. Concorrência (duplo clique no Confirmar): o
+ * snapshot de dedup NÃO enxerga inserts ainda não commitados do concorrente
+ * (READ COMMITTED) — quem segura é o índice único parcial em (accountId,
+ * fitId) + `skipDuplicates` no insert (ver `repository.insertMany` e a
+ * migration `transaction_fitid_unique`).
  */
 async function commitImport(
   userId: string,
   accountId: string,
-  fileName: string,
-  fileContent: string,
+  transactions: ParsedTransaction[],
+  errors: ImportParseError[],
 ): Promise<ImportCommitResult> {
   await assertAccountOwnership(userId, accountId);
 
-  const { transactions, errors } = await parseImportFile(fileName, fileContent);
   if (transactions.length === 0) return { imported: 0, duplicados: 0, erros: errors };
 
   const withCategory = await Promise.all(

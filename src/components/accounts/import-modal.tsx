@@ -39,7 +39,7 @@ type ImportModalProps = {
 export function ImportModal({ open, onOpenChange, accountId }: ImportModalProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { step, entries, isAnalyzing, isConfirming, addFiles, removeFile, analyze, confirm, reset } =
+  const { step, entries, isAnalyzing, isConfirming, addFiles, removeFile, analyze, confirm, back, reset } =
     useImportFiles(accountId);
 
   function handleOpenChange(next: boolean) {
@@ -110,6 +110,11 @@ export function ImportModal({ open, onOpenChange, accountId }: ImportModalProps)
               <Button type="button" onClick={() => void analyze()} disabled={!hasReadyFiles || isReadingAny || isAnalyzing}>
                 {isAnalyzing && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
                 Analisar arquivos
+              </Button>
+            )}
+            {step === "preview" && (
+              <Button type="button" variant="outline" onClick={back} disabled={isConfirming}>
+                Voltar
               </Button>
             )}
             {step === "preview" && (

@@ -14,3 +14,32 @@ export const importSchema = z.object({
 });
 
 export type ImportInput = z.infer<typeof importSchema>;
+
+/** Trava contra payload absurdo no commit — nenhum extrato real chega perto. */
+const MAX_TRANSACTIONS = 20_000;
+
+const parsedTransactionSchema = z.object({
+  fitId: z.string().nullable(),
+  date: z.coerce.date(),
+  amount: z.string().trim().min(1),
+  type: z.enum(["INCOME", "EXPENSE"]),
+  description: z.string(),
+});
+
+const parseErrorSchema = z.object({
+  snippet: z.string(),
+  reason: z.string(),
+});
+
+/**
+ * Payload do commit — as transações já parseadas pela prévia
+ * (`previewImport`), revalidadas na borda antes de gravar (o commit não
+ * reparseia o arquivo, ver `service.ts` `commitImport`).
+ */
+export const commitImportSchema = z.object({
+  accountId: z.string().trim().min(1, "Conta é obrigatória"),
+  transactions: z.array(parsedTransactionSchema).max(MAX_TRANSACTIONS, "Extrato muito grande"),
+  errors: z.array(parseErrorSchema),
+});
+
+export type CommitImportInput = z.infer<typeof commitImportSchema>;

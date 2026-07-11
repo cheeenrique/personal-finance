@@ -3,9 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { importService } from "./service";
-import { importSchema } from "./schemas";
+import { commitImportSchema, importSchema } from "./schemas";
 import { ImportDomainError } from "./errors";
-import type { ActionResult, ImportCommitResult, ImportPreview } from "./types";
+import type {
+  ActionResult,
+  ImportCommitResult,
+  ImportParseError,
+  ImportPreviewResult,
+  ParsedTransaction,
+} from "./types";
 
 /** Server Actions só delegam para o module (docs/99-CLAUDE.md, "Regra de Ouro"). */
 
@@ -33,7 +39,7 @@ export async function previewImportAction(
   accountId: string,
   fileName: string,
   fileContent: string,
-): Promise<ActionResult<ImportPreview>> {
+): Promise<ActionResult<ImportPreviewResult>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
@@ -46,13 +52,13 @@ export async function previewImportAction(
   }
 
   try {
-    const preview = await importService.previewImport(
+    const result = await importService.previewImport(
       userId,
       parsed.data.accountId,
       parsed.data.fileName,
       parsed.data.fileContent,
     );
-    return { success: true, data: preview };
+    return { success: true, data: result };
   } catch (error) {
     return toActionError(error);
   }
@@ -60,13 +66,13 @@ export async function previewImportAction(
 
 export async function commitImportAction(
   accountId: string,
-  fileName: string,
-  fileContent: string,
+  transactions: ParsedTransaction[],
+  errors: ImportParseError[],
 ): Promise<ActionResult<ImportCommitResult>> {
   const userId = await requireUserId();
   if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
 
-  const parsed = importSchema.safeParse({ accountId, fileName, fileContent });
+  const parsed = commitImportSchema.safeParse({ accountId, transactions, errors });
   if (!parsed.success) {
     return {
       success: false,
@@ -78,8 +84,8 @@ export async function commitImportAction(
     const result = await importService.commitImport(
       userId,
       parsed.data.accountId,
-      parsed.data.fileName,
-      parsed.data.fileContent,
+      parsed.data.transactions,
+      parsed.data.errors,
     );
     revalidatePath("/accounts");
     revalidatePath(`/accounts/${parsed.data.accountId}`);

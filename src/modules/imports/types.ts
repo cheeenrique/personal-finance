@@ -49,6 +49,18 @@ export type ImportPreview = {
   erros: ImportParseError[];
 };
 
+/**
+ * Retorno de `previewImport` — a prévia exibida + as transações JÁ parseadas.
+ * O commit reaproveita `transactions` em vez de reparsear o arquivo (PDF é
+ * extraído por LLM: reparsear custa uma 2ª chamada Gemini, lenta e não
+ * determinística — a prévia mostrada poderia divergir do que é gravado). O
+ * front carrega `transactions` da prévia até o commit.
+ */
+export type ImportPreviewResult = {
+  preview: ImportPreview;
+  transactions: ParsedTransaction[];
+};
+
 /** Resultado da confirmação — o que de fato foi gravado. */
 export type ImportCommitResult = {
   imported: number;

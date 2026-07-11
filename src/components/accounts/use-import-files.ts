@@ -67,8 +67,8 @@ export function useImportFiles(accountId: string) {
         try {
           const response = await previewImportAction(accountId, entry.name, entry.content!);
           return response.success
-            ? { id: entry.id, preview: response.data, previewError: null }
-            : { id: entry.id, preview: null, previewError: response.error.message };
+            ? { id: entry.id, preview: response.data.preview, parsed: response.data.transactions, previewError: null }
+            : { id: entry.id, preview: null, parsed: null, previewError: response.error.message };
         } catch {
           return { id: entry.id, preview: null, previewError: "Não foi possível analisar o arquivo." };
         }
@@ -82,16 +82,16 @@ export function useImportFiles(accountId: string) {
     return nextEntries;
   }
 
-  /** Chama `commitImportAction` pra cada arquivo com prévia bem-sucedida, em paralelo — reimportar é seguro (dedup no backend). */
+  /** Chama `commitImportAction` pra cada arquivo com prévia bem-sucedida, em paralelo — reenvia as transações já parseadas na prévia (sem 2º parse) e reimportar é seguro (dedup no backend). */
   async function confirm(): Promise<ImportFileEntry[]> {
-    const analyzed = entries.filter((entry) => entry.preview !== null);
+    const analyzed = entries.filter((entry) => entry.preview !== null && entry.parsed !== null);
     if (analyzed.length === 0) return entries;
 
     setIsConfirming(true);
     const patches = await Promise.all(
       analyzed.map(async (entry): Promise<EntryPatch> => {
         try {
-          const response = await commitImportAction(accountId, entry.name, entry.content!);
+          const response = await commitImportAction(accountId, entry.parsed!, entry.preview!.erros);
           return response.success
             ? { id: entry.id, commit: response.data, commitError: null }
             : { id: entry.id, commit: null, commitError: response.error.message };
@@ -108,6 +108,11 @@ export function useImportFiles(accountId: string) {
     return nextEntries;
   }
 
+  /** Volta pra seleção mantendo os arquivos já lidos — permite retentar (`analyze` de novo, ex.: PDF que falhou na extração) ou trocar arquivos sem recomeçar do zero. */
+  function back() {
+    setStep("select");
+  }
+
   function reset() {
     setStep("select");
     setEntries([]);
@@ -115,5 +120,5 @@ export function useImportFiles(accountId: string) {
     setIsConfirming(false);
   }
 
-  return { step, entries, isAnalyzing, isConfirming, addFiles, removeFile, analyze, confirm, reset };
+  return { step, entries, isAnalyzing, isConfirming, addFiles, removeFile, analyze, confirm, back, reset };
 }
