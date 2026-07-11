@@ -144,7 +144,13 @@ async function resolveCategoryName(
   }
 
   const category = await transactionService.lastCategoryForDescription(userId, description);
-  return category?.name ?? null;
+  if (category) return category.name;
+
+  // Sem categoria real equivalente nem histórico: surfa a sugestão CRUA da IA (se houver) pro
+  // preview oferecer "Criar: <nome>" no select (front detecta que o nome não bate com nenhuma
+  // categoria real e pré-seleciona a opção de criar). Ainda não é categoria de verdade — só
+  // candidata; o usuário aceita (cria em 1 clique) ou troca. Sem sugestão, `null`.
+  return suggestedCategoryName ?? null;
 }
 
 async function resolveCategoryId(userId: string, description: string): Promise<string | null> {
