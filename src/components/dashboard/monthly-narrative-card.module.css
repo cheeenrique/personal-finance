@@ -1,0 +1,69 @@
+/**
+ * Keyframes + gradientes do card "Resumo do mês" — portados 1:1 do
+ * demonstrador visual (`Personal Finance - Resumo do Mes.dc.html`, fonte de
+ * verdade) e do handoff (`design/PERSONAL_FINANCE_DS_HANDOFF.md`). Só tokens
+ * do DS via var() (--primary/--secondary/--on-primary), nenhuma cor nova.
+ * `--secondary` é o token "elevated/s2" do projeto (docs/04-DESIGN_SYSTEM.md,
+ * tabela de tokens) — pf-elevated/pf-s2 do protótipo mapeiam pra ele.
+ *
+ * Guard local de `prefers-reduced-motion` deixado explícito (pedido do
+ * handoff de design) mesmo já havendo um global em `globals.css` `@layer
+ * base` que zera duration/iteration-count de toda animação da aplicação.
+ */
+
+.narrativeHighlight {
+  position: relative;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 12%, var(--secondary)), var(--secondary));
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, transparent);
+}
+
+.accentBar {
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--on-primary), var(--primary));
+}
+
+@keyframes pf-sparkle {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.22);
+    opacity: 1;
+  }
+}
+
+.sparkle {
+  animation: pf-sparkle 1.8s ease-in-out infinite;
+}
+
+@keyframes pf-itemin {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.itemIn {
+  opacity: 0;
+  animation: pf-itemin 0.4s ease forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sparkle,
+  .itemIn {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
