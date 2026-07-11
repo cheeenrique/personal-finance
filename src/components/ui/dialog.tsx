@@ -39,13 +39,30 @@ function DialogOverlay({
   )
 }
 
+/**
+ * Largura/altura do modal. `sm` (default) — comportamento original, inalterado.
+ * `wide` — mais largo (formulários com mais campos), altura ainda automática.
+ * `tall` — largo E alto (perto da altura da tela), pensado pra conteúdo extenso
+ * (import de fatura/contrato). Use com `DialogHeader`/`DialogBody`/`DialogFooter`
+ * pra manter header e footer fixos e só o corpo (`DialogBody`) scrollar.
+ */
+type DialogContentSize = "sm" | "wide" | "tall"
+
+const dialogContentSizeClassName: Record<DialogContentSize, string> = {
+  sm: "top-1/2 left-1/2 grid grid-cols-[minmax(0,1fr)] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 sm:max-w-sm",
+  wide: "top-1/2 left-1/2 grid grid-cols-[minmax(0,1fr)] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 sm:max-w-2xl",
+  tall: "top-[4vh] left-1/2 flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] -translate-x-1/2 translate-y-0 flex-col gap-4 overflow-hidden sm:max-w-2xl",
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  size = "sm",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  size?: DialogContentSize
 }) {
   return (
     <DialogPortal>
@@ -53,7 +70,8 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid grid-cols-[minmax(0,1fr)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed z-50 w-full rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          dialogContentSizeClassName[size],
           className
         )}
         {...props}
@@ -84,7 +102,22 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn("flex shrink-0 flex-col gap-2", className)}
+      {...props}
+    />
+  )
+}
+
+/**
+ * Corpo scrollável do modal — usar com `DialogContent size="tall"` pra manter
+ * `DialogHeader`/`DialogFooter` fixos e só esta área rolar (`overflow-x-hidden`
+ * evita scroll horizontal da página).
+ */
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn("min-h-0 flex-1 overflow-x-hidden overflow-y-auto", className)}
       {...props}
     />
   )
@@ -102,7 +135,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        "-mx-4 -mb-4 flex shrink-0 flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
         className
       )}
       {...props}
@@ -148,6 +181,7 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
