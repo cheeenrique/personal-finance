@@ -3,6 +3,7 @@ import { parseOfx } from "./ofx-parser";
 import { parseCsv } from "./csv-parser";
 import { parseXlsx } from "./xlsx-parser";
 import { parsePdfStatement } from "./pdf-parser";
+import { parseCardInvoice } from "./card-invoice-parser";
 
 /**
  * Registry de parsers por formato de arquivo
@@ -31,8 +32,21 @@ function detectExtension(fileName: string): string {
  * (`pdf-parser.ts`), mesmo racional do `financing-parser.ts` de
  * `modules/telegram`.
  */
-export async function parseImportFile(fileName: string, content: string): Promise<ImportParseResult> {
+export type ParseImportOpts = { kind?: "account" | "card"; password?: string };
+
+export async function parseImportFile(
+  fileName: string,
+  content: string,
+  opts?: ParseImportOpts,
+): Promise<ImportParseResult> {
   const extension = detectExtension(fileName);
+
+  // PDF + kind="card" → parser NOVO de fatura (card-invoice-parser.ts, NVIDIA).
+  // Qualquer outro PDF (extrato de conta, kind ausente/"account") segue no
+  // caminho ORIGINAL (pdf-parser.ts, Gemini) — comportamento de extrato inalterado.
+  if (extension === "pdf" && opts?.kind === "card") {
+    return parseCardInvoice(Buffer.from(content, "base64"), opts.password);
+  }
 
   if (extension === "ofx") return parseOfx(content);
   if (extension === "csv") return parseCsv(content);
