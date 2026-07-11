@@ -14,6 +14,7 @@ export type WeeklyRunResult = {
   weeklySummaryCreated: boolean;
   anomaliesCreated: number;
   greenCreated: number;
+  recurringSuggestionsCreated: number;
 };
 
 /** Resultado agregado do cron global — soma de todos os usuários (ver route.ts do cron). */
@@ -22,4 +23,5 @@ export type CronRunSummary = {
   weeklySummaryCreated: number;
   anomaliesCreated: number;
   greenCreated: number;
+  recurringSuggestionsCreated: number;
 };

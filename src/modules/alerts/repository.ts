@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { Prisma, type Alert } from "@/generated/prisma/client";
-import type { AlertType, AlertSeverity } from "@/generated/prisma/enums";
+import { TransactionType, type AlertType, type AlertSeverity } from "@/generated/prisma/enums";
 
 export type CreateAlertData = {
   type: AlertType;
@@ -102,6 +102,35 @@ async function listAllUserIds(): Promise<string[]> {
   return users.map((user) => user.id);
 }
 
+export type ExpenseSignatureRow = {
+  description: string;
+  amount: Prisma.Decimal;
+  date: Date;
+  categoryId: string | null;
+};
+
+/**
+ * Despesas EXPENSE não-transferência desde `since` — insumo bruto do detector
+ * de sugestão de recorrência (`recurring-suggestion.ts`). Sem agregação
+ * aqui: o agrupamento por (descrição normalizada, valor, mês) é lógica de
+ * domínio do detector, não do acesso a dados (mesmo racional de
+ * `groupExpensesByCategoryInRange` em `modules/transactions/repository.ts`,
+ * que também deixa a agregação de negócio pro caller).
+ */
+async function findExpensesSince(userId: string, since: Date): Promise<ExpenseSignatureRow[]> {
+  return prisma.transaction.findMany({
+    where: {
+      userId,
+      deletedAt: null,
+      type: TransactionType.EXPENSE,
+      transferId: null,
+      date: { gte: since },
+    },
+    select: { description: true, amount: true, date: true, categoryId: true },
+    orderBy: { date: "asc" },
+  });
+}
+
 export const alertRepository = {
   create,
   list,
@@ -110,4 +139,5 @@ export const alertRepository = {
   listActiveForDashboard,
   findByDedupKey,
   listAllUserIds,
+  findExpensesSince,
 };

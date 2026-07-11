@@ -2,28 +2,31 @@ import { AlertType } from "@/generated/prisma/enums";
 import { generateWeeklySummary, type WeeklySummaryPayload } from "./weekly-summary";
 import { detectAnomalies } from "./anomaly";
 import { detectGreen } from "./green";
+import { detectRecurringSuggestions } from "./recurring-suggestion";
 import { isWeeklySummaryWindowOpen } from "./week";
 import { alertRepository, type AlertListFilter } from "./repository";
 import { AlertNotFoundError } from "./errors";
 import type { Alert, WeeklyRunResult, CronRunSummary } from "./types";
 
 /**
- * Orquestra a geração semanal de UM usuário: resumo + anomalia + verde, nessa
- * ordem (docs/29-ALERTS.md, "O que o cron faz"). Idempotente — cada gerador
- * já checa existência antes de criar (dedup por `weekKey`, ver
- * `repository.ts` `findByDedupKey`), então rodar `runWeekly` 2x com o mesmo
- * `refDate` não duplica nenhum Alert.
+ * Orquestra a geração semanal de UM usuário: resumo + anomalia + verde +
+ * sugestão de recorrência, nessa ordem (docs/29-ALERTS.md, "O que o cron
+ * faz"). Idempotente — cada gerador já checa existência antes de criar
+ * (dedup por `weekKey`/`signature`, ver `repository.ts` `findByDedupKey`),
+ * então rodar `runWeekly` 2x com o mesmo `refDate` não duplica nenhum Alert.
  */
 async function runWeekly(userId: string, refDate: Date = new Date()): Promise<WeeklyRunResult> {
   const { created: weeklySummaryCreated } = await generateWeeklySummary(userId, refDate);
   const anomalies = await detectAnomalies(userId, refDate);
   const green = await detectGreen(userId, refDate);
+  const recurringSuggestions = await detectRecurringSuggestions(userId, refDate);
 
   return {
     userId,
     weeklySummaryCreated,
     anomaliesCreated: anomalies.length,
     greenCreated: green.length,
+    recurringSuggestionsCreated: recurringSuggestions.length,
   };
 }
 
@@ -48,6 +51,7 @@ async function runWeeklyForAllUsers(refDate: Date = new Date()): Promise<CronRun
     weeklySummaryCreated: results.filter((result) => result.weeklySummaryCreated).length,
     anomaliesCreated: results.reduce((total, result) => total + result.anomaliesCreated, 0),
     greenCreated: results.reduce((total, result) => total + result.greenCreated, 0),
+    recurringSuggestionsCreated: results.reduce((total, result) => total + result.recurringSuggestionsCreated, 0),
   };
 }
 
