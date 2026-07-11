@@ -58,3 +58,7 @@ dist/
 # Playwright screenshots (QA)
 .playwright-mcp/
 *.qa.png
+
+# Fixtures de PDF real (docs/superpowers/plans/2026-07-11-import-documentos-nvidia.md, T1)
+# — documentos financeiros pessoais do dono, NUNCA commitados (repo público).
+src/lib/pdf/__fixtures__/
