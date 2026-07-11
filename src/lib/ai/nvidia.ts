@@ -73,8 +73,11 @@ function buildModelParams(config: AiModelConfig): Record<string, unknown> | unde
 
 /** `choices[0].message.content` às vezes vem cru (JSON puro) ou envolto em texto/markdown
  * (` ```json ... ``` `) mesmo com instrução explícita — tenta direto, cai pro 1º bloco
- * `{...}` encontrado via regex antes de desistir. */
-function extractJsonFromContent(content: string): unknown | null {
+ * `{...}` encontrado via regex antes de desistir. Remove antes o bloco de raciocínio
+ * `<think>…</think>` (modelos de reasoning tipo nemotron emitem mesmo com thinking off) —
+ * senão a regex `{…}` poderia casar chaves dentro do raciocínio em vez do JSON de saída. */
+function extractJsonFromContent(rawContent: string): unknown | null {
+  const content = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   try {
     return JSON.parse(content);
   } catch {

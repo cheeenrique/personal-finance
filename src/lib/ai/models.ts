@@ -20,9 +20,10 @@ import type { AiModelConfig, AiRole } from "./types";
 const REGISTRY: Record<AiRole, AiModelConfig> = {
   "document-text": {
     provider: "nvidia",
-    // deepseek-v4-flash (não -pro): o -pro no free tier NIM enfileira/estoura o timeout
-    // na extração de documento real; o -flash extrai a mesma fatura em ~8s (spike medido).
-    model: "deepseek-ai/deepseek-v4-flash",
+    // nemotron-3-nano-30b: deepseek-v4-flash foi DEPRECIADO (404 no NIM); o -pro enfileira/
+    // estoura timeout em doc grande no free tier. nemotron extrai fatura E contrato real em
+    // ~2s (spike medido) e está disponível. (`nvidia.ts` remove `<think>` da resposta.)
+    model: "nvidia/nemotron-3-nano-30b-a3b",
     modality: "text",
     params: { thinking: false },
     fallback: "gemini",
