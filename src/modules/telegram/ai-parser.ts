@@ -395,8 +395,12 @@ export async function parseTransactionFromImage(
     "vision",
     RESPONSE_SCHEMA,
     parseAiTransactionResponse,
+    IMAGE_GEMINI_TIMEOUT_MS,
   );
 }
+
+/** Timeout maior pra imagem — vision + structured output com thinking costuma encostar/passar de 8s (mesmo racional da voz). */
+const IMAGE_GEMINI_TIMEOUT_MS = 20000;
 
 /** Timeout maior pra voz — áudio + structured output costuma passar de 8s. */
 const VOICE_GEMINI_TIMEOUT_MS = 20000;
