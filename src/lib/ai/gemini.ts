@@ -16,7 +16,11 @@
  * conteúdo de `contents` (texto do usuário/bytes de imagem/documento) nem a
  * API key.
  */
-const GEMINI_MODEL = "gemini-2.5-flash";
+// gemini-3.1-flash-lite: mais rápido e barato que 2.5-flash pras nossas tarefas
+// (extração de PDF/parse estruturado, não raciocínio), free tier bem mais folgado
+// (500 req/dia vs 20 do 2.5-flash, que vivia estourando a cota). 2.5-flash-lite
+// foi descontinuado pra contas novas (404). Vale pra TODOS os callers (import + telegram).
+const GEMINI_MODEL = "gemini-3.1-flash-lite";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const REQUEST_TIMEOUT_MS = 8000;
 
@@ -38,6 +42,8 @@ export async function callGemini<T>(
   responseSchema: object,
   parseResponse: (rawJson: unknown) => T | null,
   timeoutMs: number = REQUEST_TIMEOUT_MS,
+  /** "Thinking" do Gemini desligado por padrão (`0`) em TODAS as chamadas — nossas tarefas (extração/parse estruturado) não precisam de raciocínio e o thinking só custa latência/tokens/cota. Decisão do dono do projeto. */
+  thinkingBudget: number = 0,
 ): Promise<T | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -55,12 +61,18 @@ export async function callGemini<T>(
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema,
+          thinkingConfig: { thinkingBudget },
         },
       }),
     });
 
     if (!response.ok) {
-      console.error(`[lib/ai/gemini] ${source} request failed`, { status: response.status });
+      // Corpo do erro do Google (status + mensagem — ex.: API_KEY_INVALID,
+      // payload grande, quota). NÃO contém o conteúdo enviado (`contents`);
+      // é a explicação do próprio Gemini, essencial pra diagnosticar em vez
+      // de engolir tudo numa mensagem genérica.
+      const detail = await response.text().catch(() => "");
+      console.error(`[lib/ai/gemini] ${source} request failed`, { status: response.status, detail: detail.slice(0, 300) });
       return null;
     }
 

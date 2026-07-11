@@ -28,6 +28,16 @@ import type { ImportParseError, ImportParseResult, ParsedTransaction } from "../
  * `ai-parser.ts`/`financing-parser.ts`, docs/30-TELEGRAM.md, "Segurança").
  */
 
+/**
+ * Extração de PDF via Gemini é lenta (~30–90s pra um extrato real — o modelo
+ * lê o documento inteiro e devolve a lista estruturada), muito acima do
+ * default de 8s do transporte (voltado a texto/imagem curtos). Sem esta
+ * margem a chamada aborta antes de terminar e o extrato inteiro vira o erro
+ * genérico "não foi possível extrair". (Thinking já vem desligado por padrão
+ * em `callGemini`, o que também derruba a latência.)
+ */
+const PDF_TIMEOUT_MS = 90_000;
+
 const ISO_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DECIMAL_STRING_REGEX = /^\d+(\.\d+)?$/;
 
@@ -144,7 +154,13 @@ export async function parsePdfStatement(base64Content: string): Promise<ImportPa
     { text: buildPdfPrompt() },
   ];
 
-  const rawItems = await callGemini([{ parts }], "pdf-import-statement", PDF_RESPONSE_SCHEMA, parseExtractionEnvelope);
+  const rawItems = await callGemini(
+    [{ parts }],
+    "pdf-import-statement",
+    PDF_RESPONSE_SCHEMA,
+    parseExtractionEnvelope,
+    PDF_TIMEOUT_MS,
+  );
 
   if (rawItems === null) {
     return {
