@@ -37,4 +37,20 @@ async function markProcessed(userId: string, updateId: number): Promise<{ isDupl
   }
 }
 
-export const telegramDedupRepository = { markProcessed };
+/**
+ * Limpeza da tabela de dedup (cron `/api/cron/telegram-dedup-cleanup`): o
+ * Telegram só reenvia um `update_id` dentro de minutos após timeout, então
+ * qualquer registro com mais de `days` dias é seguro apagar — evita a tabela
+ * crescer pra sempre.
+ */
+async function cleanupOlderThan(days: number): Promise<number> {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const result = await prisma.telegramProcessedUpdate.deleteMany({
+    where: { createdAt: { lt: cutoff } },
+  });
+
+  return result.count;
+}
+
+export const telegramDedupRepository = { markProcessed, cleanupOlderThan };
