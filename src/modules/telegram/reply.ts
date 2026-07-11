@@ -140,13 +140,27 @@ export function buildImageUnreadableReply(): string {
 }
 
 /**
- * Nota de voz inaudível / Gemini falhou / pending aberto (docs/30-TELEGRAM.md
- * — parsing por voz). Pede pra digitar; não culpa o microfone genérico.
+ * Nota de voz inaudível / Gemini falhou (docs/30-TELEGRAM.md — parsing por
+ * voz). Pede pra digitar; não culpa o microfone genérico.
  */
 export function buildVoiceUnreadableReply(): string {
   return [
     `${ICON_WARNING} Não consegui entender essa nota de voz.`,
     "Manda de novo com mais clareza, ou digite o lançamento (ex.: mercado 120).",
+  ].join("\n");
+}
+
+/**
+ * Voz recebida com um pending em aberto (docs/30-TELEGRAM.md, "Fluxo
+ * conversacional" — voz nunca é tratada como resposta textual a um pending).
+ * DIFERENTE de `buildVoiceUnreadableReply`: aqui o áudio nem chegou a ser
+ * processado, não tem nada de "não entendi o áudio" — o problema é a
+ * pergunta em aberto. Mensagem honesta em vez da mentira de áudio ilegível.
+ */
+export function buildVoicePendingOpenReply(): string {
+  return [
+    `${ICON_WARNING} Você tem uma pergunta em aberto.`,
+    "Responda ela primeiro (ou envie \"cancelar\").",
   ].join("\n");
 }
 

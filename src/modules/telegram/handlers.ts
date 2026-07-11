@@ -1,6 +1,4 @@
 import { Prisma } from "@/generated/prisma/client";
-import { transactionService } from "@/modules/transactions/service";
-import { createTransactionSchema } from "@/modules/transactions/schemas";
 import { TransactionDomainError } from "@/modules/transactions/errors";
 import { accountService } from "@/modules/accounts/service";
 import { AccountDomainError } from "@/modules/accounts/errors";
@@ -9,6 +7,7 @@ import { nowInSaoPaulo, parseInSaoPaulo } from "@/lib/date/timezone";
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { parseTransactionFromImage, parseTransactionFromVoice, parseTransactionWithAI } from "./ai-parser";
 import { parseFinancingFromDocument } from "./financing-parser";
+import { createBotTransaction } from "./create";
 import { draftFromAi, handlePendingReply, processDraft } from "./draft";
 import { telegramPendingRepository } from "./pending";
 import { normalizeWord } from "./normalize";
@@ -17,13 +16,11 @@ import {
   listInvestmentNamesForAI,
   listKnownMerchantsForAI,
   listOriginNamesForAI,
-  originPayload,
   resolveCategoryId,
   resolveOrigin,
 } from "./resolve";
 import { executeTelegramQuery, resolvePeriodRange } from "./query";
 import { handleInvestContribution } from "./invest";
-import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildBalanceReply,
   buildDocumentUnreadableReply,
@@ -36,6 +33,7 @@ import {
   buildTodaySummaryReply,
   buildTransactionConfirmationReply,
   buildUnknownReply,
+  buildVoicePendingOpenReply,
   buildVoiceUnreadableReply,
 } from "./reply";
 import { TelegramDomainError } from "./errors";
@@ -51,40 +49,36 @@ function isKnownDomainError(error: unknown): error is Error {
 
 /**
  * Regra 2/3 (docs/30-TELEGRAM.md): categoria nunca fica nula, data default =
- * agora. Origem default = `resolveOrigin` sem kind/name (mesma conta ativa
+ * hoje. Origem default = `resolveOrigin` sem kind/name (mesma conta ativa
  * mais antiga de sempre, ver resolve.ts) — caminho SEM fluxo de pergunta
  * (usado tanto pro lançamento rápido regex quanto pro fallback quando a IA
  * falha/está indisponível, docs/30-TELEGRAM.md "A IA nunca pode derrubar o
- * bot"). Toda transação criada pelo bot leva a tag "Telegram" (find-or-create,
- * requisito do dono — nunca afeta transações da UI web).
+ * bot"). Data = hoje sempre → `createBotTransaction` sempre cria pago (mesmo
+ * comportamento de antes). Montagem do schema + tag "Telegram" + regra de
+ * `isPaid`: núcleo compartilhado com `draft.ts` (ver `create.ts`). Sem
+ * teclado pós-save nesta versão (docs/30-TELEGRAM.md, "Botões inline").
  */
 async function handleCreateTransaction(
   userId: string,
   command: Extract<ParsedCommand, { kind: "create_transaction" }>,
 ): Promise<CommandResult> {
-  const [category, origin, telegramTagId] = await Promise.all([
+  const [category, origin] = await Promise.all([
     resolveCategoryId(userId, command.type, command.keywordCandidates, command.description),
     resolveOrigin(userId, null, null),
-    resolveTelegramTagId(userId),
   ]);
 
-  const parsed = createTransactionSchema.safeParse({
-    description: command.description,
-    amount: command.amount,
+  const result = await createBotTransaction(userId, {
     type: command.type,
-    categoryId: category.id,
-    ...originPayload(origin),
-    tagIds: [telegramTagId],
+    amount: command.amount,
+    description: command.description,
+    date: toDateInputValueSaoPaulo(),
+    category,
+    origin,
   });
 
-  if (!parsed.success) {
-    return {
-      text: buildErrorReply(parsed.error.issues[0]?.message ?? "Dados inválidos."),
-      resultCode: "validation_error",
-    };
+  if (!result.success) {
+    return { text: buildErrorReply(result.message), resultCode: "validation_error" };
   }
-
-  const created = await transactionService.createTransaction(userId, parsed.data);
 
   return {
     text: buildTransactionConfirmationReply({
@@ -93,8 +87,8 @@ async function handleCreateTransaction(
       amount: command.amount,
       categoryName: category.name,
       originLabel: origin.label,
-      date: created.date,
-      isPaid: created.isPaid,
+      date: result.created.date,
+      isPaid: result.created.isPaid,
     }),
     resultCode: "transaction_created",
   };
@@ -273,10 +267,11 @@ export async function handleVoiceEntry(
   mimeType: string,
 ): Promise<CommandResult> {
   const pending = await telegramPendingRepository.getActive(userId);
-  // Voz com pending aberto: não trata como resposta textual — pede digitar.
+  // Voz com pending aberto: não trata como resposta textual — pede pra
+  // resolver a pergunta em aberto primeiro (mensagem honesta, docs/30-TELEGRAM.md).
   if (pending) {
     return {
-      text: buildVoiceUnreadableReply(),
+      text: buildVoicePendingOpenReply(),
       resultCode: "voice_pending_open",
     };
   }

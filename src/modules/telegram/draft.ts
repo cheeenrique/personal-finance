@@ -1,18 +1,15 @@
 import { toDateInputValueSaoPaulo } from "@/lib/date/format";
 import { positiveDecimalSchema } from "@/lib/money/schema";
-import { createTransactionSchema } from "@/modules/transactions/schemas";
-import { transactionService } from "@/modules/transactions/service";
+import { createBotTransaction } from "./create";
 import { buildPendingOriginKeyboard, buildPostSaveKeyboard } from "./inline-keyboard";
 import { isCancelCommand, mergeReplyIntoDraft } from "./pending-merge";
 import { telegramPendingRepository, type PendingEntry } from "./pending";
 import {
   expectedOriginKind,
   listActiveOriginsForButtons,
-  originPayload,
   resolveCategoryByName,
   resolveOriginStrict,
 } from "./resolve";
-import { resolveTelegramTagId } from "./telegram-tag";
 import {
   buildAskAmountReply,
   buildAskOriginAmbiguousReply,
@@ -112,11 +109,9 @@ async function resolveDraft(userId: string, draft: TelegramDraft): Promise<Draft
 }
 
 /**
- * Cria a transação a partir de um draft já completo. Regra determinística de
- * `isPaid` (docs/30-TELEGRAM.md): data resolvida > hoje (America/Sao_Paulo) =
- * previsto, senão pago — nunca decidida pela IA. Toda transação criada pelo
- * bot leva a tag "Telegram" (find-or-create, `telegram-tag.ts` — requisito do
- * dono, nunca afeta transações criadas pela UI web).
+ * Cria a transação a partir de um draft já completo. Regra de `isPaid` (data
+ * resolvida > hoje = previsto) + montagem do schema + tag "Telegram": núcleo
+ * compartilhado com o fallback regex (`handlers.ts`) — ver `create.ts`.
  */
 async function createTransactionFromDraft(
   userId: string,
@@ -124,38 +119,28 @@ async function createTransactionFromDraft(
   category: { id: string; name: string },
   origin: TelegramOrigin,
 ): Promise<CommandResult> {
-  const today = toDateInputValueSaoPaulo();
-  const dateStr = draft.date ?? today;
-  const isPaid = dateStr <= today;
-  const telegramTagId = await resolveTelegramTagId(userId);
-
-  const parsed = createTransactionSchema.safeParse({
-    description: draft.description,
-    amount: draft.amount,
-    type: draft.type,
-    categoryId: category.id,
-    ...originPayload(origin),
-    date: dateStr,
-    isPaid,
-    tagIds: [telegramTagId],
-  });
+  const dateStr = draft.date ?? toDateInputValueSaoPaulo();
 
   // Limpa o pending ANTES de qualquer early-return — completo ou inválido, o
   // rascunho em progresso não deve sobreviver a este ponto (evita re-perguntar
-  // um draft que já tentamos finalizar). Se `createTransaction` falhar
+  // um draft que já tentamos finalizar). Se `createBotTransaction` falhar
   // abaixo, o pending já foi perdido — mas isso não duplica nada: o dedup por
   // `update_id` (route.ts, `modules/telegram/dedup.ts`) já garante que um
   // retry do Telegram é descartado antes de chegar aqui.
   await telegramPendingRepository.remove(userId);
 
-  if (!parsed.success) {
-    return {
-      text: buildErrorReply(parsed.error.issues[0]?.message ?? "Dados inválidos."),
-      resultCode: "validation_error",
-    };
-  }
+  const result = await createBotTransaction(userId, {
+    type: draft.type,
+    amount: draft.amount ?? "0",
+    description: draft.description,
+    date: dateStr,
+    category,
+    origin,
+  });
 
-  const created = await transactionService.createTransaction(userId, parsed.data);
+  if (!result.success) {
+    return { text: buildErrorReply(result.message), resultCode: "validation_error" };
+  }
 
   return {
     text: buildTransactionConfirmationReply({
@@ -164,11 +149,11 @@ async function createTransactionFromDraft(
       amount: draft.amount ?? "0",
       categoryName: category.name,
       originLabel: origin.label,
-      date: created.date,
-      isPaid: created.isPaid,
+      date: result.created.date,
+      isPaid: result.created.isPaid,
     }),
     resultCode: "transaction_created",
-    replyMarkup: buildPostSaveKeyboard(created.id),
+    replyMarkup: buildPostSaveKeyboard(result.created.id),
   };
 }
 
