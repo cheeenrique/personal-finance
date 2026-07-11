@@ -368,6 +368,32 @@ Thresholds usados pelos algoritmos de Alert (anomalia e economia). Ver `12-SETTI
 
 ---
 
+## TelegramProcessedUpdate
+
+```ts id="tgpu01"
+id
+userId
+
+updateId // BigInt — update_id do Telegram
+
+createdAt
+
+@@unique([userId, updateId])
+@@index([createdAt])
+```
+
+Dedup do webhook do Telegram (`30-TELEGRAM.md`, "Confiabilidade"): o
+Telegram reenvia o MESMO update quando não recebe `200` a tempo (download de
+foto/voz + Gemini + criação da transação rodam síncronos e podem passar do
+timeout dele). `POST /api/telegram` marca cada `(userId, updateId)`
+processado ANTES de qualquer trabalho pesado; reenvio detectado é
+descartado sem reprocessar, evitando transação duplicada. Chave composta
+(não só `updateId`) porque cada usuário tem seu próprio bot BYO — o mesmo
+`update_id` pode existir em usuários diferentes. `userId` com
+`onDelete: Cascade`.
+
+---
+
 # Relações Principais
 
 * User → tudo

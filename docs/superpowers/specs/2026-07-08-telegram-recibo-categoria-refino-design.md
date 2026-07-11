@@ -1,5 +1,10 @@
 # Refino de categoria no recibo/Telegram — override + item-aware
 
+> **SUPERSEDED — feature removida em 2026-07-11.** `MerchantCategoryRule` e o
+> override merchant→categoria descritos aqui foram removidos por inteiro
+> (front, back e tabela). Registro histórico, não reflete o comportamento
+> atual — ver `docs/30-TELEGRAM.md`.
+
 Data: 2026-07-08
 Status: design aprovado (escopo), aguardando revisão do spec
 

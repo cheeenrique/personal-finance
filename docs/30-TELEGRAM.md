@@ -227,11 +227,23 @@ via Gemini **vision** (mesmo modelo, `gemini-2.5-flash`, mesmo endpoint
   do usuário, BYO-bot). Timeout de 8s em cada chamada — `null` em qualquer
   falha (arquivo expirado, rede, timeout), o webhook responde pedindo pra
   reenviar.
-* **Extração** — mesmas regras de type/amount/description/categoryName/
-  paymentMethod da extração por texto (ver seção acima), só a FONTE muda
-  (imagem via `inlineData` + prompt). Cobre recibo, nota fiscal, comprovante
-  de Pix, notificação push **e tela de detalhe no app do cartão** — o prompt
-  trata esses formatos como lançamento válido quando há valor + estabelecimento.
+* **Extração** — mesmas regras de type/amount/description/paymentMethod da
+  extração por texto (ver seção acima), só a FONTE muda (imagem via
+  `inlineData` + prompt). Cobre recibo, nota fiscal, comprovante de Pix,
+  notificação push **e tela de detalhe no app do cartão** — o prompt trata
+  esses formatos como lançamento válido quando há valor + estabelecimento.
+* **Prompt enxuto de propósito** — o caminho de FOTO (`buildImagePrompt`,
+  `ai-parser.ts`) NÃO carrega a lista de ~40 merchants conhecidos nem a
+  prosa longa de regras de categoria que texto/voz recebem (`contextBlock`
+  com `includeMerchants: false`) — só uma linha simples pedindo o nome mais
+  próximo dentre as categorias do usuário. Motivo: esse contexto extra
+  inflava o thinking token do Gemini e estourava o timeout em fotos simples
+  (medido: prompt cheio ~7s vs. enxuto ~3.5s pra mesma foto). A IA SEMPRE
+  sugere uma categoria pra foto também — nunca bloqueia o lançamento por
+  falta dela (mesma regra do texto, ver "Resolução de categoria" acima); o
+  usuário troca pelo botão **Trocar categoria** depois de cadastrado (ver
+  "Botões inline"). Texto e voz continuam com o contexto rico (merchants +
+  regras completas) — só a foto foi enxugada.
 * **Legenda inteligente** — se o `caption` casar (case-insensitive) com o nome
   de um cartão/conta ATIVO do usuário (ex.: "Crédito pessoal"), vira
   `originName`/`paymentMethod` de forma determinística em `handlers.ts`
@@ -277,7 +289,12 @@ separado. Mesmo `responseSchema` do texto — `parseTransactionFromVoice`.
 * **Limite** — duração > 60s → recusa e pede texto (antes de baixar).
 * **Fluxo** — igual ao texto livre: register / invest / query. Sem
   `GEMINI_API_KEY` / timeout / áudio inaudível → `buildVoiceUnreadableReply`.
-* Voz com pending aberto **não** é tratada como resposta — pede digitar.
+* **Voz com pending aberto** — **não** é tratada como resposta ao pending
+  (igual antes), mas a mensagem mudou: NÃO cai mais no genérico "não
+  entendi essa nota de voz" (`buildVoiceUnreadableReply`) — o áudio nem
+  chega a ser processado pelo Gemini. Responde honesto,
+  `buildVoicePendingOpenReply()`: "Você tem uma pergunta em aberto. Responda
+  ela primeiro (ou envie \"cancelar\")." (`resultCode: voice_pending_open`).
 * Timeout Gemini da voz: 20s; webhook `maxDuration=30`.
 
 ## Vídeo (não aceito)
@@ -526,6 +543,32 @@ manualmente. Nunca afeta transações criadas pela UI web.
 * Comando de vínculo (`/vincular`/`/start`) roda **antes** da checagem de chat vinculado no webhook — é assim que um `chat_id` novo, ainda não vinculado a esse bot, entra no sistema. Mensagem de um `chat_id` diferente do vinculado (e que não é um comando de vínculo): **rejeitar silenciosamente** (sem responder — não confirma ao remetente que o bot existe).
 * **Legado removido:** o secret único global (`TELEGRAM_WEBHOOK_SECRET`) e a allowlist fixa via env (`TELEGRAM_ALLOWED_CHAT_IDS`) não existem mais — cada usuário tem seu próprio secret/bot no banco.
 * **Logs:** nunca logar corpo da mensagem nem valores monetários — só `chat_id` + resultado (ex.: `chat_id=123 -> transaction_created`, `chat_id=123 -> telegram_linked`).
+
+---
+
+# Confiabilidade
+
+**Dedup por `update_id`** — o Telegram reenvia o MESMO update se não receber
+`200` a tempo (download de foto/voz + Gemini + `createTransaction` rodam
+síncronos abaixo e podem passar do timeout dele). Tabela
+`TelegramProcessedUpdate` (`userId` + `updateId`, `@@unique([userId,
+updateId])` — ver `03-DATABASE.md`) registra cada update processado;
+`modules/telegram/dedup.ts` (`telegramDedupRepository.markProcessed`) roda
+no TOPO do webhook, ANTES de qualquer processamento pesado, tanto pra
+`message` quanto pra `callback_query`. Reenvio detectado → loga
+`chat_id=X -> duplicate_update_skipped` e responde `200` sem reprocessar
+(evita transação duplicada).
+
+**Boundary de erro único** — `app/api/telegram/route.ts`, `POST` envolve TODO
+o dispatch (`dispatchUpdate`) num try/catch final: nenhum caminho (texto,
+foto, voz, documento) pode virar `500` pro Telegram — se virasse, ele
+reenviaria o update e, sem o dedup acima já ter marcado esse `update_id`, a
+falha se repetiria sem chegar a lugar nenhum. No catch, se o `chat_id` for
+conhecido, o bot ainda avisa o usuário (`buildErrorReply`, "Não foi possível
+processar sua mensagem agora."). A resposta ao Telegram é SEMPRE `200`,
+inclusive nesse caminho de erro e na rejeição silenciosa de chat não
+vinculado — os try/catch específicos por caminho (voz, etc.) continuam
+valendo, isto é só a rede de segurança final.
 
 ---
 
