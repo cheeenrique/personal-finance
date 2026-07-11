@@ -62,10 +62,10 @@ async function currentCardInvoicesTotal(userId: string): Promise<Prisma.Decimal>
     .reduce((total, card) => total.plus(card.currentInvoiceTotal), new Prisma.Decimal(0));
 }
 
-/** Σ `Asset.currentValue` do tipo EMERGENCY_FUND — reserva de emergência (docs/03-DATABASE.md, `Asset`). */
-async function emergencyFundTotal(userId: string): Promise<Prisma.Decimal> {
+/** Σ `Asset.currentValue` dos tipos EMERGENCY_FUND + INVESTMENT — reserva de emergência e investimentos (reserva líquida), docs/03-DATABASE.md `Asset`. */
+async function liquidReserveTotal(userId: string): Promise<Prisma.Decimal> {
   const result = await prisma.asset.aggregate({
-    where: { userId, type: AssetType.EMERGENCY_FUND, deletedAt: null },
+    where: { userId, type: { in: [AssetType.EMERGENCY_FUND, AssetType.INVESTMENT] }, deletedAt: null },
     _sum: { currentValue: true },
   });
   return result._sum.currentValue ?? new Prisma.Decimal(0);
@@ -87,7 +87,7 @@ export async function healthScore(userId: string, refDate: Date = new Date()): P
 
   const priorMonths = [1, 2].map((n) => subtractMonths(year, month, n));
 
-  const [monthCashflow, priorCashflows, loanTotal, cardInvoiceTotal, emergencyFund] = await Promise.all([
+  const [monthCashflow, priorCashflows, loanTotal, cardInvoiceTotal, liquidReserve] = await Promise.all([
     reportService.cashflow(userId, monthStart, monthEnd),
     Promise.all(
       priorMonths.map(({ year: priorYear, month: priorMonth }) => {
@@ -97,7 +97,7 @@ export async function healthScore(userId: string, refDate: Date = new Date()): P
     ),
     loanInstallmentsTotal(userId, { start: monthStart, end: monthEnd }, nextMonthStart),
     currentCardInvoicesTotal(userId),
-    emergencyFundTotal(userId),
+    liquidReserveTotal(userId),
   ]);
 
   const income = monthCashflow.income;
@@ -115,10 +115,10 @@ export async function healthScore(userId: string, refDate: Date = new Date()): P
   const savingsRate = income.isZero() ? (monthCashflow.net.isNegative() ? -1 : 0) : monthCashflow.net.dividedBy(income).toNumber();
   const debtBurden = income.isZero() ? (debtTotal.greaterThan(0) ? 1 : 0) : debtTotal.dividedBy(income).toNumber();
   const cushionMonths = avgMonthlyExpense.isZero()
-    ? emergencyFund.greaterThan(0)
+    ? liquidReserve.greaterThan(0)
       ? 6
       : 0
-    : emergencyFund.dividedBy(avgMonthlyExpense).toNumber();
+    : liquidReserve.dividedBy(avgMonthlyExpense).toNumber();
 
   const savingsScore = linearScore(savingsRate, 0, 0.2);
   const debtScore = linearScore(debtBurden, 0.5, 0.1);

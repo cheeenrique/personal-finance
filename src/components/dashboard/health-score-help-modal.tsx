@@ -31,7 +31,7 @@ const METRICS: readonly MetricExplanation[] = [
     title: "Meses de reserva",
     weight: "peso 30%",
     description:
-      "Reserva de emergência ÷ gasto médio mensal dos últimos 3 meses. 0 meses de colchão vale 0 pontos, 6 meses ou mais vale 100 pontos.",
+      "Reserva de emergência e investimentos ÷ gasto médio mensal dos últimos 3 meses. 0 meses de colchão vale 0 pontos, 6 meses ou mais vale 100 pontos.",
   },
 ] as const;
 
