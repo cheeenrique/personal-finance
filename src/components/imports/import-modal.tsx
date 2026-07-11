@@ -16,6 +16,7 @@ import { notifySuccess } from "@/lib/toast";
 import type { ImportTarget, ImportTransactionType } from "@/modules/imports/types";
 import { ACCOUNT_PERIOD_SUMMARY_QUERY_KEY } from "@/components/accounts/use-account-period-summary";
 import { aggregateCommit, isPdfImportFile } from "./import-file-utils";
+import { ImportAnalyzing } from "./import-analyzing";
 import { ImportDropzone } from "./import-dropzone";
 import { STEP_TRANSITION, stepVariants } from "./import-motion";
 import { ImportPreview } from "./import-preview";
@@ -118,7 +119,10 @@ export function ImportModal({ open, onOpenChange, target }: ImportModalProps) {
   const hasReadyFiles = entries.some((entry) => entry.status === "ready");
   const isReadingAny = entries.some((entry) => entry.status === "reading");
   const totalNovos = entries.reduce((sum, entry) => sum + (entry.preview?.novos.length ?? 0), 0);
-  const isAnalyzingPdf = isAnalyzing && entries.some((entry) => entry.status === "ready" && isPdfImportFile(entry.name));
+  const analyzingPdfNames = entries
+    .filter((entry) => entry.status === "ready" && isPdfImportFile(entry.name))
+    .map((entry) => entry.name);
+  const isAnalyzingPdf = isAnalyzing && analyzingPdfNames.length > 0;
 
   const footer = (
     <>
@@ -178,16 +182,19 @@ export function ImportModal({ open, onOpenChange, target }: ImportModalProps) {
 
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={step} variants={stepVariants} initial="enter" animate="center" exit="exit" transition={STEP_TRANSITION}>
-              {step === "select" && (
-                <ImportDropzone
-                  entries={entries}
-                  onAddFiles={addFiles}
-                  onRemoveFile={removeFile}
-                  disabled={isAnalyzing}
-                  allowPassword={target.kind === "card"}
-                  onPasswordChange={setPassword}
-                />
-              )}
+              {step === "select" &&
+                (isAnalyzingPdf ? (
+                  <ImportAnalyzing target={target} fileNames={analyzingPdfNames} />
+                ) : (
+                  <ImportDropzone
+                    entries={entries}
+                    onAddFiles={addFiles}
+                    onRemoveFile={removeFile}
+                    disabled={isAnalyzing}
+                    allowPassword={target.kind === "card"}
+                    onPasswordChange={setPassword}
+                  />
+                ))}
               {step === "preview" && (
                 <ImportPreview
                   entries={entries}
@@ -198,13 +205,6 @@ export function ImportModal({ open, onOpenChange, target }: ImportModalProps) {
               {step === "result" && <ImportResult entries={entries} />}
             </motion.div>
           </AnimatePresence>
-
-          {isAnalyzingPdf && (
-            <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-              {copy.extractingLabel}
-            </p>
-          )}
         </div>
       </MotionConfig>
     </FormModal>
