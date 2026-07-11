@@ -110,8 +110,8 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
             <Button
               type="button"
               variant="accent"
-              size="sm"
-              className="gap-1.5"
+              size="lg"
+              className="gap-2"
               onClick={() => openTransactionModal(TransactionType.EXPENSE, card.id)}
             >
               <Plus className="size-4" aria-hidden="true" />

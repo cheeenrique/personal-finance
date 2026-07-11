@@ -15,7 +15,7 @@ export function CardImportButton({ cardId }: CardImportButtonProps) {
 
   return (
     <>
-      <Button type="button" variant="accent" size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
+      <Button type="button" variant="accent" size="lg" className="gap-2" onClick={() => setOpen(true)}>
         <UploadCloud className="size-4" aria-hidden="true" />
         Importar fatura
       </Button>
