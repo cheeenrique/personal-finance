@@ -50,6 +50,10 @@ export function FinancingImportButton({ onParsed, disabled }: FinancingImportBut
       setImporting(false);
       // Remonta o <input type="file"> — permite reimportar o MESMO arquivo.
       setInputKey((key) => key + 1);
+      // Zera senha/toggle após cada tentativa — senão um próximo arquivo (diferente)
+      // reenviaria a senha stale do anterior (isolamento por arquivo, igual ao dropzone).
+      setHasPassword(false);
+      setPassword("");
     }
   }
 

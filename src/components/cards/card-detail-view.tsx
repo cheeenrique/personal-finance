@@ -100,7 +100,7 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
       </div>
 
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="inline-flex items-center gap-2 text-base font-extrabold text-foreground">
             <ShoppingBag className="size-[17px] text-muted-foreground" aria-hidden="true" />
             Compras da fatura atual
