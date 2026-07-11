@@ -22,6 +22,7 @@ import {
 } from "./resolve";
 import { executeTelegramQuery, resolvePeriodRange } from "./query";
 import { handleInvestContribution } from "./invest";
+import { answerQuestion } from "./ask";
 import {
   buildBalanceReply,
   buildDocumentUnreadableReply,
@@ -135,10 +136,13 @@ async function buildAiContext(userId: string) {
  *
  * `intent="query"` (docs/30-TELEGRAM.md, "Consulta por IA") desvia pro
  * executor de consulta (`query.ts`) ANTES de qualquer coisa do fluxo de
- * lançamento — nunca abre pending, nunca vira `create_transaction`. `intent`
- * ausente (resposta antiga/sem classificação) cai no default de sempre
- * (`isTransaction` decide register vs. unknown), zero regressão pro
- * comportamento pré-existente.
+ * lançamento — nunca abre pending, nunca vira `create_transaction`.
+ * `intent="ask"` (pergunta analítica ABERTA que nenhum `queryType` fechado
+ * cobre — "por que gastei mais em maio", "quanto posso guardar") desvia pro
+ * `ask.ts` `answerQuestion`, que responde em texto livre ANCORADO em números
+ * reais (nunca invents valor). `intent` ausente (resposta antiga/sem
+ * classificação) cai no default de sempre (`isTransaction` decide register
+ * vs. unknown), zero regressão pro comportamento pré-existente.
  */
 async function handleFreeformEntry(
   userId: string,
@@ -168,6 +172,11 @@ async function handleFreeformEntry(
   if (intent === "invest") {
     if (!ai.invest) return { text: buildUnknownReply(), resultCode: "unknown_message" };
     return handleInvestContribution(userId, ai.invest);
+  }
+
+  if (intent === "ask") {
+    const text = await answerQuestion(userId, rawText);
+    return { text, resultCode: "ask_answered" };
   }
 
   if (!ai.isTransaction) {
@@ -380,6 +389,15 @@ export async function handleVoiceEntry(
   if (intent === "invest") {
     if (!ai.invest) return { text: buildUnknownReply(), resultCode: "unknown_message" };
     return handleInvestContribution(userId, ai.invest);
+  }
+
+  // `ai.description` é a única fonte de texto da pergunta transcrita a
+  // partir do áudio (voz não tem "rawText" como o caminho de texto,
+  // `handleFreeformEntry` acima — ver instrução de prompt em `ai-parser.ts`,
+  // `INTENT_CLASSIFICATION`).
+  if (intent === "ask") {
+    const text = await answerQuestion(userId, ai.description);
+    return { text, resultCode: "ask_answered" };
   }
 
   if (!ai.isTransaction) {

@@ -175,8 +175,7 @@ function parseFinancingResponse(rawJson: unknown): ParsedFinancing | null {
  * o MESMO role usado pra fatura de cartão (`card-invoice-parser.ts`) — thinking/reasoning
  * OFF por padrão vale pra TODO documento, contrato incluso (decisão explícita do dono:
  * ligar reasoning só por medição concreta, nunca por suposição de que um documento
- * "parece complexo" — ver nota condicional no final do arquivo/plano, T13, sobre trocar
- * pra `role: "document-text-reasoning"` SE os testes reais mostrarem confusão de campo).
+ * "parece complexo").
  * PDF escaneado (sem text layer) ou foto direta (mimeType não-PDF) usa
  * `role: "document-vision"` (qwen) — mesmo caminho de `card-invoice-parser.ts`.
  *

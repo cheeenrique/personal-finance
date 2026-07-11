@@ -62,17 +62,20 @@ export type TelegramPaymentMethod = "credit" | "debit" | "pix" | "transfer" | "c
 /**
  * Intenção classificada pela IA pra mensagem de texto livre (docs/30-TELEGRAM.md,
  * "Consulta por IA"): "register" (lançamento, fluxo já existente), "query"
- * (pergunta sobre as finanças do usuário — ver `TelegramQueryParsed`) ou
- * "unknown" (nem um nem outro). A extração por IMAGEM nunca classifica intent
- * (foto continua só register) — `AiParsedTransaction.intent` vem `undefined`
- * nesse caminho; `handlers.ts` cai no default `isTransaction ? "register" :
+ * (pergunta ESTRUTURADA sobre as finanças do usuário — ver `TelegramQueryParsed`,
+ * `queryType`s fechados como "spent"/"balance"/"top_categories"), "ask" (pergunta
+ * ANALÍTICA aberta que nenhum `queryType` fechado cobre — "por que gastei mais
+ * em maio", "quanto posso guardar", ver `ask.ts` `answerQuestion`) ou "unknown"
+ * (nem um nem outro). A extração por IMAGEM nunca classifica intent (foto
+ * continua só register) — `AiParsedTransaction.intent` vem `undefined` nesse
+ * caminho; `handlers.ts` cai no default `isTransaction ? "register" :
  * "unknown"` quando ausente.
  */
 /**
  * "invest" = aporte em produto cadastrado em `/investments` (docs/28-INVESTMENTS.md
  * + docs/30-TELEGRAM.md) — não é lançamento genérico nem consulta.
  */
-export type TelegramIntent = "register" | "query" | "invest" | "unknown";
+export type TelegramIntent = "register" | "query" | "ask" | "invest" | "unknown";
 
 /** Tipo de pergunta reconhecido pela IA (docs/30-TELEGRAM.md, "Consulta por IA") — mapeado 1:1 pro executor (`query.ts`, `executeTelegramQuery`). */
 export type TelegramQueryType =

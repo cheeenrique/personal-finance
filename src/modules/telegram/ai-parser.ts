@@ -53,7 +53,7 @@ const RESPONSE_SCHEMA = {
     // a extração de imagem (`buildImagePrompt`) nunca as menciona, então o
     // modelo tende a omiti-las nesse caminho (nenhuma delas é `required`
     // abaixo, de propósito — zero regressão no caminho de foto/register).
-    intent: { type: "STRING", enum: ["register", "query", "invest", "unknown"], nullable: true },
+    intent: { type: "STRING", enum: ["register", "query", "ask", "invest", "unknown"], nullable: true },
     query: {
       type: "OBJECT",
       nullable: true,
@@ -105,7 +105,7 @@ const aiResponseSchema = z.object({
   paymentMethod: z.enum(["credit", "debit", "pix", "transfer", "cash"]).nullable().optional(),
   originKind: z.enum(["account", "card"]).nullable().optional(),
   originName: z.string().nullable().optional(),
-  intent: z.enum(["register", "query", "invest", "unknown"]).nullable().optional(),
+  intent: z.enum(["register", "query", "ask", "invest", "unknown"]).nullable().optional(),
   query: queryResponseSchema.nullable().optional(),
   invest: investResponseSchema.nullable().optional(),
 });
@@ -269,12 +269,14 @@ const INTENT_CLASSIFICATION = [
   "PRIMEIRO classifique o conteúdo em um `intent`:",
   '- "register": o usuário quer REGISTRAR um lançamento novo (gasto ou receita) — ex.: "mercado 120", "recebi 500 de freela". NÃO use register para aporte em investimento (cofrinho/CDB).',
   '- "invest": o usuário quer APORTAR / investir dinheiro num produto cadastrado — ex.: "investi 100 no Cofrinho Nubank", "aportei 200 no CDB", "coloquei 50 no cofrinho".',
-  '- "query": o usuário está PERGUNTANDO sobre as finanças dele, sem querer registrar nada novo — ex.: "quanto gastei esse mês", "qual meu saldo", "quais meus investimentos", "fatura do Nubank", "quanto falta pagar".',
+  '- "query": o usuário está PERGUNTANDO sobre as finanças dele com uma pergunta ESTRUTURADA/ESPECÍFICA que bate 1:1 com um dos `queryType`s fechados abaixo ("Regras de pergunta") — ex.: "quanto gastei esse mês", "qual meu saldo", "quais meus investimentos", "fatura do Nubank", "quanto falta pagar", "quais minhas top categorias".',
+  '- "ask": o usuário está fazendo uma pergunta ANALÍTICA/ABERTA sobre as finanças dele que NENHUM `queryType` fechado de "query" cobre — geralmente envolve "por quê", comparação, causa, previsão ou recomendação — ex.: "por que gastei mais em maio", "quanto posso guardar esse mês", "minhas finanças estão indo bem?", "dá pra economizar em quê". Use "ask" só quando a pergunta não reduz a um `queryType` fechado; se reduzir, prefira "query" (mais preciso e determinístico).',
   '- "unknown": nem lançamento, nem aporte, nem pergunta reconhecível (saudação, ruído/áudio inaudível, mensagem aleatória, pergunta fora de escopo financeiro).',
   "",
   'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null e invest=null.',
   'Se intent="invest": preencha isTransaction=false, description curto, invest={amount, investmentName, accountName}, query=null.',
   'Se intent="query": preencha isTransaction=false, description com qualquer texto curto (não é usado), e preencha o objeto `query` seguindo as "Regras de pergunta" abaixo. Deixe invest=null.',
+  'Se intent="ask": preencha isTransaction=false, description com a PERGUNTA transcrita na íntegra (fonte de texto do áudio pro `ask.ts` responder — texto digitado já usa a mensagem original bruta em vez de description, mas voz não tem outra fonte), e deixe query=null e invest=null (a pergunta em si é respondida fora deste parser, ver `ask.ts`).',
   'Se intent="unknown": preencha isTransaction=false e deixe query=null e invest=null.',
 ];
 
