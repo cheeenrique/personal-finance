@@ -56,7 +56,7 @@ export function ImportPreviewPanel({ entry, categoryOptionsByType, onCategoryCha
           variants={listContainerVariants(0.05)}
           initial="hidden"
           animate="visible"
-          className="flex max-h-64 flex-col overflow-y-auto rounded-lg border border-border"
+          className="flex flex-col rounded-lg border border-border"
         >
           {novos.map((item, index) => {
             const options = categoryOptionsByType[item.type];
@@ -90,7 +90,7 @@ export function ImportPreviewPanel({ entry, categoryOptionsByType, onCategoryCha
                   />
                   <span
                     className={cn(
-                      "font-mono font-semibold",
+                      "w-28 shrink-0 text-right font-mono font-semibold tabular-nums",
                       item.type === TransactionType.INCOME ? "text-on-success" : "text-on-danger",
                     )}
                   >
