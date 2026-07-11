@@ -55,7 +55,13 @@ function buildMessages(input: ExtractionInput, prompt: string, schema: JsonSchem
   ];
 }
 
-function buildExtraBody(config: AiModelConfig): Record<string, unknown> | undefined {
+/**
+ * Params específicos do modelo (`chat_template_kwargs` pro deepseek, `reasoning_budget`
+ * pro nemotron) — vão no TOPO do body. NIM (REST) NÃO aceita `extra_body` (isso é
+ * conceito do SDK Python da OpenAI, que MESCLA o `extra_body` no corpo antes de enviar);
+ * mandar `extra_body` literal retorna `400 Unsupported parameter(s): extra_body`.
+ */
+function buildModelParams(config: AiModelConfig): Record<string, unknown> | undefined {
   if (config.params?.thinking !== undefined) {
     return { chat_template_kwargs: { thinking: config.params.thinking } };
   }
@@ -104,8 +110,8 @@ export class NvidiaNimExtractor implements StructuredExtractor {
         max_tokens: MAX_TOKENS,
         stream: false,
       };
-      const extraBody = buildExtraBody(model);
-      if (extraBody) body.extra_body = extraBody;
+      const modelParams = buildModelParams(model);
+      if (modelParams) Object.assign(body, modelParams);
       if (model.params?.temperature !== undefined) body.temperature = model.params.temperature;
       if (model.params?.topP !== undefined) body.top_p = model.params.topP;
 

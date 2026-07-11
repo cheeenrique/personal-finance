@@ -69,7 +69,9 @@ describe("NvidiaNimExtractor", () => {
     const body = JSON.parse(init.body as string);
     expect(body.model).toBe("deepseek-ai/deepseek-v4-pro");
     expect(body.stream).toBe(false);
-    expect(body.extra_body).toEqual({ chat_template_kwargs: { thinking: false } });
+    // params do modelo vão no TOPO do body (NIM rejeita `extra_body` literal), não aninhados.
+    expect(body.extra_body).toBeUndefined();
+    expect(body.chat_template_kwargs).toEqual({ thinking: false });
     expect(body.messages[0].content).toContain("PROMPT AQUI");
     expect(body.messages[0].content).toContain("TEXTO DO DOCUMENTO");
     expect(init.headers.Authorization).toBe("Bearer test-key");

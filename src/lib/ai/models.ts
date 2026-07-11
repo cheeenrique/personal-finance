@@ -20,7 +20,9 @@ import type { AiModelConfig, AiRole } from "./types";
 const REGISTRY: Record<AiRole, AiModelConfig> = {
   "document-text": {
     provider: "nvidia",
-    model: "deepseek-ai/deepseek-v4-pro",
+    // deepseek-v4-flash (não -pro): o -pro no free tier NIM enfileira/estoura o timeout
+    // na extração de documento real; o -flash extrai a mesma fatura em ~8s (spike medido).
+    model: "deepseek-ai/deepseek-v4-flash",
     modality: "text",
     params: { thinking: false },
     fallback: "gemini",
