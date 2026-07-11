@@ -9,6 +9,9 @@ import { assetService } from "@/modules/assets/service";
 import { cardService } from "@/modules/cards/service";
 import { loanService } from "@/modules/loans/service";
 import { reportService } from "@/modules/reports/service";
+import { projectionService } from "@/modules/projections/service";
+import { insightsService } from "@/modules/insights/service";
+import { goalService } from "@/modules/goals/service";
 import { nowInSaoPaulo } from "@/lib/date/timezone";
 import { parseFlexibleDate } from "@/lib/date/schema";
 import { PERIOD_OPTIONS, type PeriodPreset } from "@/components/transactions/period-presets";
@@ -26,6 +29,11 @@ import { LoansSummary } from "@/components/dashboard/loans-summary";
 import { ExpenseCategoryChart } from "@/components/dashboard/expense-category-chart";
 import { MonthlyEvolutionChart } from "@/components/dashboard/monthly-evolution-chart";
 import { RecentTransactionsTable } from "@/components/dashboard/recent-transactions-table";
+import { HealthScoreCard } from "@/components/dashboard/health-score-card";
+import { MonthlyNarrativeCard } from "@/components/dashboard/monthly-narrative-card";
+import { CashflowProjectionChart } from "@/components/dashboard/cashflow-projection-chart";
+import { CategoryTrendsCard } from "@/components/dashboard/category-trends-card";
+import { GoalsSummary } from "@/components/dashboard/goals-summary";
 
 const RECENT_TRANSACTIONS_LIMIT = 5;
 const DEFAULT_PERIOD: PeriodPreset = "this_month";
@@ -86,6 +94,13 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
   const parsedDateTo = parseFlexibleDate(dateTo);
   const { year } = deriveYearMonth(dateTo);
 
+  // "Hoje" em America/Sao_Paulo — usado tanto pra fatiar a evolução mensal
+  // (abaixo) quanto pro mês-alvo da narrativa mensal (sempre o mês CORRENTE,
+  // independente do filtro de período do Dashboard).
+  const nowMonth = nowInSaoPaulo();
+  const currentYear = nowMonth.getFullYear();
+  const currentMonth = nowMonth.getMonth() + 1;
+
   const [
     insufficientBalanceReport,
     totalBalance,
@@ -100,6 +115,11 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     expenseByCardTree,
     monthlyCashflow,
     recentTransactions,
+    cashflowProjection,
+    healthScoreResult,
+    categoryTrendsResult,
+    monthlyNarrativeResult,
+    goalsWithProgress,
   ] = await Promise.all([
     accountService.getInsufficientBalanceReport(userId),
     accountService.totalBalance(userId),
@@ -129,6 +149,17 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     // tela mostrando dois números pro mesmo mês confundia (parecia bug).
     reportService.cashflowByMonth(userId, year),
     transactionService.listRecentForDashboard(userId, RECENT_TRANSACTIONS_LIMIT),
+    // "Projeção de saldo (30 dias)" — já retorna number puro (sem Decimal).
+    projectionService.forecast(userId, 30),
+    // "Saúde financeira" — score 0-100 + breakdown, sempre do mês corrente.
+    insightsService.healthScore(userId),
+    // "Tendências" — categorias com gasto subindo vs. média móvel.
+    insightsService.categoryTrends(userId),
+    // "Resumo do mês" via IA — mês CORRENTE (`currentYear`/`currentMonth`),
+    // não o mês do filtro de período selecionado.
+    insightsService.monthlyNarrative(userId, currentYear, currentMonth),
+    // "Metas" — progresso derivado (saldo de conta/ativo vinculado ou valor manual).
+    goalService.listWithProgress(userId),
   ]);
 
   const kpiData: KPIGridData = {
@@ -155,8 +186,7 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
   // período "Este ano" olhando pra trás não existe hoje, mas `cashflowByMonth`
   // é sempre o ano do período, que pode divergir do ano corrente em casos de borda
   // como "Mês passado" em janeiro) mostram os 12 meses cheios — mesmo tratamento
-  // de `/reports` (`cashflowPoints`).
-  const nowMonth = nowInSaoPaulo();
+  // de `/reports` (`cashflowPoints`). `nowMonth` já calculado acima (currentYear/currentMonth).
   const monthlyEvolutionPoints =
     year === nowMonth.getFullYear() ? monthlyCashflow.slice(0, nowMonth.getMonth() + 1) : monthlyCashflow;
 
@@ -176,12 +206,15 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
 
       <AlertsSection alerts={activeAlerts} />
 
+      <MonthlyNarrativeCard narrative={monthlyNarrativeResult} />
+
       <KPIGrid data={kpiData} period={period} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <CardsSummary cards={cards} />
         <InstallmentsSummary purchases={installmentPurchases} />
         <LoansSummary loans={activeLoans} />
+        <HealthScoreCard healthScore={healthScoreResult} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -208,6 +241,13 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
         <MonthlyEvolutionChart points={monthlyEvolutionPoints} />
       </div>
 
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <CashflowProjectionChart projection={cashflowProjection} />
+        <CategoryTrendsCard rising={categoryTrendsResult.rising} />
+      </div>
+
+      <GoalsSummary goals={goalsWithProgress} />
+
       <RecentTransactionsTable
         transactions={recentTransactions.map((transaction) => ({
           ...transaction,
@@ -229,6 +269,8 @@ function DashboardSkeleton() {
 
       <Skeleton className="h-48 w-full rounded-xl" />
 
+      <Skeleton className="h-28 w-full rounded-xl" />
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, index) => (
           <Skeleton key={index} className="h-40 w-full rounded-xl" />
@@ -239,12 +281,20 @@ function DashboardSkeleton() {
         <Skeleton className="h-56 w-full rounded-xl" />
         <Skeleton className="h-56 w-full rounded-xl" />
         <Skeleton className="h-56 w-full rounded-xl" />
+        <Skeleton className="h-56 w-full rounded-xl" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Skeleton className="h-72 w-full rounded-xl" />
         <Skeleton className="h-72 w-full rounded-xl" />
       </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Skeleton className="h-72 w-full rounded-xl" />
+        <Skeleton className="h-56 w-full rounded-xl" />
+      </div>
+
+      <Skeleton className="h-56 w-full rounded-xl" />
 
       <Skeleton className="h-72 w-full rounded-xl" />
     </div>
