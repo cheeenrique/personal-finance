@@ -16,6 +16,8 @@
  * conteúdo de `contents` (texto do usuário/bytes de imagem/documento) nem a
  * API key.
  */
+import type { AiModelConfig, ExtractionInput, ExtractOpts, JsonSchema, StructuredExtractor } from "./types";
+
 // gemini-3.1-flash-lite: mais rápido e barato que 2.5-flash pras nossas tarefas
 // (extração de PDF/parse estruturado, não raciocínio), free tier bem mais folgado
 // (500 req/dia vs 20 do 2.5-flash, que vivia estourando a cota). 2.5-flash-lite
@@ -94,8 +96,6 @@ export async function callGemini<T>(
   }
 }
 
-import type { AiModelConfig, ExtractionInput, ExtractOpts, JsonSchema, StructuredExtractor } from "./types";
-
 /**
  * `GeminiExtractor` — adapter de FALLBACK (instrução do dono: "não desabilite o Gemini,
  * deixe como fallback") embrulhando o `callGemini` acima. `document-text`/`document-vision`
@@ -146,11 +146,23 @@ export class GeminiExtractor implements StructuredExtractor {
     _model: AiModelConfig,
     opts?: ExtractOpts,
   ): Promise<T | null> {
-    const parts: GeminiContentPart[] =
-      input.kind === "text"
-        ? [{ text: `${prompt}\n\n${input.text}` }]
-        : [{ inlineData: { mimeType: input.mimeType, data: input.bytes.toString("base64") } }, { text: prompt }];
+    try {
+      const parts: GeminiContentPart[] =
+        input.kind === "text"
+          ? [{ text: `${prompt}\n\n${input.text}` }]
+          : [{ inlineData: { mimeType: input.mimeType, data: input.bytes.toString("base64") } }, { text: prompt }];
 
-    return callGemini([{ parts }], "lib-ai-extract", toGeminiSchema(schema), parse, opts?.timeoutMs);
+      return await callGemini([{ parts }], "lib-ai-extract", toGeminiSchema(schema), parse, opts?.timeoutMs);
+    } catch (error) {
+      // Mesma disciplina erro→null do `callGemini` (LSP, `StructuredExtractor.extract` NUNCA
+      // lança — ver types.ts). Cobre falha SÍNCRONA de `toGeminiSchema`/`convertSchemaNode`
+      // (ex.: schema malformado com `type` não-string, já que `JsonSchema` não tem validação
+      // de runtime) que aconteceria FORA do try/catch do `callGemini`. NUNCA loga
+      // schema/input, só a razão do erro.
+      console.error("[lib/ai/gemini] lib-ai-extract failed", {
+        reason: error instanceof Error ? error.name : "unknown",
+      });
+      return null;
+    }
   }
 }
