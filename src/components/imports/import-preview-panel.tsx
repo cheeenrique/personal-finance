@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { Plus } from "lucide-react";
 
 import { TransactionType } from "@/generated/prisma/enums";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
@@ -8,6 +9,7 @@ import type { ImportTransactionType } from "@/modules/imports/types";
 import { formatDateSaoPaulo } from "@/lib/date/format";
 import { formatBRL } from "@/lib/money/format";
 import { cn } from "@/lib/utils";
+import { categoryNameFromOverride, isCreateCategoryOverride } from "./import-file-utils";
 import { listContainerVariants, listItemVariants } from "./import-motion";
 import type { ImportFileEntry } from "./import-types";
 
@@ -62,6 +64,22 @@ export function ImportPreviewPanel({ entry, categoryOptionsByType, onCategoryCha
             const options = categoryOptionsByType[item.type];
             const selected = entry.categoryOverrides[index] ?? NO_CATEGORY_VALUE;
 
+            // Sugestão da IA sem categoria real equivalente (`use-import-files.ts` `analyze()`)
+            // vem pré-selecionada como este sentinela — injeta "Criar: <nome>" no topo do select
+            // (docs/06-SCREENS.md, "EntitySelect": `onCreate` cria a partir da busca; aqui a opção
+            // já nasce pronta, sem o usuário precisar digitar o nome de novo).
+            const createOption: EntitySelectOption | null =
+              selected !== NO_CATEGORY_VALUE && isCreateCategoryOverride(selected)
+                ? {
+                    value: selected,
+                    label: `Criar: ${categoryNameFromOverride(selected)}`,
+                    icon: <Plus className="size-3.5 text-primary" aria-hidden="true" />,
+                  }
+                : null;
+            const selectOptions = createOption
+              ? [createOption, { value: NO_CATEGORY_VALUE, label: "Sem categoria" }, ...options]
+              : [{ value: NO_CATEGORY_VALUE, label: "Sem categoria" }, ...options];
+
             return (
               <motion.li
                 key={index}
@@ -72,8 +90,10 @@ export function ImportPreviewPanel({ entry, categoryOptionsByType, onCategoryCha
                   <p className="truncate font-semibold text-foreground">{item.description}</p>
                   <p className="text-xs text-muted-foreground">
                     {formatDateSaoPaulo(item.date)}
-                    {/* Sugestão do histórico sem categoria correspondente pré-selecionada (nome não bateu com nenhuma
-                        categoria atual do usuário) — mostra o nome sugerido mesmo assim, pro usuário decidir. */}
+                    {/* Sugestão sem categoria real equivalente já nasce pré-selecionada como
+                        "Criar: <nome>" (ver `createOption` acima) — este texto só aparece se o
+                        usuário voltar manualmente pra "Sem categoria", lembrando que a sugestão
+                        continua disponível no select. */}
                     {item.categoryName && selected === NO_CATEGORY_VALUE && ` · sugestão: ${item.categoryName}`}
                   </p>
                 </div>
@@ -81,7 +101,7 @@ export function ImportPreviewPanel({ entry, categoryOptionsByType, onCategoryCha
                   <EntitySelect
                     aria-label={`Categoria de ${item.description}`}
                     className="h-8 w-40 text-xs"
-                    options={[{ value: NO_CATEGORY_VALUE, label: "Sem categoria" }, ...options]}
+                    options={selectOptions}
                     value={selected}
                     onValueChange={(value) =>
                       onCategoryChange(entry.id, index, value === NO_CATEGORY_VALUE ? null : value)

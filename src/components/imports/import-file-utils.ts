@@ -1,4 +1,5 @@
-import { TransactionType } from "@/generated/prisma/enums";
+import { CategoryType, TransactionType } from "@/generated/prisma/enums";
+import { normalizeWord } from "@/modules/telegram/normalize";
 import type { ImportPreviewItem, ParsedTransaction } from "@/modules/imports/types";
 import type { ImportFileEntry } from "./import-types";
 
@@ -121,6 +122,86 @@ export function applyCategoryOverrides(
   return parsed.map((item, index) =>
     overrideByParsedIndex.has(index) ? { ...item, categoryId: overrideByParsedIndex.get(index) } : item,
   );
+}
+
+/**
+ * Sentinela pro override "criar categoria nova" — `categoryOverrides[i]` (Refino "Criar
+ * categoria no import") guarda um id real de categoria, `null` ("Sem categoria") ou este
+ * sentinela + o nome sugerido pela IA quando o usuário ainda não tem uma categoria equivalente
+ * (`use-import-files.ts` `analyze()`). Prefixo nunca colide com um `cuid` real do Prisma.
+ */
+const CREATE_CATEGORY_PREFIX = "__create__:";
+
+export function createCategoryOverrideValue(name: string): string {
+  return `${CREATE_CATEGORY_PREFIX}${name}`;
+}
+
+export function isCreateCategoryOverride(value: string): boolean {
+  return value.startsWith(CREATE_CATEGORY_PREFIX);
+}
+
+export function categoryNameFromOverride(value: string): string {
+  return value.slice(CREATE_CATEGORY_PREFIX.length);
+}
+
+/** Tipo de categoria (`CategoryType`) equivalente ao tipo do lançamento (`ImportTransactionType`) — mesmos valores string ("INCOME"/"EXPENSE"), só troca o tipo TS pro que `createCategoryAction` espera. */
+function toCategoryType(type: TransactionType): CategoryType {
+  return type === TransactionType.INCOME ? CategoryType.INCOME : CategoryType.EXPENSE;
+}
+
+/** Chave de dedup pra "categorias a criar" — nome normalizado (case/acento-insensível, mesma regra de `matchCategoryByName` em `modules/imports/service.ts`) + tipo, porque o mesmo nome pode existir em Receita E Despesa (ex.: "Reembolso"). */
+function buildCreateCategoryKey(name: string, type: CategoryType): string {
+  return `${normalizeWord(name)}:${type}`;
+}
+
+/**
+ * Junta as sugestões "Criar: <nome>" (sentinela `CREATE_CATEGORY_PREFIX`) de TODOS os itens de
+ * TODOS os arquivos já analisados, dedup por nome+tipo — se 3 itens (mesmo em arquivos
+ * diferentes) pedem "Alimentação" (Despesa), só 1 categoria é criada (`use-import-files.ts`
+ * `confirm()` chama `createCategoryAction` uma vez por entrada deste mapa).
+ */
+export function collectCategoriesToCreate(
+  entries: ImportFileEntry[],
+): Map<string, { name: string; type: CategoryType }> {
+  const toCreate = new Map<string, { name: string; type: CategoryType }>();
+
+  for (const entry of entries) {
+    if (!entry.preview) continue;
+    entry.categoryOverrides.forEach((override, index) => {
+      if (!override || !isCreateCategoryOverride(override)) return;
+      const itemType = entry.preview!.novos[index]?.type;
+      if (!itemType) return;
+
+      const name = categoryNameFromOverride(override);
+      const type = toCategoryType(itemType);
+      const key = buildCreateCategoryKey(name, type);
+      if (!toCreate.has(key)) toCreate.set(key, { name, type });
+    });
+  }
+
+  return toCreate;
+}
+
+/**
+ * Resolve os overrides "Criar: <nome>" de UM arquivo pro `categoryId` recém-criado
+ * (`createdIdByKey`, vindo de `collectCategoriesToCreate` + `createCategoryAction`,
+ * `use-import-files.ts` `confirm()`) — chamado logo antes do commit. Categoria que falhou ao
+ * criar (erro-como-dado, sem entrada no mapa) cai em `null`: o item nasce "Sem categoria" em
+ * vez de derrubar a importação inteira por causa de 1 categoria.
+ */
+export function resolveCreateOverrides(
+  entry: ImportFileEntry,
+  createdIdByKey: Map<string, string>,
+): (string | null)[] {
+  return entry.categoryOverrides.map((override, index) => {
+    if (!override || !isCreateCategoryOverride(override)) return override ?? null;
+    const itemType = entry.preview?.novos[index]?.type;
+    if (!itemType) return null;
+
+    const name = categoryNameFromOverride(override);
+    const key = buildCreateCategoryKey(name, toCategoryType(itemType));
+    return createdIdByKey.get(key) ?? null;
+  });
 }
 
 export function formatFileSize(bytes: number): string {
