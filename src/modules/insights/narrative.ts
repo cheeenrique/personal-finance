@@ -133,25 +133,57 @@ async function buildNarrative(userId: string, year: number, month: number): Prom
 }
 
 /**
- * Cache em `Map` module-level pra mês FECHADO (imutável — mesma leitura vale
- * pra sempre) — sem `unstable_cache` do Next porque nenhum outro módulo do
- * projeto usa (grep vazio); mês corrente NUNCA cacheia (dado muda a cada
- * transação nova). Só cacheia resultado de SUCESSO: falha transitória da IA
- * (`null`) fica fora do cache, permitindo retry numa chamada futura.
+ * Janela de frescor do mês CORRENTE — resumo de alto nível, não número
+ * ao vivo: uma transação nova não precisa aparecer instantaneamente na
+ * narrativa (dashboard já mostra os números exatos nos KPIs/gráficos ao
+ * lado). 8h cobre múltiplas cargas do dashboard no mesmo dia sem chamar a
+ * IA a cada request, mas ainda renova pelo menos 1x/dia útil.
  */
-const narrativeCache = new Map<string, MonthlyNarrative>();
+const CURRENT_MONTH_NARRATIVE_TTL_MS = 8 * 60 * 60 * 1000;
+
+/**
+ * `expiresAt: null` = nunca expira (mês fechado, imutável). `expiresAt:
+ * number` = timestamp epoch (ms) até quando o valor do mês corrente vale.
+ */
+type NarrativeCacheEntry = { value: NonNullable<MonthlyNarrative>; expiresAt: number | null };
+
+/**
+ * Cache em `Map` module-level — mês FECHADO (imutável) cacheia pra sempre
+ * (`expiresAt: null`); mês CORRENTE cacheia com TTL curto
+ * (`CURRENT_MONTH_NARRATIVE_TTL_MS`) pra não chamar a IA em toda carga do
+ * dashboard. `unstable_cache` do Next foi avaliado e descartado aqui: ele
+ * cacheia QUALQUER retorno da função (inclusive `null` de falha transitória
+ * da IA) sem um jeito de "não cachear" de dentro do próprio fetcher, e a
+ * única invalidação sob demanda (`revalidateTag`) só funciona em Server
+ * Action/Route Handler — esta função é chamada direto de um Server Component
+ * (`DashboardContent` em `app/(app)/dashboard/page.tsx`), sem acesso a
+ * `revalidateTag` pra bustar um `null` recém-gravado. `Map` module-level com
+ * TTL evita o problema de raiz: só grava em cache resultado != null.
+ * Trade-off aceito: por ser per-instância (não sobrevive a cold start /
+ * troca de instância na Vercel), o pior caso é uma chamada extra de IA após
+ * deploy/cold start — não uma chamada a cada render como antes.
+ */
+const narrativeCache = new Map<string, NarrativeCacheEntry>();
+
+function isFreshCacheEntry(entry: NarrativeCacheEntry): boolean {
+  return entry.expiresAt === null || Date.now() < entry.expiresAt;
+}
 
 export async function monthlyNarrative(userId: string, year: number, month: number): Promise<MonthlyNarrative> {
   const closed = isClosedMonth(year, month);
   const cacheKey = `${userId}:${year}:${month}`;
 
-  if (closed) {
-    const cached = narrativeCache.get(cacheKey);
-    if (cached !== undefined) return cached;
-  }
+  const cached = narrativeCache.get(cacheKey);
+  if (cached && isFreshCacheEntry(cached)) return cached.value;
 
   const result = await buildNarrative(userId, year, month);
 
-  if (closed && result !== null) narrativeCache.set(cacheKey, result);
+  if (result !== null) {
+    narrativeCache.set(cacheKey, {
+      value: result,
+      expiresAt: closed ? null : Date.now() + CURRENT_MONTH_NARRATIVE_TTL_MS,
+    });
+  }
+
   return result;
 }
