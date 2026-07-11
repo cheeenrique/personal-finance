@@ -211,10 +211,15 @@ livre passa por IA.
 O bot também aceita **foto** de nota fiscal, comprovante (Pix/transferência),
 notificação push do banco/cartão **ou tela de detalhe da compra no app do
 cartão** (ex.: Nubank — logo do estabelecimento, valor grande `R$ …`, data por
-extenso, "Compra à vista", "Dado original", "Cartão virtual …. XXXX"). Extração
-via Gemini **vision** (mesmo modelo, `gemini-2.5-flash`, mesmo endpoint
-`generateContent`, mesmo `responseSchema`), `modules/telegram/ai-parser.ts`,
-`parseTransactionFromImage`.
+extenso, "Compra à vista", "Dado original", "Cartão virtual …. XXXX"). A imagem
+pode conter **1 OU VÁRIOS lançamentos** — ex.: print de UMA notificação de
+compra (1 lançamento) ou print com VÁRIAS notificações/comprovantes
+empilhados na mesma tela (N lançamentos). Extração via camada de IA
+(`@/lib/ai/extract`, `role: "document-vision"` — NVIDIA `nemotron-nano-12b-v2-vl`,
+fallback Gemini automático quando o primário esgota, ver `models.ts`),
+`modules/telegram/ai-parser.ts`, `parseTransactionFromImage` — sempre devolve
+um **array** (`AiParsedTransaction[]`, `[]` quando não há nenhum lançamento
+legível).
 
 * **Detecção** — `message.photo` do Telegram é um array de `PhotoSize`
   (thumb→full, ordem não garantida); `modules/telegram/photo.ts`,
@@ -228,39 +233,59 @@ via Gemini **vision** (mesmo modelo, `gemini-2.5-flash`, mesmo endpoint
   falha (arquivo expirado, rede, timeout), o webhook responde pedindo pra
   reenviar.
 * **Extração** — mesmas regras de type/amount/description/paymentMethod da
-  extração por texto (ver seção acima), só a FONTE muda (imagem via
-  `inlineData` + prompt). Cobre recibo, nota fiscal, comprovante de Pix,
-  notificação push **e tela de detalhe no app do cartão** — o prompt trata
-  esses formatos como lançamento válido quando há valor + estabelecimento.
+  extração por texto (ver seção acima), aplicadas POR ITEM de `transactions[]`
+  — só a FONTE muda (imagem via bytes + prompt). Cobre recibo, nota fiscal,
+  comprovante de Pix, notificação push **e tela de detalhe no app do
+  cartão** — o prompt trata esses formatos como lançamento válido quando há
+  valor + estabelecimento. `amount` de cada item é normalizado (vírgula →
+  ponto decimal) antes da validação zod — o VLM às vezes devolve o valor no
+  formato BR mesmo instruído a usar ponto. Item malformado individual é
+  descartado isoladamente (erro-como-dado), nunca derruba os demais itens
+  válidos da mesma imagem.
 * **Prompt enxuto de propósito** — o caminho de FOTO (`buildImagePrompt`,
   `ai-parser.ts`) NÃO carrega a lista de ~40 merchants conhecidos nem a
   prosa longa de regras de categoria que texto/voz recebem (`contextBlock`
   com `includeMerchants: false`) — só uma linha simples pedindo o nome mais
   próximo dentre as categorias do usuário. Motivo: esse contexto extra
-  inflava o thinking token do Gemini e estourava o timeout em fotos simples
-  (medido: prompt cheio ~7s vs. enxuto ~3.5s pra mesma foto). A IA SEMPRE
-  sugere uma categoria pra foto também — nunca bloqueia o lançamento por
-  falta dela (mesma regra do texto, ver "Resolução de categoria" acima); o
-  usuário troca pelo botão **Trocar categoria** depois de cadastrado (ver
-  "Botões inline"). Texto e voz continuam com o contexto rico (merchants +
-  regras completas) — só a foto foi enxugada.
+  inflava o thinking token do modelo e estourava o timeout em fotos simples.
+  A IA SEMPRE sugere uma categoria pra foto também — nunca bloqueia o
+  lançamento por falta dela (mesma regra do texto, ver "Resolução de
+  categoria" acima); o usuário troca pelo botão **Trocar categoria** depois
+  de cadastrado (ver "Botões inline", só disponível no caminho de 1
+  lançamento). Texto e voz continuam com o contexto rico (merchants + regras
+  completas) — só a foto foi enxugada.
 * **Legenda inteligente** — se o `caption` casar (case-insensitive) com o nome
   de um cartão/conta ATIVO do usuário (ex.: "Crédito pessoal"), vira
   `originName`/`paymentMethod` de forma determinística em `handlers.ts`
   (`enrichAiOriginFromCaption`) — **não** vira `categoryName`. Categoria vem
   do estabelecimento / "Dado original" / itens da imagem. Final `…. 7547`
-  sozinho continua **não** resolvendo cartão.
+  sozinho continua **não** resolvendo cartão. `enrichAiOriginFromCaption` só
+  se aplica ao caminho de **1** lançamento (fluxo conversacional).
 * **`originKind`/`originName` na imagem** — mesma regra estrita do texto: só
   preenche se o NOME de uma conta/cartão REAL do usuário aparecer na imagem
   (ou na legenda, acima). Dígitos do cartão NÃO bastam.
-* **Mesmo fluxo conversacional do texto** — a partir do momento em que a IA
-  reconhece um lançamento na foto (`isTransaction=true` + `amount` legível),
-  o resultado cai no MESMO `processDraft` (`draft.ts`) do texto (híbrido com
-  botões — ver abaixo). Sem fallback determinístico pra foto — sem
-  `GEMINI_API_KEY`, erro/timeout, imagem sem lançamento/valor, o bot responde
-  pedindo pra reenviar o print inteiro ou digitar em texto (mensagem honesta,
-  sem culpar "luz/foco"), sem abrir pending. `resultCode` distingue
-  `image_ai_null` vs `image_no_amount` no log.
+* **1 lançamento reconhecido** — a partir do momento em que a IA reconhece o
+  lançamento na foto (`amount` legível), o resultado cai no MESMO
+  `processDraft` (`draft.ts`) do texto (híbrido com botões — ver abaixo):
+  pergunta origem ambígua/faltante quando necessário, cria com botões
+  pós-save (Desfazer / Trocar categoria / Trocar origem).
+* **N lançamentos reconhecidos (N>1)** — `handlers.ts`,
+  `handleMultipleImageTransactions`: cria TODOS direto, SEM fluxo de
+  pergunta por item (perguntar N vezes numa foto só seria péssima UX) —
+  categoria por histórico/nome (`resolveCategoryByName`) e origem DEFAULT
+  quando a IA não identificou uma origem real (`resolveOrigin`, mesmo
+  fallback do lançamento rápido regex), mesma tag "Telegram" e regra de
+  `isPaid` de sempre (`createBotTransaction`). Resposta combinada
+  (`buildMultiTransactionReply`, `reply.ts`): "✅ N lançamentos cadastrados" +
+  lista "descrição — valor" por item + total. Item que falhar na criação
+  (erro de validação isolado) é descartado da lista, sem derrubar os demais;
+  se TODOS falharem, resposta de erro genérica em vez de confirmação vazia.
+  Sem botões por item nesta versão.
+* Sem fallback determinístico pra foto (não dá pra "regex" uma imagem) —
+  array vazio (extração indisponível/timeout, imagem sem nenhum lançamento
+  reconhecível, ou nenhum item com valor legível) responde pedindo pra
+  reenviar o print inteiro ou digitar em texto (mensagem honesta, sem culpar
+  "luz/foco"), sem abrir pending. `resultCode: "image_unreadable"`.
 * Uma foto enviada enquanto já existe um pending em aberto (pergunta de
   valor/origem pendente) NÃO é tratada como resposta a esse pending nesta
   versão — vira um lançamento novo via imagem (o pending antigo só expira

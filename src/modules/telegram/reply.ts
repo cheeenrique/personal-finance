@@ -127,10 +127,34 @@ export function buildPendingGaveUpReply(): string {
 }
 
 /**
- * Foto que não deu pra baixar OU que o Gemini não conseguiu ler como um
- * lançamento (sem valor legível, ou nada de financeiro reconhecível —
- * docs/30-TELEGRAM.md). Mensagem honesta: não culpa "luz/foco" (prints
- * digitais nítidos também falham). Pede reenvio ou texto.
+ * Confirmação de imagem com MAIS de 1 lançamento reconhecido
+ * (docs/30-TELEGRAM.md, "Parsing por IA (lançamento via FOTO)" — print com
+ * várias notificações/comprovantes empilhados). `items` já vêm da transação
+ * PERSISTIDA (`description`/`amount` de `TransactionWithTags`, não do dado
+ * cru da IA) — `total` pré-somado pelo caller (`handlers.ts`,
+ * `handleMultipleImageTransactions`), mesmo padrão de `buildMonthExpensesReply`
+ * (reply.ts só formata, nunca calcula). Sem teclado por item nesta versão.
+ */
+export function buildMultiTransactionReply(
+  items: Array<{ description: string; amount: string }>,
+  total: string,
+): string {
+  const lines = items.map((item) => `${capitalize(item.description)} — ${formatBRL(item.amount)}`);
+
+  return [
+    `${ICON_SUCCESS} ${items.length} lançamentos cadastrados`,
+    "",
+    ...lines,
+    "",
+    `Total: ${formatBRL(total)}`,
+  ].join("\n");
+}
+
+/**
+ * Foto que não deu pra baixar OU que a extração não conseguiu ler nenhum
+ * lançamento (sem valor legível em nenhum item, ou nada de financeiro
+ * reconhecível — docs/30-TELEGRAM.md). Mensagem honesta: não culpa "luz/foco"
+ * (prints digitais nítidos também falham). Pede reenvio ou texto.
  */
 export function buildImageUnreadableReply(): string {
   return [

@@ -16,6 +16,7 @@ import {
   listInvestmentNamesForAI,
   listKnownMerchantsForAI,
   listOriginNamesForAI,
+  resolveCategoryByName,
   resolveCategoryId,
   resolveOrigin,
 } from "./resolve";
@@ -29,6 +30,7 @@ import {
   buildFinancingSummaryReply,
   buildImageUnreadableReply,
   buildMonthExpensesReply,
+  buildMultiTransactionReply,
   buildQueryReply,
   buildTodaySummaryReply,
   buildTransactionConfirmationReply,
@@ -37,7 +39,7 @@ import {
   buildVoiceUnreadableReply,
 } from "./reply";
 import { TelegramDomainError } from "./errors";
-import type { CommandResult, ParsedCommand, TelegramIntent } from "./types";
+import type { AiParsedTransaction, CommandResult, ParsedCommand, TelegramIntent } from "./types";
 
 function isKnownDomainError(error: unknown): error is Error {
   return (
@@ -177,17 +179,28 @@ async function handleFreeformEntry(
 
 /**
  * Lançamento via FOTO (docs/30-TELEGRAM.md, bot aceita foto de nota/
- * comprovante/notificação — extração por Gemini vision). A partir do momento
- * em que a IA reconhece um lançamento na imagem, cai no MESMO fluxo
- * conversacional do texto (`processDraft`, draft.ts): confirma origem
- * ambígua (ex.: notificação só cita "cartão final 7547", sem nome real de
- * cartão — vira pergunta, nunca um chute), aplica a tag "Telegram", cria a
- * transação.
+ * comprovante/notificação — extração pela camada de IA nova, VLM NVIDIA com
+ * fallback Gemini). A imagem pode conter 1 OU VÁRIOS lançamentos (ex.: print
+ * de UMA notificação de compra vs. print com VÁRIAS empilhadas) —
+ * `parseTransactionFromImage` sempre devolve um array (`[]` quando não há
+ * nenhum lançamento legível).
+ *
+ * **1 lançamento** — MESMO fluxo conversacional do texto (`processDraft`,
+ * draft.ts): confirma origem ambígua (ex.: notificação só cita "cartão final
+ * 7547", sem nome real de cartão — vira pergunta, nunca um chute), aplica a
+ * tag "Telegram", cria a transação com botões pós-save.
+ *
+ * **N lançamentos (N>1)** — cria TODOS direto, sem fluxo de pergunta por item
+ * (UX ruim pra várias perguntas em sequência numa foto só): categoria por
+ * histórico/nome (`resolveCategoryByName`) e origem DEFAULT quando a IA não
+ * identificou uma real (`resolveOrigin`, mesmo fallback do lançamento rápido
+ * regex) — ver `handleMultipleImageTransactions`. Resposta combinada, sem
+ * teclado por item nesta versão.
  *
  * DIFERENTE do texto, não existe fallback determinístico pra foto (não dá
- * pra "regex" uma imagem) — sem `GEMINI_API_KEY`, erro/timeout na chamada,
- * imagem sem nenhum lançamento reconhecível (`isTransaction=false`) ou sem
- * valor legível (`amount=null`), responde pedindo pra reenviar a foto (mais
+ * pra "regex" uma imagem) — array vazio (sem `NVIDIA_API_KEY`/`GEMINI_API_KEY`,
+ * erro/timeout na chamada, imagem sem nenhum lançamento reconhecível ou sem
+ * valor legível em nenhum item) responde pedindo pra reenviar a foto (mais
  * nítida) ou digitar em texto, sem abrir um pending — não há nada de
  * concreto pra perguntar sobre nesses casos.
  *
@@ -197,14 +210,15 @@ async function handleFreeformEntry(
  *
  * Se a legenda casar com conta/cartão real e a IA não preencheu origem,
  * `enrichAiOriginFromCaption` completa origin/paymentMethod de forma
- * determinística (legenda "Crédito pessoal" = cartão, não categoria).
+ * determinística (legenda "Crédito pessoal" = cartão, não categoria) — só se
+ * aplica ao caminho de 1 lançamento (fluxo conversacional).
  */
 function enrichAiOriginFromCaption(
-  ai: NonNullable<Awaited<ReturnType<typeof parseTransactionFromImage>>>,
+  ai: AiParsedTransaction,
   caption: string | null,
   accountNames: string[],
   cardNames: string[],
-): typeof ai {
+): AiParsedTransaction {
   if (!caption || ai.originName) return ai;
 
   const captionNorm = normalizeWord(caption);
@@ -236,6 +250,76 @@ function enrichAiOriginFromCaption(
   return ai;
 }
 
+/** Item com `amount` legível — filtra os que a IA não conseguiu extrair valor (imagem parcialmente ilegível). */
+function hasReadableAmount(item: AiParsedTransaction): item is AiParsedTransaction & { amount: string } {
+  return Boolean(item.amount);
+}
+
+/**
+ * Cria 1 transação a partir de um item de imagem MULTI-lançamento — mesmo
+ * núcleo de montagem (`createBotTransaction`) do resto do bot, resolução de
+ * categoria/origem SEM fluxo de pergunta (docs/30-TELEGRAM.md, Regra 2:
+ * categoria sempre sugerida, nunca bloqueia; `resolveOrigin` cai na conta
+ * ativa default quando a IA não identificou uma origem real, mesma regra do
+ * fallback regex — `handleCreateTransaction` acima). `null` quando a criação
+ * falha (erro de validação isolado nesse item) — descartado da lista final
+ * pelo caller, nunca derruba os demais itens da mesma imagem.
+ */
+async function createImageBatchItem(
+  userId: string,
+  item: AiParsedTransaction & { amount: string },
+): Promise<{ description: string; amount: string } | null> {
+  const keywordCandidates = [item.categoryName, item.description].filter((value): value is string =>
+    Boolean(value),
+  );
+
+  const [category, origin] = await Promise.all([
+    resolveCategoryByName(userId, item.type, item.categoryName, item.description, keywordCandidates),
+    resolveOrigin(userId, item.originKind, item.originName),
+  ]);
+
+  const result = await createBotTransaction(userId, {
+    type: item.type,
+    amount: item.amount,
+    description: item.description,
+    date: item.date ?? toDateInputValueSaoPaulo(),
+    category,
+    origin,
+  });
+
+  if (!result.success) return null;
+  return { description: result.created.description, amount: result.created.amount.toString() };
+}
+
+/**
+ * Imagem com MAIS de 1 lançamento reconhecido — cria TODOS em paralelo e
+ * responde com um resumo combinado (`buildMultiTransactionReply`). Item que
+ * falhar na criação é silenciosamente descartado da lista (erro isolado, não
+ * derruba os demais); se TODOS falharem, responde erro genérico em vez de uma
+ * confirmação vazia.
+ */
+async function handleMultipleImageTransactions(
+  userId: string,
+  items: Array<AiParsedTransaction & { amount: string }>,
+): Promise<CommandResult> {
+  const results = await Promise.all(items.map((item) => createImageBatchItem(userId, item)));
+  const created = results.filter((item): item is { description: string; amount: string } => item !== null);
+
+  if (created.length === 0) {
+    return {
+      text: buildErrorReply("Não foi possível cadastrar os lançamentos dessa imagem."),
+      resultCode: "image_multi_all_failed",
+    };
+  }
+
+  const total = created.reduce((sum, item) => sum.plus(item.amount), new Prisma.Decimal(0));
+
+  return {
+    text: buildMultiTransactionReply(created, total.toString()),
+    resultCode: "image_multi_created",
+  };
+}
+
 export async function handleImageEntry(
   userId: string,
   imageBytes: Buffer,
@@ -243,17 +327,19 @@ export async function handleImageEntry(
   caption: string | null,
 ): Promise<CommandResult> {
   const ctx = await buildAiContext(userId);
-  const aiRaw = await parseTransactionFromImage(imageBytes, mimeType, caption, ctx);
+  const items = await parseTransactionFromImage(imageBytes, mimeType, caption, ctx);
+  const validItems = items.filter(hasReadableAmount);
 
-  if (aiRaw === null) {
-    return { text: buildImageUnreadableReply(), resultCode: "image_ai_null" };
-  }
-  if (!aiRaw.isTransaction || !aiRaw.amount) {
-    return { text: buildImageUnreadableReply(), resultCode: "image_no_amount" };
+  if (validItems.length === 0) {
+    return { text: buildImageUnreadableReply(), resultCode: "image_unreadable" };
   }
 
-  const ai = enrichAiOriginFromCaption(aiRaw, caption, ctx.accountNames, ctx.cardNames);
-  return processDraft(userId, draftFromAi(ai), 0);
+  if (validItems.length === 1) {
+    const ai = enrichAiOriginFromCaption(validItems[0], caption, ctx.accountNames, ctx.cardNames);
+    return processDraft(userId, draftFromAi(ai), 0);
+  }
+
+  return handleMultipleImageTransactions(userId, validItems);
 }
 
 /**
