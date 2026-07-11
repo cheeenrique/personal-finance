@@ -29,6 +29,11 @@ import { normalizeTransactionItem, parseTransactionEnvelope } from "./normalize"
  * senha (mesmo racional de `lib/ai/gemini.ts`).
  */
 
+/** Extração de documento é lenta (modelo lê a fatura inteira + gera JSON) — 90s cobre o
+ * NVIDIA (deepseek-v4-flash ~8s, com folga) E o fallback Gemini (que sem isso usaria o
+ * default curto de `callGemini` e abortava no documento). Abaixo do maxDuration serverless. */
+const DOCUMENT_TIMEOUT_MS = 90_000;
+
 const INVOICE_RESPONSE_SCHEMA: JsonSchema = {
   type: "object",
   properties: {
@@ -86,8 +91,8 @@ export async function parseCardInvoice(bytes: Buffer, password?: string): Promis
 
   const prompt = buildInvoicePrompt();
   const rawItems = extraction.hasTextLayer
-    ? await extractStructured("document-text", { kind: "text", text: extraction.text }, prompt, INVOICE_RESPONSE_SCHEMA, parseTransactionEnvelope)
-    : await extractStructured("document-vision", { kind: "vision", bytes, mimeType: "application/pdf" }, prompt, INVOICE_RESPONSE_SCHEMA, parseTransactionEnvelope);
+    ? await extractStructured("document-text", { kind: "text", text: extraction.text }, prompt, INVOICE_RESPONSE_SCHEMA, parseTransactionEnvelope, { timeoutMs: DOCUMENT_TIMEOUT_MS })
+    : await extractStructured("document-vision", { kind: "vision", bytes, mimeType: "application/pdf" }, prompt, INVOICE_RESPONSE_SCHEMA, parseTransactionEnvelope, { timeoutMs: DOCUMENT_TIMEOUT_MS });
 
   if (rawItems === null) {
     return buildErrorResult("Não foi possível extrair os lançamentos da fatura (tente novamente em instantes).");

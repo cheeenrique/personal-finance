@@ -182,6 +182,9 @@ export async function parseFinancingFromDocument(
   mimeType: string,
   password?: string,
 ): Promise<ParsedFinancing | null> {
+  // Extração de documento é lenta — 90s cobre o NVIDIA (deepseek-v4-flash) E o fallback
+  // Gemini (que sem isso usaria o default curto de `callGemini` e abortava). < maxDuration.
+  const DOCUMENT_TIMEOUT_MS = 90_000;
   const prompt = buildFinancingPrompt();
 
   if (mimeType !== "application/pdf") {
@@ -191,6 +194,7 @@ export async function parseFinancingFromDocument(
       prompt,
       FINANCING_RESPONSE_SCHEMA,
       parseFinancingResponse,
+      { timeoutMs: DOCUMENT_TIMEOUT_MS },
     );
   }
 
@@ -212,6 +216,7 @@ export async function parseFinancingFromDocument(
       prompt,
       FINANCING_RESPONSE_SCHEMA,
       parseFinancingResponse,
+      { timeoutMs: DOCUMENT_TIMEOUT_MS },
     );
   }
 

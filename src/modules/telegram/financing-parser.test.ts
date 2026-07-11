@@ -31,6 +31,7 @@ describe("parseFinancingFromDocument", () => {
       expect.any(String),
       expect.any(Object),
       expect.any(Function),
+      { timeoutMs: expect.any(Number) },
     );
   });
 
@@ -46,6 +47,7 @@ describe("parseFinancingFromDocument", () => {
       expect.any(String),
       expect.any(Object),
       expect.any(Function),
+      { timeoutMs: expect.any(Number) },
     );
   });
 
@@ -62,6 +64,7 @@ describe("parseFinancingFromDocument", () => {
       expect.any(String),
       expect.any(Object),
       expect.any(Function),
+      { timeoutMs: expect.any(Number) },
     );
   });
 
