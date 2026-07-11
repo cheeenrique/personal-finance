@@ -26,6 +26,8 @@ const parsedTransactionSchema = z.object({
   amount: z.string().trim().min(1),
   type: z.enum(["INCOME", "EXPENSE"]),
   description: z.string(),
+  /** Override de categoria escolhido pelo usuário na prévia — ownership validado em `commitImport` (`service.ts`), nunca aqui. */
+  categoryId: z.string().nullable().optional(),
 });
 
 const parseErrorSchema = z.object({ snippet: z.string(), reason: z.string() });

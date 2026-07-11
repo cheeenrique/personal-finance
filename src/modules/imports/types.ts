@@ -27,6 +27,14 @@ export type ParsedTransaction = {
   amount: string;
   type: ImportTransactionType;
   description: string;
+  /**
+   * Categoria escolhida pelo usuário na prévia (override) — opcional, `undefined`/`null` nos
+   * parsers (nunca preenchida no parse). Só o front, no commit, manda um valor não-nulo aqui.
+   * `commitImport` valida ownership (`categoryRepository.findOwnedIds`) antes de usar — se não
+   * pertencer ao userId, cai no fallback de histórico (`resolveCategoryId`) como se não
+   * tivesse vindo nada (docs/10-AUTH.md, isolamento por userId).
+   */
+  categoryId?: string | null;
 };
 
 /** Uma linha/bloco do arquivo que falhou o parse — trecho cru + motivo, pro usuário identificar o lançamento no arquivo original. */

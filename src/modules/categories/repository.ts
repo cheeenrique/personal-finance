@@ -84,6 +84,24 @@ async function countChildren(userId: string, parentId: string): Promise<number> 
   return prisma.category.count({ where: { userId, parentId, deletedAt: null } });
 }
 
+/**
+ * Subconjunto de `ids` que de fato pertence a este userId (não deletado) — 1 query pra N ids,
+ * insumo de validação de ownership (ex.: `categoryId` escolhido pelo usuário num import de
+ * fatura, ver `modules/imports/service.ts` `commitImport`; docs/10-AUTH.md, isolamento por
+ * userId). `ids` de outro usuário simplesmente não voltam no Set — quem chama decide o
+ * fallback.
+ */
+async function findOwnedIds(userId: string, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+
+  const rows = await prisma.category.findMany({
+    where: { userId, deletedAt: null, id: { in: ids } },
+    select: { id: true },
+  });
+
+  return new Set(rows.map((row) => row.id));
+}
+
 export const categoryRepository = {
   findById,
   listAll,
@@ -91,4 +109,5 @@ export const categoryRepository = {
   update,
   softDelete,
   countChildren,
+  findOwnedIds,
 };

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/client";
 import { accountRepository } from "@/modules/accounts/repository";
 import { cardRepository } from "@/modules/cards/repository";
+import { categoryRepository } from "@/modules/categories/repository";
 import { transactionService } from "@/modules/transactions/service";
 import { calendarPartsSP } from "@/lib/date/calendar-sp";
 import { parseImportFile } from "./parsers";
@@ -115,6 +116,26 @@ async function resolveCategoryId(userId: string, description: string): Promise<s
 }
 
 /**
+ * Categoria final gravada no commit — o usuário pode ESCOLHER a categoria de um item na
+ * prévia (`item.categoryId`, front manda no commit); se vier um valor não-nulo E ele estiver
+ * em `ownedCategoryIds` (pertence ao `userId`, ver `categoryRepository.findOwnedIds`), usa o
+ * override. Caso contrário (não veio, veio `null`, ou veio um id de outro usuário) cai no
+ * fallback de sempre — histórico por descrição (`resolveCategoryId`). Um `categoryId` que não
+ * pertence ao usuário NUNCA é gravado (docs/10-AUTH.md, isolamento por userId) — trata como se
+ * não tivesse vindo nada, não é erro de validação (o front não deveria mandar isso, mas o
+ * backend não confia).
+ */
+async function resolveCommitCategoryId(
+  userId: string,
+  description: string,
+  requestedCategoryId: string | null | undefined,
+  ownedCategoryIds: Set<string>,
+): Promise<string | null> {
+  if (requestedCategoryId && ownedCategoryIds.has(requestedCategoryId)) return requestedCategoryId;
+  return resolveCategoryId(userId, description);
+}
+
+/**
  * Prévia da importação — parseia o arquivo (parser resolvido por extensão,
  * `parsers/index.ts`) e classifica cada transação em novo/duplicado/erro, sem
  * gravar nada (docs/03-DATABASE.md, "Importação de Extrato OFX"; formatos
@@ -195,7 +216,11 @@ async function previewImport(
  * conta/cartão, e ownership + dedup continuam valendo aqui.
  * Categorização resolvida ANTES do `$transaction` interativo (mantém a janela
  * da transação curta — mesmo cuidado de `modules/cards/pay-invoice.ts`); dedup
- * + insert acontecem dentro dela. Concorrência (duplo clique no Confirmar): o
+ * + insert acontecem dentro dela. Cada item pode chegar com um `categoryId`
+ * escolhido pelo usuário na prévia (override) — `resolveCommitCategoryId`
+ * valida ownership (1 query pro conjunto de categorias pedidas) antes de usar;
+ * sem override válido, cai no histórico de sempre (`resolveCategoryId`).
+ * Concorrência (duplo clique no Confirmar): o
  * snapshot de dedup NÃO enxerga inserts ainda não commitados do concorrente
  * (READ COMMITTED) — quem segura é o índice único parcial em (accountId,
  * fitId) + `skipDuplicates` no insert pra CONTA (ver `repository.insertMany` e
@@ -212,10 +237,13 @@ async function commitImport(
 
   if (transactions.length === 0) return { imported: 0, duplicados: 0, erros: errors };
 
+  const requestedCategoryIds = [...new Set(transactions.flatMap((item) => (item.categoryId ? [item.categoryId] : [])))];
+  const ownedCategoryIds = await categoryRepository.findOwnedIds(userId, requestedCategoryIds);
+
   const withCategory = await Promise.all(
     transactions.map(async (item) => ({
       ...item,
-      categoryId: await resolveCategoryId(userId, item.description),
+      categoryId: await resolveCommitCategoryId(userId, item.description, item.categoryId, ownedCategoryIds),
     })),
   );
 
