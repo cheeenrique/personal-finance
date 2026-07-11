@@ -22,11 +22,11 @@ const MAX_VISIBLE_PURCHASES = 5;
  * Clique vai direto pro modal de detalhes daquela compra em `/installments`
  * (`?open=<id>`, lido por `InstallmentsBoard`).
  *
- * Mostra só os `MAX_VISIBLE_PURCHASES` mais recentes. `ActiveInstallmentPurchase`
- * não expõe `createdAt`, mas `transactionService.listActiveInstallmentPurchases`
- * já vem ordenado por `createdAt` desc (repository), então o slice aqui
- * preserva "mais recentes primeiro" sem precisar tocar no service compartilhado.
- * "Ver todos" cobre o restante em `/installments`.
+ * Mostra só os `MAX_VISIBLE_PURCHASES` mais perto de acabar: sort por menor
+ * quantidade de parcelas restantes (`installmentsCount - paidCount`)
+ * primeiro, com empate desfeito por menor `remainingAmount` — o sort +
+ * slice acontece aqui (sem tocar no service compartilhado). "Ver todos"
+ * cobre o restante em `/installments`.
  */
 export function InstallmentsSummary({ purchases }: InstallmentsSummaryProps) {
   if (purchases.length === 0) {
@@ -45,7 +45,14 @@ export function InstallmentsSummary({ purchases }: InstallmentsSummaryProps) {
     );
   }
 
-  const recentPurchases = purchases.slice(0, MAX_VISIBLE_PURCHASES);
+  const recentPurchases = [...purchases]
+    .sort((a, b) => {
+      const remainingCountDiff =
+        a.installmentsCount - a.paidCount - (b.installmentsCount - b.paidCount);
+      if (remainingCountDiff !== 0) return remainingCountDiff;
+      return a.remainingAmount.comparedTo(b.remainingAmount);
+    })
+    .slice(0, MAX_VISIBLE_PURCHASES);
 
   return (
     <SectionCard title="Parcelamentos ativos" action={{ label: "Ver todos", href: "/installments" }}>
