@@ -28,6 +28,7 @@ const SUPPORTED_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/pn
 export async function parseFinancingDocumentAction(
   base64: string,
   mimeType: string,
+  password?: string,
 ): Promise<ActionResult<ParsedFinancing>> {
   const session = await auth();
   if (!session?.user?.id) {
@@ -42,14 +43,14 @@ export async function parseFinancingDocumentAction(
   }
 
   const documentBytes = Buffer.from(base64, "base64");
-  const parsed = await parseFinancingFromDocument(documentBytes, mimeType);
+  const parsed = await parseFinancingFromDocument(documentBytes, mimeType, password);
 
   if (!parsed) {
     return {
       success: false,
       error: {
         code: "DOCUMENT_UNREADABLE",
-        message: "Não consegui ler o documento — preencha os campos manualmente.",
+        message: "Não consegui ler o documento — confira a senha (se houver) ou preencha os campos manualmente.",
       },
     };
   }
