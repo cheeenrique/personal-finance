@@ -1,21 +1,29 @@
 import { prisma } from "@/lib/db/client";
 import { accountRepository } from "@/modules/accounts/repository";
+import { cardRepository } from "@/modules/cards/repository";
 import { transactionService } from "@/modules/transactions/service";
 import { calendarPartsSP } from "@/lib/date/calendar-sp";
 import { parseImportFile } from "./parsers";
 import { importRepository, type FallbackRow } from "./repository";
-import { AccountNotFoundError } from "./errors";
+import { AccountNotFoundError, CardNotFoundError } from "./errors";
 import type {
   ImportCommitResult,
   ImportParseError,
   ImportPreviewItem,
   ImportPreviewResult,
+  ImportTarget,
   ParsedTransaction,
 } from "./types";
 
-async function assertAccountOwnership(userId: string, accountId: string): Promise<void> {
-  const account = await accountRepository.findById(userId, accountId);
-  if (!account) throw new AccountNotFoundError(accountId);
+async function assertTargetOwnership(userId: string, target: ImportTarget): Promise<void> {
+  if (target.kind === "account") {
+    const account = await accountRepository.findById(userId, target.accountId);
+    if (!account) throw new AccountNotFoundError(target.accountId);
+    return;
+  }
+
+  const card = await cardRepository.findById(userId, target.cardId);
+  if (!card) throw new CardNotFoundError(target.cardId);
 }
 
 /** Genérico em `T` (não fixo em `ParsedTransaction`) — preserva campos extras do chamador (ex.: `categoryId` já resolvido em `commitImport`) no `Array.prototype.filter` narrowing. */
@@ -24,21 +32,21 @@ function hasFitId<T extends { fitId: string | null }>(item: T): item is T & { fi
 }
 
 /**
- * Chave de dedup do fallback sem `fitId` (docs/03-DATABASE.md, "Importação de
- * Extrato OFX") — mesma regra dos dois lados (linha existente no banco vs.
- * item recém-parseado). Dia-calendário em America/Sao_Paulo (`calendarPartsSP`,
- * não `date.toISOString()`): a mesma transação pode existir no banco com hora
- * diferente do que o parser produz (todo parser em `parsers/*.ts` nasce à
- * meia-noite SP) — comparar o instante exato deixava passar duplicata real
- * (bug: extrato Nubank conta/Pix sem `<FITID>`). CONTRATO: `amount` sempre
- * normalizado como `Decimal.toFixed(2)` ("50.00", nunca "50" ou "50.1") — cada
- * parser garante isso (`parseOfxAmount`/`parseCsvAmount`), o repository em
- * `findFallbackRows`. Formato divergente entre os lados quebra a chave e
- * duplica tudo sem fitId no reimport.
+ * Chave de dedup do fallback sem `fitId` — target-aware (docs/superpowers/specs/2026-07-11-import-fatura-cartao-credito-design.md,
+ * "Fluxo 1"): CONTA usa `(data,valor,descrição)` (mesma regra de sempre, docs/03-DATABASE.md
+ * "Importação de Extrato OFX"); CARTÃO usa só `(data,valor)` — fatura de cartão não tem
+ * `fitId` NUNCA (diferente do raro caso de conta), e o dono decidiu que 2 compras mesma
+ * data/valor na fatura já contam como duplicata (parcela = gasto flat, sem campo extra pra
+ * diferenciar). Dia-calendário em America/Sao_Paulo (`calendarPartsSP`), não
+ * `date.toISOString()` — mesmo racional do arquivo original.
+ *
+ * Exportada (só pra teste — `service.test.ts`): função PURA, sem I/O.
  */
-function fallbackKey(date: Date, amount: string, description: string): string {
+export function buildFallbackKey(target: ImportTarget, date: Date, amount: string, description: string): string {
   const { year, month, day } = calendarPartsSP(date);
-  return `${year}-${month}-${day}|${amount}|${description.trim().toLowerCase()}`;
+  const dayKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  if (target.kind === "card") return `${dayKey}|${amount}`;
+  return `${dayKey}|${amount}|${description.trim().toLowerCase()}`;
 }
 
 /**
@@ -50,10 +58,10 @@ function fallbackKey(date: Date, amount: string, description: string): string {
  * como se fosse duplicata da mesma chave, nem duplica além do que o banco já
  * tem).
  */
-function buildFallbackKeyCounts(rows: FallbackRow[]): Map<string, number> {
+function buildFallbackKeyCounts(target: ImportTarget, rows: FallbackRow[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const row of rows) {
-    const key = fallbackKey(row.date, row.amount, row.description);
+    const key = buildFallbackKey(target, row.date, row.amount, row.description);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
@@ -62,8 +70,8 @@ function buildFallbackKeyCounts(rows: FallbackRow[]): Map<string, number> {
 /** Estado de dedup mutável do batch — MESMA instância usada do 1º ao último item do loop (preview ou commit), nunca dois estados separados. */
 type DedupState = { fitIds: Set<string>; fallbackCounts: Map<string, number> };
 
-function buildDedupState(existingFitIds: Set<string>, fallbackRows: FallbackRow[]): DedupState {
-  return { fitIds: existingFitIds, fallbackCounts: buildFallbackKeyCounts(fallbackRows) };
+function buildDedupState(target: ImportTarget, existingFitIds: Set<string>, fallbackRows: FallbackRow[]): DedupState {
+  return { fitIds: existingFitIds, fallbackCounts: buildFallbackKeyCounts(target, fallbackRows) };
 }
 
 /**
@@ -73,14 +81,14 @@ function buildDedupState(existingFitIds: Set<string>, fallbackRows: FallbackRow[
  * fallback duplicada decrementa a contagem (consome 1 ocorrência do banco por
  * item do arquivo que bateu nela — dedup in-batch natural, sem Set à parte).
  */
-function isDuplicate(item: ParsedTransaction, state: DedupState): boolean {
+function isDuplicate(target: ImportTarget, item: ParsedTransaction, state: DedupState): boolean {
   if (item.fitId) {
     if (state.fitIds.has(item.fitId)) return true;
     state.fitIds.add(item.fitId);
     return false;
   }
 
-  const key = fallbackKey(item.date, item.amount, item.description);
+  const key = buildFallbackKey(target, item.date, item.amount, item.description);
   const remaining = state.fallbackCounts.get(key) ?? 0;
   if (remaining <= 0) return false;
 
@@ -111,18 +119,24 @@ async function resolveCategoryId(userId: string, description: string): Promise<s
  * `parsers/index.ts`) e classifica cada transação em novo/duplicado/erro, sem
  * gravar nada (docs/03-DATABASE.md, "Importação de Extrato OFX"; formatos
  * além de OFX em docs/superpowers/specs/2026-07-08-import-multiformato-design.md).
- * Dedup por `fitId` já existente na CONTA; fallback por `(date, amount,
- * description)` pros itens sem `fitId` (CSV nunca tem).
+ * Dedup por `fitId` já existente no TARGET; fallback por `(date, amount,
+ * description?)` pros itens sem `fitId` (CSV nunca tem; fatura de cartão
+ * nunca tem — ver `buildFallbackKey`).
  */
 async function previewImport(
   userId: string,
-  accountId: string,
+  target: ImportTarget,
   fileName: string,
   fileContent: string,
+  password?: string,
 ): Promise<ImportPreviewResult> {
-  await assertAccountOwnership(userId, accountId);
+  await assertTargetOwnership(userId, target);
 
-  const { transactions, errors } = await parseImportFile(fileName, fileContent);
+  const { transactions, errors } = await parseImportFile(
+    fileName,
+    fileContent,
+    target.kind === "card" ? { kind: "card", password } : undefined,
+  );
 
   const withFitId = transactions.filter(hasFitId);
   const withoutFitId = transactions.filter((item) => !hasFitId(item));
@@ -130,18 +144,18 @@ async function previewImport(
   const [existingFitIds, fallbackRows] = await Promise.all([
     importRepository.findExistingFitIds(
       userId,
-      accountId,
+      target,
       withFitId.map((item) => item.fitId),
     ),
-    withoutFitId.length > 0 ? importRepository.findFallbackRows(userId, accountId) : Promise.resolve([]),
+    withoutFitId.length > 0 ? importRepository.findFallbackRows(userId, target) : Promise.resolve([]),
   ]);
-  const state = buildDedupState(existingFitIds, fallbackRows);
+  const state = buildDedupState(target, existingFitIds, fallbackRows);
 
   let duplicados = 0;
   const novosParsed: ParsedTransaction[] = [];
 
   for (const item of transactions) {
-    if (isDuplicate(item, state)) {
+    if (isDuplicate(target, item, state)) {
       duplicados += 1;
       continue;
     }
@@ -170,7 +184,7 @@ async function previewImport(
 }
 
 /**
- * Confirma a importação — grava só os itens ainda não existentes na conta.
+ * Confirma a importação — grava só os itens ainda não existentes no target.
  * Recebe as `transactions` JÁ parseadas pela prévia (`previewImport`), NÃO
  * reparseia o arquivo: PDF é extraído por LLM (`parsers/pdf-parser.ts`), então
  * reparsear no commit gastaria uma 2ª chamada Gemini — lenta e não
@@ -178,22 +192,23 @@ async function previewImport(
  * confirmou). As transações chegam do client (produzidas pelo parser do
  * servidor na prévia, revalidadas por `commitImportSchema` na action); isso
  * não amplia poder — o usuário já pode criar lançamentos manuais na própria
- * conta, e ownership + dedup continuam valendo aqui.
+ * conta/cartão, e ownership + dedup continuam valendo aqui.
  * Categorização resolvida ANTES do `$transaction` interativo (mantém a janela
  * da transação curta — mesmo cuidado de `modules/cards/pay-invoice.ts`); dedup
  * + insert acontecem dentro dela. Concorrência (duplo clique no Confirmar): o
  * snapshot de dedup NÃO enxerga inserts ainda não commitados do concorrente
  * (READ COMMITTED) — quem segura é o índice único parcial em (accountId,
- * fitId) + `skipDuplicates` no insert (ver `repository.insertMany` e a
- * migration `transaction_fitid_unique`).
+ * fitId) + `skipDuplicates` no insert pra CONTA (ver `repository.insertMany` e
+ * a migration `transaction_fitid_unique`); cartão não tem essa rede (nunca tem
+ * `fitId` — decisão consciente, ver `repository.ts`).
  */
 async function commitImport(
   userId: string,
-  accountId: string,
+  target: ImportTarget,
   transactions: ParsedTransaction[],
   errors: ImportParseError[],
 ): Promise<ImportCommitResult> {
-  await assertAccountOwnership(userId, accountId);
+  await assertTargetOwnership(userId, target);
 
   if (transactions.length === 0) return { imported: 0, duplicados: 0, erros: errors };
 
@@ -211,20 +226,20 @@ async function commitImport(
     const [existingFitIds, fallbackRows] = await Promise.all([
       importRepository.findExistingFitIds(
         userId,
-        accountId,
+        target,
         withFitId.map((item) => item.fitId),
         tx,
       ),
-      withoutFitId.length > 0 ? importRepository.findFallbackRows(userId, accountId, tx) : Promise.resolve([]),
+      withoutFitId.length > 0 ? importRepository.findFallbackRows(userId, target, tx) : Promise.resolve([]),
     ]);
-    const state = buildDedupState(existingFitIds, fallbackRows);
+    const state = buildDedupState(target, existingFitIds, fallbackRows);
 
     // Dedup in-batch: `isDuplicate` muta `state` a cada item — duas
     // transações com o mesmo `fitId` (ou a mesma chave de fallback, até o
     // limite do que o banco já tem) no MESMO arquivo inserem só o necessário.
     // O snapshot do banco não enxerga o que ainda está no próprio batch.
-    const toInsert = withCategory.filter((item) => !isDuplicate(item, state));
-    const insertedCount = await importRepository.insertMany(userId, accountId, toInsert, tx);
+    const toInsert = withCategory.filter((item) => !isDuplicate(target, item, state));
+    const insertedCount = await importRepository.insertMany(userId, target, toInsert, tx);
 
     // `insertedCount < toInsert.length` acontece sob commit concorrente: o
     // índice único parcial + `skipDuplicates` descartam o que o outro commit

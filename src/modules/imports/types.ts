@@ -1,5 +1,14 @@
 import type { TransactionType } from "@/generated/prisma/enums";
 
+/**
+ * Alvo de uma importação — conta (extrato) OU cartão (fatura,
+ * docs/superpowers/specs/2026-07-11-import-fatura-cartao-credito-design.md, "Fluxo 1").
+ * Costuras target-específicas: dedup de conta usa `(data,valor,descrição)`, cartão usa só
+ * `(data,valor)` (fatura não tem `fitId`, ver `service.ts` `buildFallbackKey`); insert de
+ * cartão grava `cardId` set + `accountId=null` (ver `repository.ts` `insertMany`).
+ */
+export type ImportTarget = { kind: "account"; accountId: string } | { kind: "card"; cardId: string };
+
 /** Todo parser de import só produz lançamento simples (CREDIT/DEBIT) — nunca TRANSFER/CARD_PAYMENT (ver parsers/*.ts). */
 export type ImportTransactionType = Extract<TransactionType, "INCOME" | "EXPENSE">;
 

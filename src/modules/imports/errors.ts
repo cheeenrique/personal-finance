@@ -25,3 +25,10 @@ export class AccountNotFoundError extends ImportDomainError {
     super(`Conta não encontrada: ${accountId}`, "ACCOUNT_NOT_FOUND", undefined, { accountId });
   }
 }
+
+/** Cartão informado não existe ou não pertence ao usuário (docs/10-AUTH.md, "Regra Principal de Segurança") — espelha `AccountNotFoundError` acima pro target `{kind:"card"}`. */
+export class CardNotFoundError extends ImportDomainError {
+  constructor(cardId: string) {
+    super(`Cartão não encontrado: ${cardId}`, "CARD_NOT_FOUND", undefined, { cardId });
+  }
+}
