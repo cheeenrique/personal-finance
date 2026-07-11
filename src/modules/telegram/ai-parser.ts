@@ -149,73 +149,127 @@ function knownMerchantsLabel(merchants: KnownMerchant[]): string {
     .join("; ");
 }
 
+/**
+ * Blocos de regra compartilhados entre os prompts de TEXTO e VOZ (mesma
+ * extração completa: intent + register + invest + query) — extraídos pra
+ * matar o drift entre os 3 prompts (regra 02-dry-kiss-yagni, 3+ ocorrências =
+ * extrair; o comentário antigo em `RESPONSE_SCHEMA` já admitia que texto e
+ * imagem tinham divergido). IMAGEM não usa estes blocos: não classifica
+ * intent (só faz register) e tem regras de campo bem diferentes por ler
+ * pixels em vez de texto/áudio — ver `buildImagePrompt`.
+ */
+const INTENT_CLASSIFICATION = [
+  "PRIMEIRO classifique o conteúdo em um `intent`:",
+  '- "register": o usuário quer REGISTRAR um lançamento novo (gasto ou receita) — ex.: "mercado 120", "recebi 500 de freela". NÃO use register para aporte em investimento (cofrinho/CDB).',
+  '- "invest": o usuário quer APORTAR / investir dinheiro num produto cadastrado — ex.: "investi 100 no Cofrinho Nubank", "aportei 200 no CDB", "coloquei 50 no cofrinho".',
+  '- "query": o usuário está PERGUNTANDO sobre as finanças dele, sem querer registrar nada novo — ex.: "quanto gastei esse mês", "qual meu saldo", "quais meus investimentos", "fatura do Nubank", "quanto falta pagar".',
+  '- "unknown": nem lançamento, nem aporte, nem pergunta reconhecível (saudação, ruído/áudio inaudível, mensagem aleatória, pergunta fora de escopo financeiro).',
+  "",
+  'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null e invest=null.',
+  'Se intent="invest": preencha isTransaction=false, description curto, invest={amount, investmentName, accountName}, query=null.',
+  'Se intent="query": preencha isTransaction=false, description com qualquer texto curto (não é usado), e preencha o objeto `query` seguindo as "Regras de pergunta" abaixo. Deixe invest=null.',
+  'Se intent="unknown": preencha isTransaction=false e deixe query=null e invest=null.',
+];
+
+function rulesLaunch(categoriesLabel: string): string[] {
+  return [
+    'Regras de lançamento (só valem quando intent="register"):',
+    "- isTransaction=false se o conteúdo NÃO for um lançamento (saudação, pergunta, ruído, texto aleatório sem qualquer menção a gasto/recebimento de dinheiro).",
+    '- type: INCOME quando o dinheiro ENTRA pro usuário (ex.: "recebi", "recebido de", "pix recebido", "caiu", salário, freela); EXPENSE quando o dinheiro SAI (ex.: "paguei", "comprei", "pix para", "transferência para", gasto do dia a dia). Assuma EXPENSE quando ambíguo.',
+    '- amount: valor decimal em string (ex.: "30" ou "30.50"), sem símbolo de moeda (considere números por extenso quando a fonte for áudio). Se NÃO houver valor numérico, retorne null — NUNCA invente um valor.',
+    "- description: descrição curta do lançamento (poucas palavras). Pessoa ou empresa EXTERNA citada (ex.: \"mãe\", \"Romeika\", \"Funape\" — alguém que NÃO é o próprio usuário) SEMPRE vai na descrição, nunca é uma conta/cartão do usuário. Se o pagador/beneficiário for o MESMO de um item da lista \"Pagadores/recebedores conhecidos\" abaixo (mesmo com o texto diferente — variação de grafia, abreviação, razão social com CNPJ junto etc.), escreva a description com o nome CANÔNICO desse item (o texto entre aspas antes da seta), em vez de repetir o texto cru.",
+    '- date: resolva datas relativas ("hoje", "ontem", "amanhã") e absolutas ("dia 18/06", "18/06") usando a data de referência acima como "hoje" e o ano corrente quando omitido. Formato YYYY-MM-DD. Sem menção de data, retorne null.',
+    `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Se o pagador/beneficiário bater com um item da lista "Pagadores/recebedores conhecidos" abaixo (mesmo critério da regra de description), use a categoria DESSE item. Senão, sem boa correspondência, retorne null.`,
+    '- paymentMethod: identifique COMO o dinheiro saiu/entrou — "credit" (cartão de crédito), "debit" (cartão de débito), "pix", "transfer" (transferência/TED/DOC), "cash" (dinheiro/espécie). Sem menção de canal, retorne null.',
+    '- originKind/originName: só preencha se o nome citado bater com um item REAL das listas abaixo. Se citar um CARTÃO da lista (geralmente junto de "crédito"/"débito"), originKind="card" e originName = nome EXATO da lista de cartões. Se citar uma CONTA da lista (geralmente junto de "pix"/"transferência"/banco), originKind="account" e originName = nome EXATO da lista de contas. IMPORTANTE: nome de pessoa/empresa EXTERNA (que foi pra description) NUNCA é origem, mesmo aparecendo perto de "pix" ou "transferência". Sem menção de conta/cartão real do usuário, ambos null.',
+  ];
+}
+
+function rulesInvest(investmentsLabel: string, accountsLabel: string): string[] {
+  return [
+    'Regras de aporte (só valem quando intent="invest"):',
+    '- invest.amount: valor decimal em string (ex.: "100" ou "100.50"). null se não houver valor — NUNCA invente.',
+    `- invest.investmentName: nome MAIS PRÓXIMO dentre os investimentos do usuário: [${investmentsLabel}]. null se não citar nenhum.`,
+    `- invest.accountName: conta de onde sai o dinheiro, se citada — nome EXATO de [${accountsLabel}]. null se não citar (o app usa a conta default).`,
+  ];
+}
+
+function rulesQuery(categoriesLabel: string, cardsLabel: string): string[] {
+  return [
+    'Regras de pergunta (só valem quando intent="query"):',
+    '- queryType: "spent" (quanto gastou), "received" (quanto recebeu), "balance" (saldo das contas), "category_total" (quanto gastou numa categoria específica — preencha categoryName), "top_categories" (quais categorias tiveram maior gasto), "card_invoice" (fatura de um cartão específico — preencha cardName), "unpaid" (quanto falta pagar / previsto) ou "investments" (quais investimentos tem / posição / total investido).',
+    `- categoryName (só relevante para queryType="category_total"): nome MAIS PRÓXIMO dentre a lista de categorias do usuário: [${categoriesLabel}]. null se não citar categoria ou o queryType for outro.`,
+    `- cardName (só relevante para queryType="card_invoice"): nome MAIS PRÓXIMO dentre a lista de cartões do usuário: [${cardsLabel}]. null se não citar cartão ou o queryType for outro.`,
+    '- period: "this_month" (padrão — sem período mencionado, ou mês atual), "last_month" (mês passado), "this_year" (esse ano/ano todo). Para queryType="investments" use "this_month" (período é ignorado).',
+  ];
+}
+
+/**
+ * Rodapé com as listas reais do usuário (contas/cartões/investimentos/
+ * pagadores conhecidos) — outro bloco duplicado nos 3 prompts. Flags opcionais
+ * porque nem todo prompt usa todas as listas: IMAGEM não classifica `invest`
+ * (sem `investmentsLabel`) e, no caminho enxuto, também não usa a lista de
+ * pagadores conhecidos (docs/30-TELEGRAM.md, "Parsing por IA (lançamento via
+ * FOTO)" — menos tokens, leitura mais rápida de fotos simples).
+ */
+function contextBlock(ctx: AiParserContext, options: { includeInvestments: boolean; includeMerchants: boolean }): string[] {
+  const accountsLabel = labelOrPlaceholder(ctx.accountNames, "(nenhuma cadastrada)");
+  const cardsLabel = labelOrPlaceholder(ctx.cardNames, "(nenhum cadastrado)");
+
+  const lines = [`Contas do usuário: [${accountsLabel}]`, `Cartões do usuário: [${cardsLabel}]`];
+
+  if (options.includeInvestments) {
+    const investmentsLabel = labelOrPlaceholder(ctx.investmentNames, "(nenhum cadastrado)");
+    lines.push(`Investimentos do usuário: [${investmentsLabel}]`);
+  }
+  if (options.includeMerchants) {
+    lines.push(`Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${knownMerchantsLabel(ctx.knownMerchants)}]`);
+  }
+
+  return lines;
+}
+
 function buildPrompt(rawText: string, ctx: AiParserContext): string {
   const categoriesLabel = labelOrPlaceholder(ctx.categoryNames, "(nenhuma cadastrada)");
   const accountsLabel = labelOrPlaceholder(ctx.accountNames, "(nenhuma cadastrada)");
   const cardsLabel = labelOrPlaceholder(ctx.cardNames, "(nenhum cadastrado)");
   const investmentsLabel = labelOrPlaceholder(ctx.investmentNames, "(nenhum cadastrado)");
-  const merchantsLabel = knownMerchantsLabel(ctx.knownMerchants);
 
   return [
     "Você processa uma mensagem (pt-BR) enviada por um usuário a um bot do Telegram de finanças pessoais.",
     `Data de referência ("hoje"): ${ctx.todaySaoPaulo} (America/Sao_Paulo).`,
     "",
-    "PRIMEIRO classifique a mensagem em um `intent`:",
-    '- "register": o usuário quer REGISTRAR um lançamento novo (gasto ou receita) — ex.: "mercado 120", "recebi 500 de freela". NÃO use register para aporte em investimento (cofrinho/CDB).',
-    '- "invest": o usuário quer APORTAR / investir dinheiro num produto cadastrado — ex.: "investi 100 no Cofrinho Nubank", "aportei 200 no CDB", "coloquei 50 no cofrinho".',
-    '- "query": o usuário está PERGUNTANDO sobre as finanças dele, sem querer registrar nada novo — ex.: "quanto gastei esse mês", "qual meu saldo", "quais meus investimentos", "fatura do Nubank", "quanto falta pagar".',
-    '- "unknown": nem lançamento nem pergunta reconhecível (saudação, mensagem aleatória, pergunta fora de escopo financeiro).',
+    ...INTENT_CLASSIFICATION,
     "",
-    'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null e invest=null.',
-    'Se intent="invest": preencha isTransaction=false, description curto, invest={amount, investmentName, accountName}, query=null.',
-    'Se intent="query": preencha isTransaction=false, description com qualquer texto curto (não é usado), e preencha o objeto `query` seguindo as "Regras de pergunta" abaixo. Deixe invest=null.',
-    'Se intent="unknown": preencha isTransaction=false e deixe query=null e invest=null.',
+    ...rulesLaunch(categoriesLabel),
     "",
-    'Regras de lançamento (só valem quando intent="register"):',
-    "- isTransaction=false se a mensagem NÃO for um lançamento (saudação, pergunta, texto aleatório sem qualquer menção a gasto/recebimento de dinheiro).",
-    '- type: INCOME quando o dinheiro ENTRA pro usuário (ex.: "recebi", "recebido de", "pix recebido", "caiu", salário, freela); EXPENSE quando o dinheiro SAI (ex.: "paguei", "comprei", "pix para", "transferência para", gasto do dia a dia). Assuma EXPENSE quando ambíguo.',
-    '- amount: valor decimal em string (ex.: "30" ou "30.50"), sem símbolo de moeda. Se a mensagem NÃO mencionar nenhum valor numérico, retorne null — NUNCA invente um valor.',
-    "- description: descrição curta do lançamento (poucas palavras). Pessoa ou empresa EXTERNA citada (ex.: \"mãe\", \"Romeika\", \"Funape\" — alguém que NÃO é o próprio usuário) SEMPRE vai na descrição, nunca é uma conta/cartão do usuário. Se o pagador/beneficiário for o MESMO de um item da lista \"Pagadores/recebedores conhecidos\" abaixo (mesmo com o texto diferente — variação de grafia, abreviação, razão social com CNPJ junto etc.), escreva a description com o nome CANÔNICO desse item (o texto entre aspas antes da seta), em vez de repetir o texto cru da mensagem.",
-    '- date: resolva datas relativas ("hoje", "ontem", "amanhã") e absolutas ("dia 18/06", "18/06") usando a data de referência acima como "hoje" e o ano corrente quando omitido. Formato YYYY-MM-DD. Se a mensagem não mencionar data, retorne null.',
-    `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Se o pagador/beneficiário bater com um item da lista "Pagadores/recebedores conhecidos" abaixo (mesmo critério da regra de description), use a categoria DESSE item. Senão, se nenhuma categoria for uma boa correspondência, retorne null.`,
-    '- paymentMethod: identifique COMO o dinheiro saiu/entrou — "credit" (cartão de crédito), "debit" (cartão de débito), "pix", "transfer" (transferência/TED/DOC), "cash" (dinheiro/espécie). Se a mensagem não mencionar nenhum canal, retorne null.',
-    '- originKind/originName: só preencha se o nome citado bater com um item REAL das listas abaixo. Se citar um CARTÃO da lista (geralmente junto de "crédito"/"débito"), originKind="card" e originName = nome EXATO da lista de cartões. Se citar uma CONTA da lista (geralmente junto de "pix"/"transferência"/banco), originKind="account" e originName = nome EXATO da lista de contas. IMPORTANTE: nome de pessoa/empresa EXTERNA (que foi pra description) NUNCA é origem, mesmo aparecendo perto de "pix" ou "transferência". Sem menção de conta/cartão real do usuário, ambos null.',
+    ...rulesInvest(investmentsLabel, accountsLabel),
     "",
-    'Regras de aporte (só valem quando intent="invest"):',
-    '- invest.amount: valor decimal em string (ex.: "100" ou "100.50"). null se não houver valor — NUNCA invente.',
-    `- invest.investmentName: nome MAIS PRÓXIMO dentre os investimentos do usuário: [${investmentsLabel}]. null se não citar nenhum.`,
-    `- invest.accountName: conta de onde sai o dinheiro, se citada — nome EXATO de [${accountsLabel}]. null se não citar (o app usa a conta default).`,
+    ...rulesQuery(categoriesLabel, cardsLabel),
     "",
-    'Regras de pergunta (só valem quando intent="query"):',
-    '- queryType: "spent" (quanto gastou), "received" (quanto recebeu), "balance" (saldo das contas), "category_total" (quanto gastou numa categoria específica — preencha categoryName), "top_categories" (quais categorias tiveram maior gasto), "card_invoice" (fatura de um cartão específico — preencha cardName), "unpaid" (quanto falta pagar / previsto) ou "investments" (quais investimentos tem / posição / total investido).',
-    `- categoryName (só relevante para queryType="category_total"): nome MAIS PRÓXIMO dentre a lista de categorias do usuário: [${categoriesLabel}]. null se a mensagem não citar uma categoria ou o queryType for outro.`,
-    `- cardName (só relevante para queryType="card_invoice"): nome MAIS PRÓXIMO dentre a lista de cartões do usuário: [${cardsLabel}]. null se a mensagem não citar um cartão ou o queryType for outro.`,
-    '- period: "this_month" (padrão — quando a mensagem não menciona período, ou fala do mês atual), "last_month" (mês passado), "this_year" (esse ano/ano todo). Para queryType="investments" use "this_month" (período é ignorado).',
-    "",
-    `Contas do usuário: [${accountsLabel}]`,
-    `Cartões do usuário: [${cardsLabel}]`,
-    `Investimentos do usuário: [${investmentsLabel}]`,
-    `Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${merchantsLabel}]`,
+    ...contextBlock(ctx, { includeInvestments: true, includeMerchants: true }),
     "",
     `Mensagem do usuário: "${rawText}"`,
   ].join("\n");
 }
 
 /**
- * Prompt da extração via Gemini VISION (docs/30-TELEGRAM.md — bot aceita
- * foto de nota/comprovante/notificação). A imagem pode ser um recibo/nota
- * fiscal, um comprovante de Pix/transferência OU uma notificação push do
- * banco/cartão (print de tela do celular) — as mesmas regras de
- * type/amount/description/categoryName/paymentMethod/originKind/originName
- * de `buildPrompt` valem aqui, só a FONTE dos dados muda (imagem em vez de
- * texto). `caption` (texto que o usuário mandou junto da foto, opcional) vira
- * dica extra no fim do prompt.
+ * Prompt da extração via Gemini VISION (docs/30-TELEGRAM.md, "Parsing por IA
+ * (lançamento via FOTO)"). A imagem pode ser um recibo/nota fiscal, um
+ * comprovante de Pix/transferência, uma notificação push do banco/cartão OU a
+ * tela de detalhe da compra no app do cartão — mantém isTransaction/type/
+ * amount/description/date/paymentMethod/originKind/originName específicos de
+ * leitura visual (bem diferentes do texto/voz, por isso NÃO reusa
+ * `rulesLaunch`). PROMPT ENXUTO DE PROPÓSITO: sem intent (imagem só faz
+ * register), sem a prosa de "regras de categoria" (produtos/loja generalista/
+ * merchant canônico) e sem a lista de ~40 pagadores conhecidos — só uma linha
+ * simples de categoryName contra os nomes de categoria. Menos thinking token
+ * pro Gemini = leitura mais rápida e confiável de fotos simples (medido:
+ * prompt cheio ~7s vs. enxuto ~3.5s pra mesma foto). `caption` (texto que o
+ * usuário mandou junto da foto, opcional) vira dica extra no fim do prompt.
  */
 function buildImagePrompt(caption: string | null, ctx: AiParserContext): string {
   const categoriesLabel = labelOrPlaceholder(ctx.categoryNames, "(nenhuma cadastrada)");
-  const accountsLabel = labelOrPlaceholder(ctx.accountNames, "(nenhuma cadastrada)");
-  const cardsLabel = labelOrPlaceholder(ctx.cardNames, "(nenhum cadastrado)");
-  const merchantsLabel = knownMerchantsLabel(ctx.knownMerchants);
 
   const lines = [
     "Você extrai dados de uma IMAGEM de um lançamento financeiro pessoal (pt-BR) enviada por um usuário a um bot do Telegram.",
@@ -230,14 +284,12 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
     "- isTransaction=false SOMENTE se a imagem NÃO mostrar valor monetário NEM estabelecimento/lançamento financeiro (selfie, meme, print sem compra). Print de detalhe de compra no app do cartão = isTransaction=true.",
     '- type: INCOME quando o dinheiro ENTRA pro usuário (recebimento, Pix recebido, depósito); EXPENSE quando o dinheiro SAI (compra aprovada, pagamento, Pix enviado, compra à vista no cartão). Assuma EXPENSE quando ambíguo — a maioria das telas de cartão/recibo é gasto.',
     '- amount: valor TOTAL da compra exatamente como aparece (o valor grande "R$ …", ou "aprovado"/"pago"), em string decimal com PONTO (ex.: "30.45"), sem símbolo de moeda. Se a imagem NÃO mostrar nenhum valor numérico legível, retorne null — NUNCA invente um valor.',
-    '- description: o ESTABELECIMENTO/comércio citado (ex.: "99 Food", "FILIAL ELDORA"), poucas palavras. Em tela de detalhe do cartão, prefira o nome do estabelecimento; se estiver genérico/vazio, use o "Dado original" (ex.: "99food *Predileto S Sa") como descrição. Pessoa/empresa EXTERNA (destinatário de um Pix) vai na descrição, nunca é origem. Se bater com um item da lista "Pagadores/recebedores conhecidos" abaixo, use o nome CANÔNICO desse item (texto entre aspas antes da seta).',
+    '- description: o ESTABELECIMENTO/comércio citado (ex.: "99 Food", "FILIAL ELDORA"), poucas palavras. Em tela de detalhe do cartão, prefira o nome do estabelecimento; se estiver genérico/vazio, use o "Dado original" (ex.: "99food *Predileto S Sa") como descrição. Pessoa/empresa EXTERNA (destinatário de um Pix) vai na descrição, nunca é origem.',
     "- date: se a imagem mostrar a data/hora do lançamento (incluindo por extenso em pt-BR), resolva pro formato YYYY-MM-DD. Sem nenhuma data visível, retorne null (o sistema assume hoje).",
-    `- categoryName: escolha o nome MAIS PRÓXIMO dentre esta lista de categorias do usuário: [${categoriesLabel}]. Baseie-se no estabelecimento / "Dado original" / produtos do recibo — NÃO use o nome de um cartão/conta como categoria. Se a imagem for um recibo/nota com PRODUTOS/itens legíveis, baseie a categoria nos PRODUTOS, não só no nome da loja (loja generalista: remédio no mercado → Farmácia). Uma categoria só para a transação inteira. Se o pagador bater com a lista de conhecidos abaixo, use a categoria DESSE item só quando os produtos não indicarem outra. Sem boa correspondência, retorne null.`,
+    `- categoryName: escolha o nome mais próximo desta lista de categorias do usuário: [${categoriesLabel}], ou null.`,
     '- paymentMethod: "credit" quando a imagem mostrar compra no cartão de crédito, "Cartão virtual", "Compra à vista"/"Parcelado" no app do cartão, ou "crédito"; "debit" (débito); "pix"; "transfer" (TED/DOC/transferência); "cash" (dinheiro). Sem menção clara, retorne null.',
     `- originKind/originName: só preencha se o NOME (não o número) de uma conta ou cartão REAL do usuário aparecer na imagem OU na legenda (ver abaixo), batendo com um item das listas. Menções como "cartão com final 7547" / ".... 7547" NÃO bastam — o app não guarda os últimos dígitos. Nesse caso deixe originKind/originName null.`,
-    `Contas do usuário: [${accountsLabel}]`,
-    `Cartões do usuário: [${cardsLabel}]`,
-    `Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${merchantsLabel}]`,
+    ...contextBlock(ctx, { includeInvestments: false, includeMerchants: false }),
   ];
 
   if (caption) {
@@ -257,58 +309,32 @@ function buildImagePrompt(caption: string | null, ctx: AiParserContext): string 
 }
 
 /**
- * Prompt pra nota de voz — mesmas regras de lançamento/consulta do texto
- * (`buildPrompt`), só a FONTE muda (áudio OGG). Gemini 2.5 Flash entende
- * áudio nativo (`audio/ogg`); não há STT separado.
+ * Prompt pra nota de voz — mesmos blocos de regra do texto (`rulesLaunch`/
+ * `rulesInvest`/`rulesQuery`/`contextBlock`), só o preâmbulo muda pra pedir
+ * transcrição mental do áudio (docs/30-TELEGRAM.md, "Parsing por IA (nota de
+ * VOZ / áudio)"). Gemini 2.5 Flash entende áudio nativo (`audio/ogg`); não há
+ * STT separado.
  */
 function buildVoicePrompt(ctx: AiParserContext): string {
   const categoriesLabel = labelOrPlaceholder(ctx.categoryNames, "(nenhuma cadastrada)");
   const accountsLabel = labelOrPlaceholder(ctx.accountNames, "(nenhuma cadastrada)");
   const cardsLabel = labelOrPlaceholder(ctx.cardNames, "(nenhum cadastrado)");
   const investmentsLabel = labelOrPlaceholder(ctx.investmentNames, "(nenhum cadastrado)");
-  const merchantsLabel = knownMerchantsLabel(ctx.knownMerchants);
 
   return [
     "Você processa uma NOTA DE VOZ (pt-BR) enviada por um usuário a um bot do Telegram de finanças pessoais.",
     "Transcreva mentalmente o áudio e classifique/extraia como se fosse texto digitado.",
     `Data de referência ("hoje"): ${ctx.todaySaoPaulo} (America/Sao_Paulo).`,
     "",
-    "PRIMEIRO classifique a mensagem em um `intent`:",
-    '- "register": o usuário quer REGISTRAR um lançamento novo (gasto ou receita) — ex.: "mercado cento e vinte", "recebi quinhentos de freela". NÃO use register para aporte em investimento.',
-    '- "invest": o usuário quer APORTAR / investir — ex.: "investi cem no Cofrinho Nubank", "aportei duzentos no CDB".',
-    '- "query": o usuário está PERGUNTANDO sobre as finanças dele — ex.: "quanto gastei esse mês", "qual meu saldo", "quais meus investimentos".',
-    '- "unknown": áudio inaudível, saudação, ou nada financeiro reconhecível.',
+    ...INTENT_CLASSIFICATION,
     "",
-    'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null e invest=null.',
-    'Se intent="invest": preencha isTransaction=false, description curto, invest={amount, investmentName, accountName}, query=null.',
-    'Se intent="query": preencha isTransaction=false, description com qualquer texto curto, e preencha o objeto `query`. Deixe invest=null.',
-    'Se intent="unknown": preencha isTransaction=false e deixe query=null e invest=null.',
+    ...rulesLaunch(categoriesLabel),
     "",
-    'Regras de lançamento (só valem quando intent="register"):',
-    "- isTransaction=false se o áudio NÃO for um lançamento.",
-    '- type: INCOME quando o dinheiro ENTRA; EXPENSE quando SAI. Assuma EXPENSE quando ambíguo.',
-    '- amount: valor decimal em string (ex.: "30" ou "30.50"). Números falados ("trinta", "trinta e quarenta e cinco") viram decimal. Se NÃO houver valor, retorne null — NUNCA invente.',
-    '- description: descrição curta. Pessoa/empresa externa vai na description, nunca é origem. Se bater com "Pagadores/recebedores conhecidos", use o nome canônico.',
-    '- date: relativos ("hoje"/"ontem") e absolutos → YYYY-MM-DD. Sem data → null.',
-    `- categoryName: mais próximo de [${categoriesLabel}], ou null.`,
-    '- paymentMethod: "credit"/"debit"/"pix"/"transfer"/"cash", ou null.',
-    '- originKind/originName: só se citar conta/cartão REAL das listas. Pessoa externa NUNCA é origem.',
+    ...rulesInvest(investmentsLabel, accountsLabel),
     "",
-    'Regras de aporte (só valem quando intent="invest"):',
-    '- invest.amount: valor decimal em string. null se não houver — NUNCA invente.',
-    `- invest.investmentName: mais próximo de [${investmentsLabel}], ou null.`,
-    `- invest.accountName: conta citada de [${accountsLabel}], ou null.`,
+    ...rulesQuery(categoriesLabel, cardsLabel),
     "",
-    'Regras de pergunta (só valem quando intent="query"):',
-    '- queryType: "spent" | "received" | "balance" | "category_total" | "top_categories" | "card_invoice" | "unpaid" | "investments".',
-    `- categoryName (category_total): mais próximo de [${categoriesLabel}], ou null.`,
-    `- cardName (card_invoice): mais próximo de [${cardsLabel}], ou null.`,
-    '- period: "this_month" (padrão) | "last_month" | "this_year". Para investments use "this_month".',
-    "",
-    `Contas do usuário: [${accountsLabel}]`,
-    `Cartões do usuário: [${cardsLabel}]`,
-    `Investimentos do usuário: [${investmentsLabel}]`,
-    `Pagadores/recebedores conhecidos do usuário (descrição → categoria mais usada): [${merchantsLabel}]`,
+    ...contextBlock(ctx, { includeInvestments: true, includeMerchants: true }),
   ].join("\n");
 }
 
