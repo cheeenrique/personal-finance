@@ -4,7 +4,6 @@ import { accountService } from "@/modules/accounts/service";
 import { cardService } from "@/modules/cards/service";
 import { investmentService } from "@/modules/investments/service";
 import { transactionService } from "@/modules/transactions/service";
-import { merchantRuleService } from "@/modules/merchant-rules/service";
 import type { Category, CategoryTreeNode } from "@/modules/categories/types";
 import type { KnownMerchant } from "@/modules/transactions/types";
 import { normalizeWord } from "./normalize";
@@ -60,32 +59,8 @@ function matchByKeyword(candidates: string[], categories: Category[]): Category 
 }
 
 /**
- * Override determinístico merchant→categoria (docs/superpowers/specs/
- * 2026-07-08-telegram-recibo-categoria-refino-design.md) — GANHA de
- * keyword/histórico/IA/fallback. Consulta `merchantRuleService.
- * resolveCategoryOverride` (1 query) e resolve o `{id, name}` dentro da lista
- * de categorias JÁ carregada pelo chamador (mesmo `expectedType`, sem 2ª
- * query) — se a categoria da regra não bater o tipo esperado (caso
- * degenerado, `MerchantCategoryRule` não guarda `type`), o override não se
- * aplica e o chamador segue pro próximo critério.
- */
-async function resolveOverrideMatch(
-  userId: string,
-  description: string,
-  categories: Category[],
-): Promise<{ id: string; name: string } | null> {
-  const overrideCategoryId = await merchantRuleService.resolveCategoryOverride(userId, description);
-  if (!overrideCategoryId) return null;
-
-  const match = categories.find((category) => category.id === overrideCategoryId);
-  return match ? { id: match.id, name: match.name } : null;
-}
-
-/**
  * Resolve a categoria de uma transação criada via Telegram (docs/30-TELEGRAM.md,
- * Regra 2 + "Estrutura de Interpretação"): 0) OVERRIDE determinístico do
- * usuário (`resolveOverrideMatch`, GANHA de tudo abaixo); 1) palavra-chave
- * explícita ou a
+ * Regra 2 + "Estrutura de Interpretação"): 1) palavra-chave explícita ou a
  * própria descrição batendo com nome de categoria (própria OU filha) já
  * existente do usuário — usa a categoria EXATA que casou, sem subir pro pai
  * (granularidade específica pros relatórios); 2) HISTÓRICO — categoria da
@@ -105,9 +80,6 @@ export async function resolveCategoryId(
   const tree = await categoryService.listTree(userId);
   const categories = flattenTree(tree).filter((category) => category.type === expectedType);
 
-  const overrideMatch = await resolveOverrideMatch(userId, description, categories);
-  if (overrideMatch) return overrideMatch;
-
   const keywordMatch = matchByKeyword(keywordCandidates, categories);
   if (keywordMatch) {
     return { id: keywordMatch.id, name: keywordMatch.name };
@@ -126,17 +98,13 @@ export async function resolveCategoryId(
 
 /**
  * Resolve o `categoryName` sugerido pela IA (docs/30-TELEGRAM.md, "Parsing
- * por IA") contra as categorias REAIS do usuário: 0) OVERRIDE determinístico
- * do usuário (`resolveOverrideMatch`, GANHA de tudo — inclusive de um
- * `categoryName` que já bate exato com uma categoria real, ex.: IA escolhe
- * "Mercado" pra Eldora, mas o usuário tem override "eldora → Farmácia"); 1)
- * match EXATO por nome (case/acento-insensível) — diferente de
- * `matchByKeyword` acima (usado pelo parser regex, que casa uma palavra
- * isolada contra PARTES do nome, porque ali as candidatas são palavras
- * soltas da mensagem, não o nome completo escolhido pela IA a partir da
- * lista real). Usa a categoria EXATA que casou (própria OU filha), sem subir
- * pro pai. Sem override nem match exato → cai no `resolveCategoryId`
- * existente (que já reaplica o override antes de keyword → histórico →
+ * por IA") contra as categorias REAIS do usuário: 1) match EXATO por nome
+ * (case/acento-insensível) — diferente de `matchByKeyword` acima (usado pelo
+ * parser regex, que casa uma palavra isolada contra PARTES do nome, porque
+ * ali as candidatas são palavras soltas da mensagem, não o nome completo
+ * escolhido pela IA a partir da lista real). Usa a categoria EXATA que casou
+ * (própria OU filha), sem subir pro pai. Sem match exato → cai no
+ * `resolveCategoryId` existente (que já aplica keyword → histórico →
  * fallback "Outros"/"Outros (Receita)", sem duplicar essa regra) — cobre
  * tanto o lançamento por texto quanto por foto (ambos passam por aqui,
  * `draft.ts`).
@@ -151,9 +119,6 @@ export async function resolveCategoryByName(
   const expectedType = type === "INCOME" ? CategoryType.INCOME : CategoryType.EXPENSE;
   const tree = await categoryService.listTree(userId);
   const categories = flattenTree(tree).filter((category) => category.type === expectedType);
-
-  const overrideMatch = await resolveOverrideMatch(userId, description, categories);
-  if (overrideMatch) return overrideMatch;
 
   if (categoryName) {
     const normalizedTarget = normalizeWord(categoryName);

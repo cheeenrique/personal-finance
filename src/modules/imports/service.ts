@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { accountRepository } from "@/modules/accounts/repository";
-import { categoryRepository } from "@/modules/categories/repository";
 import { transactionService } from "@/modules/transactions/service";
-import { merchantRuleService } from "@/modules/merchant-rules/service";
 import { calendarPartsSP } from "@/lib/date/calendar-sp";
 import { parseImportFile } from "./parsers";
 import { importRepository, type FallbackRow } from "./repository";
@@ -85,31 +83,19 @@ function isDuplicate(item: ParsedTransaction, state: DedupState): boolean {
 }
 
 /**
- * Categoria sugerida por descrição — 0) OVERRIDE determinístico do usuário
- * (docs/superpowers/specs/2026-07-08-telegram-recibo-categoria-refino-design.md,
- * `merchantRuleService.resolveCategoryOverride`, GANHA de tudo); 1)
- * `transactionService.lastCategoryForDescription` (já existente — reusado,
- * nunca reimplementado). `null` quando nem o override nem o histórico
- * resolvem — jamais inventa categoria (instrução explícita do dono).
- * Preview (`resolveCategoryName`) e commit (`resolveCategoryId`) aplicam a
- * MESMA regra, senão a prévia mostraria uma categoria diferente da que
- * realmente é gravada.
+ * Categoria sugerida por descrição — `transactionService.
+ * lastCategoryForDescription` (já existente — reusado, nunca reimplementado).
+ * `null` quando o histórico não resolve — jamais inventa categoria (instrução
+ * explícita do dono). Preview (`resolveCategoryName`) e commit
+ * (`resolveCategoryId`) aplicam a MESMA regra, senão a prévia mostraria uma
+ * categoria diferente da que realmente é gravada.
  */
 async function resolveCategoryName(userId: string, description: string): Promise<string | null> {
-  const overrideCategoryId = await merchantRuleService.resolveCategoryOverride(userId, description);
-  if (overrideCategoryId) {
-    const category = await categoryRepository.findById(userId, overrideCategoryId);
-    if (category) return category.name;
-  }
-
   const category = await transactionService.lastCategoryForDescription(userId, description);
   return category?.name ?? null;
 }
 
 async function resolveCategoryId(userId: string, description: string): Promise<string | null> {
-  const overrideCategoryId = await merchantRuleService.resolveCategoryOverride(userId, description);
-  if (overrideCategoryId) return overrideCategoryId;
-
   const category = await transactionService.lastCategoryForDescription(userId, description);
   return category?.id ?? null;
 }
