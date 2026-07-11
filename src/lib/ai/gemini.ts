@@ -93,3 +93,64 @@ export async function callGemini<T>(
     clearTimeout(timeout);
   }
 }
+
+import type { AiModelConfig, ExtractionInput, ExtractOpts, JsonSchema, StructuredExtractor } from "./types";
+
+/**
+ * `GeminiExtractor` — adapter de FALLBACK (instrução do dono: "não desabilite o Gemini,
+ * deixe como fallback") embrulhando o `callGemini` acima. `document-text`/`document-vision`
+ * já apontam `fallback: "gemini"` no registry (`models.ts`, T4) — o facade (`extract.ts`,
+ * T7) instancia e chama isto de verdade quando o provider primário (NVIDIA) esgota
+ * retry, não é um caminho morto. `_model` não é usado: `callGemini` já fixa
+ * `GEMINI_MODEL`/`thinkingBudget=0` internamente (mesma decisão de todos os callers atuais
+ * do Telegram/import de extrato) — trocar de modelo Gemini continua sendo só editar a
+ * constante `GEMINI_MODEL` no topo deste arquivo (OCP), nunca um parser.
+ */
+
+type JsonSchemaNode = {
+  type?: string;
+  properties?: Record<string, JsonSchemaNode>;
+  items?: JsonSchemaNode;
+  required?: string[];
+  enum?: string[];
+  nullable?: boolean;
+};
+
+/** Converte um JSON Schema padrão (`type` lowercase) pro formato OpenAPI do Gemini (`type`
+ * UPPERCASE) — só o subset usado pelos parsers deste projeto. */
+export function toGeminiSchema(schema: JsonSchema): object {
+  return convertSchemaNode(schema as JsonSchemaNode);
+}
+
+function convertSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  if (node.type) result.type = node.type.toUpperCase();
+  if (node.enum) result.enum = node.enum;
+  if (node.nullable) result.nullable = true;
+  if (node.required) result.required = node.required;
+  if (node.properties) {
+    result.properties = Object.fromEntries(
+      Object.entries(node.properties).map(([key, value]) => [key, convertSchemaNode(value)]),
+    );
+  }
+  if (node.items) result.items = convertSchemaNode(node.items);
+  return result;
+}
+
+export class GeminiExtractor implements StructuredExtractor {
+  async extract<T>(
+    input: ExtractionInput,
+    prompt: string,
+    schema: JsonSchema,
+    parse: (raw: unknown) => T | null,
+    _model: AiModelConfig,
+    opts?: ExtractOpts,
+  ): Promise<T | null> {
+    const parts: GeminiContentPart[] =
+      input.kind === "text"
+        ? [{ text: `${prompt}\n\n${input.text}` }]
+        : [{ inlineData: { mimeType: input.mimeType, data: input.bytes.toString("base64") } }, { text: prompt }];
+
+    return callGemini([{ parts }], "lib-ai-extract", toGeminiSchema(schema), parse, opts?.timeoutMs);
+  }
+}
