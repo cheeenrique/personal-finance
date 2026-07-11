@@ -1,21 +1,20 @@
 import { z } from "zod";
 import type { ParsedFinancing } from "./types";
-import { callGemini, type GeminiContentPart } from "./ai-parser";
+import { extractPdfText, PdfPasswordError } from "@/lib/pdf/extract-text";
+import { extractStructured } from "@/lib/ai/extract";
+import type { JsonSchema } from "@/lib/ai/types";
 
 /**
  * Parsing de um DOCUMENTO de financiamento (CCB/contrato de banco, PDF ou
- * foto) via Gemini Flash (docs/50-AUDITORIA-BACKLOG.md — módulo `loans`,
- * `kind=FINANCING`). Reusa `callGemini` (`ai-parser.ts`) — mesmo padrão
- * REST/timeout/tratamento de erro da extração de transação, só o
- * `contents`/schema/validador mudam. Gemini 2.5 Flash aceita PDF via
- * `inlineData` com `mimeType: "application/pdf"`, igual imagem — mesmo
- * caminho serve pra foto do contrato.
+ * foto) via camada de IA (docs/superpowers/specs/2026-07-11-import-fatura-cartao-credito-design.md).
+ * PDF com text layer usa `role: "document-text"` (deepseek, `thinking:false`)
+ * — o MESMO role da fatura de cartão, sem tratamento especial pra contrato.
+ * PDF escaneado (sem text layer) ou foto direta usa `role: "document-vision"`
+ * (qwen) — mesmo caminho de `card-invoice-parser.ts`. Ver
+ * `parseFinancingFromDocument` mais abaixo pro racional completo.
  *
- * Decisão do dono do produto: Gemini é mais assertivo que regex/OCR pra ler
- * CCB de bancos diferentes (layout varia bastante entre C6, Itaú etc.).
- *
- * NUNCA loga o conteúdo do documento nem a API key (docs/30-TELEGRAM.md,
- * "Segurança") — mesmo racional de `ai-parser.ts`.
+ * NUNCA loga o conteúdo do documento, a senha nem a API key
+ * (docs/30-TELEGRAM.md, "Segurança").
  */
 
 const decimalStringSchema = z
@@ -62,42 +61,41 @@ export const parsedFinancingSchema = z.object({
   installments: z.array(parsedFinancingInstallmentSchema).nullable().optional(),
 });
 
-/** Formato Gemini/OpenAPI do `responseSchema` — espelha `parsedFinancingSchema` acima (structured output, ver `RESPONSE_SCHEMA` em `ai-parser.ts` pro mesmo padrão). */
-const FINANCING_RESPONSE_SCHEMA = {
-  type: "OBJECT",
+/** JSON Schema padrão (lowercase) do `responseSchema` — espelha `parsedFinancingSchema`
+ * acima (structured output, mesmo formato usado por `card-invoice-parser.ts` — os
+ * adapters convertem internamente quando precisam, ver `gemini.ts` `toGeminiSchema`). */
+const FINANCING_RESPONSE_SCHEMA: JsonSchema = {
+  type: "object",
   properties: {
-    description: { type: "STRING", nullable: true },
-    lender: { type: "STRING", nullable: true },
-    operationRef: { type: "STRING", nullable: true },
-    principal: { type: "STRING", nullable: true },
-    downPayment: { type: "STRING", nullable: true },
-    assetValue: { type: "STRING", nullable: true },
-    assetDescription: { type: "STRING", nullable: true },
-    installmentsCount: { type: "INTEGER", nullable: true },
-    installmentAmount: { type: "STRING", nullable: true },
-    totalToPay: { type: "STRING", nullable: true },
-    firstDueDate: { type: "STRING", nullable: true },
-    interestRate: { type: "STRING", nullable: true },
-    interestPeriod: { type: "STRING", enum: INTEREST_PERIOD_VALUES, nullable: true },
-    cet: { type: "STRING", nullable: true },
-    amortizationSystem: { type: "STRING", enum: AMORTIZATION_SYSTEM_VALUES, nullable: true },
-    financedTaxes: { type: "STRING", nullable: true },
-    financedInsurance: { type: "STRING", nullable: true },
-    financedFees: { type: "STRING", nullable: true },
+    description: { type: "string", nullable: true },
+    lender: { type: "string", nullable: true },
+    operationRef: { type: "string", nullable: true },
+    principal: { type: "string", nullable: true },
+    downPayment: { type: "string", nullable: true },
+    assetValue: { type: "string", nullable: true },
+    assetDescription: { type: "string", nullable: true },
+    installmentsCount: { type: "integer", nullable: true },
+    installmentAmount: { type: "string", nullable: true },
+    totalToPay: { type: "string", nullable: true },
+    firstDueDate: { type: "string", nullable: true },
+    interestRate: { type: "string", nullable: true },
+    interestPeriod: { type: "string", enum: INTEREST_PERIOD_VALUES, nullable: true },
+    cet: { type: "string", nullable: true },
+    amortizationSystem: { type: "string", enum: AMORTIZATION_SYSTEM_VALUES, nullable: true },
+    financedTaxes: { type: "string", nullable: true },
+    financedInsurance: { type: "string", nullable: true },
+    financedFees: { type: "string", nullable: true },
     installments: {
-      type: "ARRAY",
+      type: "array",
       nullable: true,
       items: {
-        type: "OBJECT",
-        properties: {
-          amount: { type: "STRING" },
-          dueDate: { type: "STRING" },
-        },
+        type: "object",
+        properties: { amount: { type: "string" }, dueDate: { type: "string" } },
         required: ["amount", "dueDate"],
       },
     },
   },
-} as const;
+};
 
 /**
  * Prompt pt-BR instruindo o Gemini a extrair os campos de um contrato/CCB de
@@ -163,22 +161,65 @@ function parseFinancingResponse(rawJson: unknown): ParsedFinancing | null {
 }
 
 /**
- * Extração via Gemini a partir de um DOCUMENTO de financiamento — PDF ou foto
- * do contrato/CCB, `mimeType` tipicamente `"application/pdf"` ou
- * `"image/jpeg"`/`"image/png"`. `null` em qualquer falha (sem
- * `GEMINI_API_KEY`, erro de rede, timeout, resposta não-2xx, JSON inválido ou
- * fora do shape esperado) — NUNCA lança; o chamador (módulo `loans`, fora do
- * escopo deste parser) decide o fallback (ex.: pedir pra digitar os campos
- * manualmente). NUNCA loga os bytes do documento nem a API key.
+ * Extração via camada de IA (docs/superpowers/specs/2026-07-11-import-fatura-cartao-credito-design.md,
+ * "Fluxo 2") — PDF com text layer usa `role: "document-text"` (deepseek, `thinking:false`),
+ * o MESMO role usado pra fatura de cartão (`card-invoice-parser.ts`) — thinking/reasoning
+ * OFF por padrão vale pra TODO documento, contrato incluso (decisão explícita do dono:
+ * ligar reasoning só por medição concreta, nunca por suposição de que um documento
+ * "parece complexo" — ver nota condicional no final do arquivo/plano, T13, sobre trocar
+ * pra `role: "document-text-reasoning"` SE os testes reais mostrarem confusão de campo).
+ * PDF escaneado (sem text layer) ou foto direta (mimeType não-PDF) usa
+ * `role: "document-vision"` (qwen) — mesmo caminho de `card-invoice-parser.ts`.
+ *
+ * `password` só se aplica a PDF (CCB escaneado como foto não tem senha). Senha
+ * errada/faltando (`PdfPasswordError`) e qualquer outra falha de leitura do PDF viram
+ * `null` — MESMO contrato de sempre (`callGemini` também sempre devolvia `null` em
+ * qualquer falha), o chamador (`modules/loans`, fora deste parser) já trata `null` como
+ * "peça pro usuário preencher manualmente".
  */
 export async function parseFinancingFromDocument(
   documentBytes: Buffer,
   mimeType: string,
+  password?: string,
 ): Promise<ParsedFinancing | null> {
-  const parts: GeminiContentPart[] = [
-    { inlineData: { mimeType, data: documentBytes.toString("base64") } },
-    { text: buildFinancingPrompt() },
-  ];
+  const prompt = buildFinancingPrompt();
 
-  return callGemini([{ parts }], "financing-document", FINANCING_RESPONSE_SCHEMA, parseFinancingResponse);
+  if (mimeType !== "application/pdf") {
+    return extractStructured(
+      "document-vision",
+      { kind: "vision", bytes: documentBytes, mimeType },
+      prompt,
+      FINANCING_RESPONSE_SCHEMA,
+      parseFinancingResponse,
+    );
+  }
+
+  let extraction: { text: string; hasTextLayer: boolean };
+  try {
+    extraction = await extractPdfText(documentBytes, password);
+  } catch (error) {
+    if (error instanceof PdfPasswordError) return null;
+    console.error("[modules/telegram/financing-parser] extractPdfText failed", {
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    return null;
+  }
+
+  if (extraction.hasTextLayer) {
+    return extractStructured(
+      "document-text",
+      { kind: "text", text: extraction.text },
+      prompt,
+      FINANCING_RESPONSE_SCHEMA,
+      parseFinancingResponse,
+    );
+  }
+
+  return extractStructured(
+    "document-vision",
+    { kind: "vision", bytes: documentBytes, mimeType },
+    prompt,
+    FINANCING_RESPONSE_SCHEMA,
+    parseFinancingResponse,
+  );
 }
