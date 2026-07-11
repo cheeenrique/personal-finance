@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
-import { Loader2 } from "lucide-react";
+import { useState } from "react";
 
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PasswordProtectedFileField } from "@/components/imports/password-protected-file-field";
 import { parseFinancingDocumentAction } from "@/app/(app)/financings/actions";
 import { notifyError } from "@/lib/toast";
 import type { ParsedFinancing } from "@/modules/telegram/types";
@@ -26,26 +24,23 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 /**
- * "Importar de documento" (docs da tarefa, item 5) — sobe PDF/foto do
- * CCB/contrato de banco, chama `parseFinancingDocumentAction` (Gemini) e
- * devolve o `ParsedFinancing` pro `FinancingFormModal` pré-preencher via
- * `onParsed`. Sem passo de prévia separado (diferente de `ImportModal`):
- * o próprio form de criação JÁ é a prévia — o usuário revisa/edita os campos
- * pré-preenchidos e só grava ao clicar "Salvar" (nunca cria nada aqui).
- * Só aparece na CRIAÇÃO (`FinancingFormModal` não renderiza isto editando).
+ * "Importar de documento" — sobe PDF/foto do CCB/contrato de banco (inclusive PDF
+ * cifrado, `PasswordProtectedFileField`), chama `parseFinancingDocumentAction`
+ * (docs/superpowers/specs/2026-07-11-import-fatura-cartao-credito-design.md, "Fluxo 2")
+ * e devolve o `ParsedFinancing` pro `FinancingFormModal` pré-preencher via `onParsed`.
+ * Sem passo de prévia separado: o próprio form de criação JÁ é a prévia.
  */
 export function FinancingImportButton({ onParsed, disabled }: FinancingImportButtonProps) {
   const [importing, setImporting] = useState(false);
   const [inputKey, setInputKey] = useState(0);
+  const [hasPassword, setHasPassword] = useState(false);
+  const [password, setPassword] = useState("");
 
-  async function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  async function handleFileSelect(file: File) {
     setImporting(true);
     try {
       const base64 = await fileToBase64(file);
-      const result = await parseFinancingDocumentAction(base64, file.type);
+      const result = await parseFinancingDocumentAction(base64, file.type, hasPassword ? password : undefined);
       if (!result.success) {
         notifyError(result.error.message);
         return;
@@ -53,37 +48,27 @@ export function FinancingImportButton({ onParsed, disabled }: FinancingImportBut
       onParsed(result.data);
     } finally {
       setImporting(false);
-      // Remonta o <input type="file"> (mesmo truque de `ImportModal`) —
-      // permite reimportar o MESMO arquivo (ex.: tentar de novo depois de
-      // corrigir algo), já que um `<input>` não dispara `onChange` de novo
-      // pro mesmo valor sem isso.
+      // Remonta o <input type="file"> — permite reimportar o MESMO arquivo.
       setInputKey((key) => key + 1);
     }
   }
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-[10px] border border-dashed border-border p-3">
-      <Label htmlFor="financing-import-file" className="text-[12.5px]">
-        Importar de documento (opcional)
-      </Label>
-      <Input
-        key={inputKey}
-        id="financing-import-file"
-        type="file"
-        accept={ACCEPTED_MIME_TYPES}
-        onChange={handleChange}
-        disabled={disabled || importing}
-      />
-      {importing && (
-        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-          Lendo e extraindo os dados do contrato…
-        </p>
-      )}
-      <p className="text-[11.5px] font-medium text-muted-foreground">
-        PDF ou foto do CCB/contrato do banco — os campos abaixo são pré-preenchidos automaticamente. Revise antes de
-        salvar.
-      </p>
-    </div>
+    <PasswordProtectedFileField
+      idPrefix="financing-import"
+      mode="standalone"
+      label="Importar de documento (opcional)"
+      helperText="PDF ou foto do CCB/contrato do banco — os campos abaixo são pré-preenchidos automaticamente. Revise antes de salvar."
+      accept={ACCEPTED_MIME_TYPES}
+      onFileSelect={(file) => void handleFileSelect(file)}
+      loading={importing}
+      loadingLabel="Lendo e extraindo os dados do contrato…"
+      inputKey={inputKey}
+      hasPassword={hasPassword}
+      onHasPasswordChange={setHasPassword}
+      password={password}
+      onPasswordChange={setPassword}
+      disabled={disabled}
+    />
   );
 }
