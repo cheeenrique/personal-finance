@@ -90,20 +90,4 @@ describe("extractStructured", () => {
     expect(nvidiaExtractMock).toHaveBeenCalledTimes(2);
     expect(geminiExtractMock).toHaveBeenCalledTimes(1);
   });
-
-  it("role SEM fallback configurado (document-text-reasoning) nunca chama Gemini, mesmo esgotando retry", async () => {
-    nvidiaExtractMock.mockResolvedValue(null);
-
-    const result = await extractStructured(
-      "document-text-reasoning",
-      { kind: "text", text: "doc" },
-      "prompt",
-      { type: "object" },
-      (raw) => raw,
-    );
-
-    expect(result).toBeNull();
-    expect(nvidiaExtractMock).toHaveBeenCalledTimes(2);
-    expect(geminiExtractMock).not.toHaveBeenCalled();
-  });
 });

@@ -20,11 +20,4 @@ describe("resolveAiModel", () => {
     expect(config.modality).toBe("vision");
     expect(config.fallback).toBe("gemini");
   });
-
-  it("document-text-reasoning resolve pra nemotron com reasoning_budget, SEM fallback", () => {
-    const config = resolveAiModel("document-text-reasoning");
-    expect(config.model).toBe("nvidia/nemotron-3-nano-30b-a3b");
-    expect(config.params?.reasoningBudget).toBeGreaterThan(0);
-    expect(config.fallback).toBeUndefined();
-  });
 });

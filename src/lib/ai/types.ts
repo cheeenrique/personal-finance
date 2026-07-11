@@ -10,7 +10,7 @@ export type AiProvider = "nvidia" | "gemini";
 
 /** Papel semântico da extração — resolve pra um provider+modelo real via `models.ts` (fonte
  * única, "Trocar de modelo/provider = editar o registry, sem tocar em parser"). */
-export type AiRole = "document-text" | "document-text-reasoning" | "document-vision";
+export type AiRole = "document-text" | "document-vision";
 
 /** Quirks por modelo repassados como `extra_body`/campos top-level na chamada NVIDIA (ver
  * `nvidia.ts`, `buildExtraBody`) — cada adapter usa só os campos que seu provider entende
@@ -36,7 +36,7 @@ export type AiModelConfig = {
   /** Provider de fallback pra esta `role` (docs/superpowers/plans/2026-07-11-import-documentos-nvidia.md,
    * correção "Gemini como FALLBACK de provider") — o facade (`extract.ts`) tenta este
    * provider só depois do primário (`provider` acima) esgotar retries e continuar `null`.
-   * `undefined` = sem fallback pra esta role (ex.: `document-text-reasoning`, hoje). */
+   * `undefined` = sem fallback pra esta role. */
   fallback?: AiProvider;
 };
 
