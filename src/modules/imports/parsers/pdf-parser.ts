@@ -1,8 +1,6 @@
-import { z } from "zod";
-import { Prisma } from "@/generated/prisma/client";
 import { callGemini, type GeminiContentPart } from "@/lib/ai/gemini";
-import { startOfDaySP } from "@/lib/date/calendar-sp";
 import type { ImportParseError, ImportParseResult, ParsedTransaction } from "../types";
+import { normalizeTransactionItem, parseTransactionEnvelope } from "./normalize";
 
 /**
  * Parser de PDF de extrato via Gemini
@@ -26,6 +24,10 @@ import type { ImportParseError, ImportParseResult, ParsedTransaction } from "../
  *
  * NUNCA loga o conteúdo do PDF nem a API key (mesmo racional de
  * `ai-parser.ts`/`financing-parser.ts`, docs/30-TELEGRAM.md, "Segurança").
+ *
+ * Normalização de item (`normalizeTransactionItem`) e validação da envoltória
+ * (`parseTransactionEnvelope`) vivem em `./normalize.ts` — compartilhadas com
+ * `card-invoice-parser.ts` (mesmo shape de item produzido pela IA).
  */
 
 /**
@@ -37,19 +39,6 @@ import type { ImportParseError, ImportParseResult, ParsedTransaction } from "../
  * em `callGemini`, o que também derruba a latência.)
  */
 const PDF_TIMEOUT_MS = 90_000;
-
-const ISO_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
-const DECIMAL_STRING_REGEX = /^\d+(\.\d+)?$/;
-
-const isoDateSchema = z.string().regex(ISO_DATE_REGEX, "esperado YYYY-MM-DD");
-const decimalStringSchema = z.string().regex(DECIMAL_STRING_REGEX, "esperado string decimal com ponto");
-
-const pdfTransactionItemSchema = z.object({
-  date: isoDateSchema,
-  amount: decimalStringSchema,
-  type: z.enum(["EXPENSE", "INCOME"]),
-  description: z.string().min(1),
-});
 
 /** Formato Gemini/OpenAPI do `responseSchema` — envelope `{ transactions: [...] }` (mesmo idioma de array-dentro-de-objeto de `installments` em `financing-parser.ts`). */
 const PDF_RESPONSE_SCHEMA = {
@@ -87,60 +76,6 @@ function buildPdfPrompt(): string {
   ].join("\n");
 }
 
-/** Só valida a ENVOLTÓRIA (`{ transactions: [...] }`) — cada item é validado individualmente em `normalizeItem`, pra um item malformado virar um erro isolado em vez de descartar o extrato inteiro. */
-function parseExtractionEnvelope(rawJson: unknown): unknown[] | null {
-  const envelope = z.object({ transactions: z.array(z.unknown()) }).safeParse(rawJson);
-  return envelope.success ? envelope.data.transactions : null;
-}
-
-function safeSnippet(raw: unknown): string {
-  try {
-    return JSON.stringify(raw);
-  } catch {
-    return "";
-  }
-}
-
-/** Bounds checadas antes de `startOfDaySP` (mesmo racional de `buildDate` em `tabular.ts`) — evita `Date` rolando pra outro mês (ex.: dia 40) silenciosamente. */
-function parseIsoDateSP(isoDate: string): Date | null {
-  const match = isoDate.match(ISO_DATE_REGEX);
-  if (!match) return null;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-
-  return startOfDaySP(year, month, day);
-}
-
-function normalizeItem(raw: unknown): { transaction: ParsedTransaction } | { error: ImportParseError } {
-  const parsed = pdfTransactionItemSchema.safeParse(raw);
-  if (!parsed.success) {
-    return {
-      error: {
-        snippet: safeSnippet(raw),
-        reason: `Lançamento com formato inesperado: ${parsed.error.issues[0]?.message ?? "erro de validação"}`,
-      },
-    };
-  }
-
-  const date = parseIsoDateSP(parsed.data.date);
-  if (!date) {
-    return { error: { snippet: safeSnippet(raw), reason: `Data inválida: "${parsed.data.date}"` } };
-  }
-
-  return {
-    transaction: {
-      fitId: null,
-      date,
-      amount: new Prisma.Decimal(parsed.data.amount).toFixed(2),
-      type: parsed.data.type,
-      description: parsed.data.description.trim(),
-    },
-  };
-}
-
 /**
  * `base64Content`: bytes do arquivo `.pdf` codificados em base64 (ver
  * contrato no topo do arquivo). `null` do `callGemini` (sem
@@ -158,7 +93,7 @@ export async function parsePdfStatement(base64Content: string): Promise<ImportPa
     [{ parts }],
     "pdf-import-statement",
     PDF_RESPONSE_SCHEMA,
-    parseExtractionEnvelope,
+    parseTransactionEnvelope,
     PDF_TIMEOUT_MS,
   );
 
@@ -178,7 +113,7 @@ export async function parsePdfStatement(base64Content: string): Promise<ImportPa
   const errors: ImportParseError[] = [];
 
   for (const raw of rawItems) {
-    const result = normalizeItem(raw);
+    const result = normalizeTransactionItem(raw);
     if ("error" in result) errors.push(result.error);
     else transactions.push(result.transaction);
   }
