@@ -65,7 +65,7 @@ export function useImportFiles(accountId: string) {
     const patches = await Promise.all(
       ready.map(async (entry): Promise<EntryPatch> => {
         try {
-          const response = await previewImportAction(accountId, entry.name, entry.content!);
+          const response = await previewImportAction({ kind: "account", accountId }, entry.name, entry.content!);
           return response.success
             ? { id: entry.id, preview: response.data.preview, parsed: response.data.transactions, previewError: null }
             : { id: entry.id, preview: null, parsed: null, previewError: response.error.message };
@@ -91,7 +91,7 @@ export function useImportFiles(accountId: string) {
     const patches = await Promise.all(
       analyzed.map(async (entry): Promise<EntryPatch> => {
         try {
-          const response = await commitImportAction(accountId, entry.parsed!, entry.preview!.erros);
+          const response = await commitImportAction({ kind: "account", accountId }, entry.parsed!, entry.preview!.erros);
           return response.success
             ? { id: entry.id, commit: response.data, commitError: null }
             : { id: entry.id, commit: null, commitError: response.error.message };
