@@ -15,6 +15,8 @@ type ImportDropzoneProps = {
   onAddFiles: (files: FileList | File[]) => void;
   onRemoveFile: (id: string) => void;
   disabled?: boolean;
+  allowPassword?: boolean;
+  onPasswordChange?: (id: string, hasPassword: boolean, password: string) => void;
 };
 
 /**
@@ -23,7 +25,7 @@ type ImportDropzoneProps = {
  * (`ImportFileRow`). Área operável por teclado (`role="button"`, Enter/
  * Espaço abrem o seletor) — nenhum elemento interativo só por mouse.
  */
-export function ImportDropzone({ entries, onAddFiles, onRemoveFile, disabled }: ImportDropzoneProps) {
+export function ImportDropzone({ entries, onAddFiles, onRemoveFile, disabled, allowPassword, onPasswordChange }: ImportDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -106,7 +108,14 @@ export function ImportDropzone({ entries, onAddFiles, onRemoveFile, disabled }: 
         >
           <AnimatePresence initial={false}>
             {entries.map((entry) => (
-              <ImportFileRow key={entry.id} entry={entry} onRemove={() => onRemoveFile(entry.id)} disabled={disabled} />
+              <ImportFileRow
+                key={entry.id}
+                entry={entry}
+                onRemove={() => onRemoveFile(entry.id)}
+                disabled={disabled}
+                allowPassword={allowPassword}
+                onPasswordChange={onPasswordChange ? (hasPassword, password) => onPasswordChange(entry.id, hasPassword, password) : undefined}
+              />
             ))}
           </AnimatePresence>
         </motion.ul>

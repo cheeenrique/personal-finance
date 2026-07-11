@@ -52,6 +52,8 @@ export function buildFileEntry(file: File): ImportFileEntry {
     status: supported ? "reading" : "error",
     content: null,
     error: supported ? null : "Formato não suportado — use OFX, CSV, XLS, XLSX ou PDF.",
+    hasPassword: false,
+    password: "",
     preview: null,
     parsed: null,
     previewError: null,

@@ -17,6 +17,7 @@ import { useShell } from "@/components/providers/shell-provider";
 import { CardLimitProgress, computeUsagePercent, usageToneTextClass } from "./card-limit-progress";
 import { CardDetailFacePanel } from "./card-detail-face-panel";
 import { CardFormModal } from "./card-form-modal";
+import { CardImportButton } from "./card-import-button";
 import { InvoiceSummaryCard } from "./invoice-summary-card";
 import { InvoiceItemsTable } from "./invoice-items-table";
 import { InvoiceHistoryList } from "./invoice-history-list";
@@ -104,16 +105,19 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
             <ShoppingBag className="size-[17px] text-muted-foreground" aria-hidden="true" />
             Compras da fatura atual
           </h3>
-          <Button
-            type="button"
-            variant="accent"
-            size="sm"
-            className="shrink-0 gap-1.5"
-            onClick={() => openTransactionModal(TransactionType.EXPENSE, card.id)}
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            Compra
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <CardImportButton cardId={card.id} />
+            <Button
+              type="button"
+              variant="accent"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => openTransactionModal(TransactionType.EXPENSE, card.id)}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              Compra
+            </Button>
+          </div>
         </div>
 
         <InvoiceItemsTable

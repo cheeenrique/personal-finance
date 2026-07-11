@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatBRL } from "@/lib/money/format";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
-import { PF_EASE_OUT } from "./import-motion";
+import { PF_EASE_OUT } from "@/components/imports/import-motion";
 
 type AccountFlowSummaryProps = {
   /** "Mês atual (jul/2026)", "Últimos 3 meses"… (`accountPeriodFullLabel`). */

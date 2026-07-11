@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { previewImportAction, commitImportAction } from "@/modules/imports/actions";
+import type { ImportTarget } from "@/modules/imports/types";
 import { buildFileEntry, readEntryContent } from "./import-file-utils";
 import type { ImportFileEntry, ImportStep } from "./import-types";
 
@@ -14,18 +15,17 @@ function applyPatches(entries: ImportFileEntry[], patches: EntryPatch[]): Import
 }
 
 /**
- * Estado do importador multi-arquivo (docs/superpowers/specs — redesign do
- * dropzone). Front itera as Server Actions por arquivo — 1 `previewImportAction`
- * + 1 `commitImportAction` cada, sem action batch nova (decisão do
- * coordenador) — e agrega tudo aqui num único array de `ImportFileEntry`.
+ * Estado do importador multi-arquivo — generalizado por `target` (conta OU cartão,
+ * docs/superpowers/specs/2026-07-11-import-fatura-cartao-credito-design.md, "Fluxo 1").
+ * Front itera as Server Actions por arquivo — 1 `previewImportAction` + 1
+ * `commitImportAction` cada, sem action batch nova.
  */
-export function useImportFiles(accountId: string) {
+export function useImportFiles(target: ImportTarget) {
   const [step, setStep] = useState<ImportStep>("select");
   const [entries, setEntries] = useState<ImportFileEntry[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
 
-  /** Adiciona arquivos soltos/selecionados, dedupando por (nome, tamanho), e dispara a leitura de conteúdo de cada um em paralelo. */
   async function addFiles(incoming: FileList | File[]) {
     const existingKeys = new Set(entries.map((entry) => `${entry.name}-${entry.size}`));
     const additions = Array.from(incoming)
@@ -56,7 +56,11 @@ export function useImportFiles(accountId: string) {
     setEntries((current) => current.filter((entry) => entry.id !== id));
   }
 
-  /** Chama `previewImportAction` pra cada arquivo pronto, em paralelo — nada é gravado ainda. */
+  /** Atualiza `hasPassword`/`password` de UM arquivo — chamado pelo `PasswordProtectedFileField` embutido em `ImportFileRow` (`ImportDropzone`, só quando `target.kind==="card"`). */
+  function setPassword(id: string, hasPassword: boolean, password: string) {
+    setEntries((current) => applyPatches(current, [{ id, hasPassword, password }]));
+  }
+
   async function analyze(): Promise<ImportFileEntry[]> {
     const ready = entries.filter((entry) => entry.status === "ready");
     if (ready.length === 0) return entries;
@@ -65,7 +69,8 @@ export function useImportFiles(accountId: string) {
     const patches = await Promise.all(
       ready.map(async (entry): Promise<EntryPatch> => {
         try {
-          const response = await previewImportAction({ kind: "account", accountId }, entry.name, entry.content!);
+          const password = entry.hasPassword && entry.password ? entry.password : undefined;
+          const response = await previewImportAction(target, entry.name, entry.content!, password);
           return response.success
             ? { id: entry.id, preview: response.data.preview, parsed: response.data.transactions, previewError: null }
             : { id: entry.id, preview: null, parsed: null, previewError: response.error.message };
@@ -82,7 +87,6 @@ export function useImportFiles(accountId: string) {
     return nextEntries;
   }
 
-  /** Chama `commitImportAction` pra cada arquivo com prévia bem-sucedida, em paralelo — reenvia as transações já parseadas na prévia (sem 2º parse) e reimportar é seguro (dedup no backend). */
   async function confirm(): Promise<ImportFileEntry[]> {
     const analyzed = entries.filter((entry) => entry.preview !== null && entry.parsed !== null);
     if (analyzed.length === 0) return entries;
@@ -91,7 +95,7 @@ export function useImportFiles(accountId: string) {
     const patches = await Promise.all(
       analyzed.map(async (entry): Promise<EntryPatch> => {
         try {
-          const response = await commitImportAction({ kind: "account", accountId }, entry.parsed!, entry.preview!.erros);
+          const response = await commitImportAction(target, entry.parsed!, entry.preview!.erros);
           return response.success
             ? { id: entry.id, commit: response.data, commitError: null }
             : { id: entry.id, commit: null, commitError: response.error.message };
@@ -108,7 +112,6 @@ export function useImportFiles(accountId: string) {
     return nextEntries;
   }
 
-  /** Volta pra seleção mantendo os arquivos já lidos — permite retentar (`analyze` de novo, ex.: PDF que falhou na extração) ou trocar arquivos sem recomeçar do zero. */
   function back() {
     setStep("select");
   }
@@ -120,5 +123,5 @@ export function useImportFiles(accountId: string) {
     setIsConfirming(false);
   }
 
-  return { step, entries, isAnalyzing, isConfirming, addFiles, removeFile, analyze, confirm, back, reset };
+  return { step, entries, isAnalyzing, isConfirming, addFiles, removeFile, setPassword, analyze, confirm, back, reset };
 }

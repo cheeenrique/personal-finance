@@ -5,8 +5,10 @@ import type { ReactNode } from "react";
 import { useIsDesktop } from "@/hooks/use-media-query";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -14,6 +16,7 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -25,8 +28,16 @@ type FormModalProps = {
   title: string;
   description?: string;
   children: ReactNode;
-  /** `max-w-lg` (500px) por padrão; `wide` usa 600px para formulários com mais campos (handoff, "FormModal/FormDrawer"). */
-  size?: "default" | "wide";
+  /**
+   * `max-w-lg` (500px) por padrão; `wide` usa 600px para formulários com mais
+   * campos (handoff, "FormModal/FormDrawer"). `tall` abre perto da altura da
+   * tela (largura como `wide`) com header/footer fixos e só o corpo
+   * scrollando (`DialogContent`/`DialogBody` size="tall") — usar com `footer`
+   * pra conteúdo extenso (ex.: import de fatura/contrato).
+   */
+  size?: "default" | "wide" | "tall";
+  /** Só usado com `size="tall"` — ações fixas no rodapé, fora da área scrollável. */
+  footer?: ReactNode;
 };
 
 /**
@@ -42,8 +53,39 @@ export function FormModal({
   description,
   children,
   size = "default",
+  footer,
 }: FormModalProps) {
   const isDesktop = useIsDesktop();
+
+  if (size === "tall") {
+    if (isDesktop) {
+      return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+          <DialogContent size="tall">
+            <DialogHeader>
+              <DialogTitle>{title}</DialogTitle>
+              {description && <DialogDescription>{description}</DialogDescription>}
+            </DialogHeader>
+            <DialogBody>{children}</DialogBody>
+            {footer && <DialogFooter>{footer}</DialogFooter>}
+          </DialogContent>
+        </Dialog>
+      );
+    }
+
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="bottom" className="flex h-[85vh] max-h-[85vh] flex-col overflow-hidden rounded-t-2xl">
+          <SheetHeader className="shrink-0">
+            <SheetTitle>{title}</SheetTitle>
+            {description && <SheetDescription>{description}</SheetDescription>}
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4">{children}</div>
+          {footer && <SheetFooter className="shrink-0">{footer}</SheetFooter>}
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   if (isDesktop) {
     return (

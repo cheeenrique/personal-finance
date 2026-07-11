@@ -4,7 +4,7 @@ import { useState } from "react";
 import { UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { ImportModal } from "./import-modal";
+import { ImportModal } from "@/components/imports/import-modal";
 
 type ImportButtonProps = { accountId: string };
 
@@ -24,7 +24,7 @@ export function ImportButton({ accountId }: ImportButtonProps) {
         <UploadCloud className="size-4" aria-hidden="true" />
         Importar extrato
       </Button>
-      <ImportModal open={open} onOpenChange={setOpen} accountId={accountId} />
+      <ImportModal open={open} onOpenChange={setOpen} target={{ kind: "account", accountId }} />
     </>
   );
 }
