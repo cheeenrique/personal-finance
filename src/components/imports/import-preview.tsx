@@ -2,12 +2,19 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { EntitySelectOption } from "@/components/forms/entity-select";
+import type { ImportTransactionType } from "@/modules/imports/types";
 import { formatBRL } from "@/lib/money/format";
 import { aggregatePreview } from "./import-file-utils";
 import { ImportPreviewPanel } from "./import-preview-panel";
 import type { ImportFileEntry } from "./import-types";
 
-type ImportPreviewProps = { entries: ImportFileEntry[] };
+type ImportPreviewProps = {
+  entries: ImportFileEntry[];
+  /** Categorias do usuário já filtradas por Receita/Despesa (Refino 3) — repassado direto pra `ImportPreviewPanel`. */
+  categoryOptionsByType: Record<ImportTransactionType, EntitySelectOption[]>;
+  onCategoryChange: (entryId: string, novosIndex: number, categoryId: string | null) => void;
+};
 
 /**
  * Step 2 do import: KPIs agregados de todos os arquivos + prévia por
@@ -15,7 +22,7 @@ type ImportPreviewProps = { entries: ImportFileEntry[] };
  * (total/novos/duplicados/erros nunca se misturam entre arquivos — handoff,
  * "Step preview"). Com um só, mostra a prévia direto, sem o chrome de abas.
  */
-export function ImportPreview({ entries }: ImportPreviewProps) {
+export function ImportPreview({ entries, categoryOptionsByType, onCategoryChange }: ImportPreviewProps) {
   const analyzed = entries.filter((entry) => entry.preview !== null || entry.previewError !== null);
   const totals = aggregatePreview(entries);
 
@@ -69,12 +76,22 @@ export function ImportPreview({ entries }: ImportPreviewProps) {
           </TabsList>
           {analyzed.map((entry) => (
             <TabsContent key={entry.id} value={entry.id} className="pt-3">
-              <ImportPreviewPanel entry={entry} />
+              <ImportPreviewPanel
+                entry={entry}
+                categoryOptionsByType={categoryOptionsByType}
+                onCategoryChange={onCategoryChange}
+              />
             </TabsContent>
           ))}
         </Tabs>
       ) : (
-        analyzed[0] && <ImportPreviewPanel entry={analyzed[0]} />
+        analyzed[0] && (
+          <ImportPreviewPanel
+            entry={analyzed[0]}
+            categoryOptionsByType={categoryOptionsByType}
+            onCategoryChange={onCategoryChange}
+          />
+        )
       )}
     </div>
   );

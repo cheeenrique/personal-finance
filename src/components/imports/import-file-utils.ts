@@ -1,5 +1,5 @@
 import { TransactionType } from "@/generated/prisma/enums";
-import type { ImportPreviewItem } from "@/modules/imports/types";
+import type { ImportPreviewItem, ParsedTransaction } from "@/modules/imports/types";
 import type { ImportFileEntry } from "./import-types";
 
 /** Extensões aceitas pelo dropzone — espelha `modules/imports/parsers/index.ts` (`.xls` é aceito e enviado; o backend devolve erro claro pro binário legado, não bloqueamos no client). */
@@ -59,7 +59,68 @@ export function buildFileEntry(file: File): ImportFileEntry {
     previewError: null,
     commit: null,
     commitError: null,
+    novosParsedIndexes: null,
+    categoryOverrides: [],
   };
+}
+
+/**
+ * Casa cada item de `preview.novos` (subsequência sem duplicatas, MESMA ordem
+ * relativa) com seu índice em `parsed` (array completo devolvido por
+ * `previewImportAction`, inclui duplicatas — `modules/imports/service.ts`
+ * `previewImport`). Casa por igualdade dos 4 campos espelhados em
+ * `ImportPreviewItem` (data/valor/tipo/descrição), andando os dois arrays com
+ * 2 ponteiros — nunca ambíguo mesmo com linhas de valores idênticos, porque
+ * cada `novos[i]` consome o próximo `parsed` que bate a partir de onde o
+ * anterior parou.
+ */
+export function mapNovosToParsedIndexes(
+  novos: ImportPreviewItem[],
+  parsed: ParsedTransaction[],
+): number[] {
+  const indexes: number[] = [];
+  let cursor = 0;
+
+  for (const item of novos) {
+    while (
+      cursor < parsed.length &&
+      !(
+        parsed[cursor].date.getTime() === item.date.getTime() &&
+        parsed[cursor].amount === item.amount &&
+        parsed[cursor].type === item.type &&
+        parsed[cursor].description === item.description
+      )
+    ) {
+      cursor += 1;
+    }
+    indexes.push(cursor);
+    cursor += 1;
+  }
+
+  return indexes;
+}
+
+/**
+ * Injeta o `categoryId` escolhido na prévia (Refino 3) nos itens de `parsed`
+ * antes do commit — usa `novosParsedIndexes` pra saber qual posição de `parsed`
+ * cada override (`categoryOverrides`, mesmo índice de `preview.novos`)
+ * corresponde. Itens fora do mapeamento (duplicatas, nunca mostradas na
+ * prévia) seguem sem `categoryId`, como hoje.
+ */
+export function applyCategoryOverrides(
+  parsed: ParsedTransaction[],
+  novosParsedIndexes: number[] | null,
+  categoryOverrides: (string | null)[],
+): ParsedTransaction[] {
+  if (!novosParsedIndexes || novosParsedIndexes.length === 0) return parsed;
+
+  const overrideByParsedIndex = new Map(
+    novosParsedIndexes.map((parsedIndex, novosIndex) => [parsedIndex, categoryOverrides[novosIndex] ?? null]),
+  );
+
+  return parsed.map((item, index) =>
+    overrideByParsedIndex.has(index) ? { ...item, categoryId: overrideByParsedIndex.get(index) } : item,
+  );
 }
 
 export function formatFileSize(bytes: number): string {

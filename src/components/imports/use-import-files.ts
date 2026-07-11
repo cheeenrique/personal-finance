@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { previewImportAction, commitImportAction } from "@/modules/imports/actions";
 import type { ImportTarget } from "@/modules/imports/types";
-import { buildFileEntry, readEntryContent } from "./import-file-utils";
+import { applyCategoryOverrides, buildFileEntry, mapNovosToParsedIndexes, readEntryContent } from "./import-file-utils";
 import type { ImportFileEntry, ImportStep } from "./import-types";
 
 type EntryPatch = Partial<ImportFileEntry> & { id: string };
@@ -19,8 +19,13 @@ function applyPatches(entries: ImportFileEntry[], patches: EntryPatch[]): Import
  * docs/superpowers/specs/2026-07-11-import-fatura-cartao-credito-design.md, "Fluxo 1").
  * Front itera as Server Actions por arquivo — 1 `previewImportAction` + 1
  * `commitImportAction` cada, sem action batch nova.
+ *
+ * `categoryNameToId` (Refino 3) — nome (lowercase) → id das categorias do
+ * usuário, usado só pra PRÉ-selecionar a categoria sugerida (`categoryName`,
+ * resolvida por histórico no backend) no select por item da prévia; nunca
+ * usado pra inventar categoria — sem match, o item nasce em "Sem categoria".
  */
-export function useImportFiles(target: ImportTarget) {
+export function useImportFiles(target: ImportTarget, categoryNameToId: Map<string, string>) {
   const [step, setStep] = useState<ImportStep>("select");
   const [entries, setEntries] = useState<ImportFileEntry[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -61,6 +66,22 @@ export function useImportFiles(target: ImportTarget) {
     setEntries((current) => applyPatches(current, [{ id, hasPassword, password }]));
   }
 
+  /**
+   * Categoria escolhida pelo usuário pra UM item da prévia (Refino 3,
+   * `novosIndex` = índice em `preview.novos`, chamado pelo select de
+   * `ImportPreviewPanel`). `categoryId: null` = "Sem categoria" explícito.
+   */
+  function setItemCategory(entryId: string, novosIndex: number, categoryId: string | null) {
+    setEntries((current) =>
+      current.map((entry) => {
+        if (entry.id !== entryId) return entry;
+        const categoryOverrides = [...entry.categoryOverrides];
+        categoryOverrides[novosIndex] = categoryId;
+        return { ...entry, categoryOverrides };
+      }),
+    );
+  }
+
   async function analyze(): Promise<ImportFileEntry[]> {
     const ready = entries.filter((entry) => entry.status === "ready");
     if (ready.length === 0) return entries;
@@ -71,9 +92,24 @@ export function useImportFiles(target: ImportTarget) {
         try {
           const password = entry.hasPassword && entry.password ? entry.password : undefined;
           const response = await previewImportAction(target, entry.name, entry.content!, password);
-          return response.success
-            ? { id: entry.id, preview: response.data.preview, parsed: response.data.transactions, previewError: null }
-            : { id: entry.id, preview: null, parsed: null, previewError: response.error.message };
+          if (!response.success) {
+            return { id: entry.id, preview: null, parsed: null, previewError: response.error.message };
+          }
+
+          const { preview, transactions } = response.data;
+          const novosParsedIndexes = mapNovosToParsedIndexes(preview.novos, transactions);
+          const categoryOverrides = preview.novos.map((item) =>
+            item.categoryName ? (categoryNameToId.get(item.categoryName.toLowerCase()) ?? null) : null,
+          );
+
+          return {
+            id: entry.id,
+            preview,
+            parsed: transactions,
+            previewError: null,
+            novosParsedIndexes,
+            categoryOverrides,
+          };
         } catch {
           return { id: entry.id, preview: null, previewError: "Não foi possível analisar o arquivo." };
         }
@@ -95,7 +131,8 @@ export function useImportFiles(target: ImportTarget) {
     const patches = await Promise.all(
       analyzed.map(async (entry): Promise<EntryPatch> => {
         try {
-          const response = await commitImportAction(target, entry.parsed!, entry.preview!.erros);
+          const transactions = applyCategoryOverrides(entry.parsed!, entry.novosParsedIndexes, entry.categoryOverrides);
+          const response = await commitImportAction(target, transactions, entry.preview!.erros);
           return response.success
             ? { id: entry.id, commit: response.data, commitError: null }
             : { id: entry.id, commit: null, commitError: response.error.message };
@@ -123,5 +160,18 @@ export function useImportFiles(target: ImportTarget) {
     setIsConfirming(false);
   }
 
-  return { step, entries, isAnalyzing, isConfirming, addFiles, removeFile, setPassword, analyze, confirm, back, reset };
+  return {
+    step,
+    entries,
+    isAnalyzing,
+    isConfirming,
+    addFiles,
+    removeFile,
+    setPassword,
+    setItemCategory,
+    analyze,
+    confirm,
+    back,
+    reset,
+  };
 }

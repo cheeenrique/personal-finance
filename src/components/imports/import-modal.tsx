@@ -1,15 +1,19 @@
 "use client";
 
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Sparkles, X } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
 import { Button } from "@/components/ui/button";
+import type { EntitySelectOption } from "@/components/forms/entity-select";
 import { invalidateAllTransactionLists } from "@/components/transactions/transaction-query-keys";
+import { useTransactionsReferenceData } from "@/components/transactions/use-transactions-reference-data";
+import { TransactionType } from "@/generated/prisma/enums";
 import { notifySuccess } from "@/lib/toast";
-import type { ImportTarget } from "@/modules/imports/types";
+import type { ImportTarget, ImportTransactionType } from "@/modules/imports/types";
 import { ACCOUNT_PERIOD_SUMMARY_QUERY_KEY } from "@/components/accounts/use-account-period-summary";
 import { aggregateCommit, isPdfImportFile } from "./import-file-utils";
 import { ImportDropzone } from "./import-dropzone";
@@ -48,8 +52,46 @@ const COPY: Record<ImportTarget["kind"], { title: string; description: string; e
 export function ImportModal({ open, onOpenChange, target }: ImportModalProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { step, entries, isAnalyzing, isConfirming, addFiles, removeFile, setPassword, analyze, confirm, back, reset } =
-    useImportFiles(target);
+
+  // Mesma fonte de categorias do resto do app (`NewTransactionForm`,
+  // `TransactionFiltersBar`) — cache compartilhado via TanStack Query, sem
+  // fetch novo (Refino 3, "reuse a MESMA fonte/UI de categoria, NÃO reimplemente").
+  const { categoryOptions, categoryById } = useTransactionsReferenceData();
+
+  // Nome (lowercase) → id — só pra casar a sugestão por histórico
+  // (`preview.novos[].categoryName`, texto) com um id real do usuário e
+  // pré-selecionar o item na prévia; nunca inventa categoria sem match.
+  const categoryNameToId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [id, ref] of categoryById) map.set(ref.name.toLowerCase(), id);
+    return map;
+  }, [categoryById]);
+
+  // `categoryOptions` já vem agrupado "Receita"/"Despesa" (mesmo `group` usado
+  // no select de Nova Transação) — só reparte por tipo pro select por item da
+  // prévia nunca oferecer categoria do tipo errado (`ImportPreviewPanel`).
+  const categoryOptionsByType = useMemo<Record<ImportTransactionType, EntitySelectOption[]>>(
+    () => ({
+      [TransactionType.INCOME]: categoryOptions.filter((option) => option.group === "Receita"),
+      [TransactionType.EXPENSE]: categoryOptions.filter((option) => option.group === "Despesa"),
+    }),
+    [categoryOptions],
+  );
+
+  const {
+    step,
+    entries,
+    isAnalyzing,
+    isConfirming,
+    addFiles,
+    removeFile,
+    setPassword,
+    setItemCategory,
+    analyze,
+    confirm,
+    back,
+    reset,
+  } = useImportFiles(target, categoryNameToId);
   const copy = COPY[target.kind];
 
   function handleOpenChange(next: boolean) {
@@ -81,29 +123,40 @@ export function ImportModal({ open, onOpenChange, target }: ImportModalProps) {
   const footer = (
     <>
       {step !== "result" && (
-        <Button type="button" variant="outline" onClick={handleClose} disabled={isAnalyzing || isConfirming}>
+        <Button type="button" variant="neutral" onClick={handleClose} disabled={isAnalyzing || isConfirming}>
+          <X className="size-4" aria-hidden="true" />
           Cancelar
         </Button>
       )}
       {step === "select" && (
         <Button type="button" onClick={() => void analyze()} disabled={!hasReadyFiles || isReadingAny || isAnalyzing}>
-          {isAnalyzing && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          {isAnalyzing ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Sparkles className="size-4" aria-hidden="true" />
+          )}
           Analisar arquivos
         </Button>
       )}
       {step === "preview" && (
-        <Button type="button" variant="outline" onClick={back} disabled={isConfirming}>
+        <Button type="button" variant="neutral" onClick={back} disabled={isConfirming}>
+          <ArrowLeft className="size-4" aria-hidden="true" />
           Voltar
         </Button>
       )}
       {step === "preview" && (
         <Button type="button" onClick={() => void handleConfirm()} disabled={isConfirming || totalNovos === 0}>
-          {isConfirming && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          {isConfirming ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Check className="size-4" aria-hidden="true" />
+          )}
           Confirmar importação
         </Button>
       )}
       {step === "result" && (
         <Button type="button" onClick={handleClose}>
+          <Check className="size-4" aria-hidden="true" />
           Concluir
         </Button>
       )}
@@ -135,7 +188,13 @@ export function ImportModal({ open, onOpenChange, target }: ImportModalProps) {
                   onPasswordChange={setPassword}
                 />
               )}
-              {step === "preview" && <ImportPreview entries={entries} />}
+              {step === "preview" && (
+                <ImportPreview
+                  entries={entries}
+                  categoryOptionsByType={categoryOptionsByType}
+                  onCategoryChange={setItemCategory}
+                />
+              )}
               {step === "result" && <ImportResult entries={entries} />}
             </motion.div>
           </AnimatePresence>

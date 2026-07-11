@@ -23,6 +23,22 @@ export type ImportFileEntry = {
   previewError: string | null;
   commit: ImportCommitResult | null;
   commitError: string | null;
+  /**
+   * Índice em `parsed` correspondente a cada item de `preview.novos`, na mesma
+   * ordem (`import-file-utils.ts` `mapNovosToParsedIndexes`) — `parsed` inclui
+   * duplicatas e vem na ordem original do arquivo, `preview.novos` é a
+   * subsequência sem duplicatas mostrada na prévia. `null` até a prévia carregar.
+   */
+  novosParsedIndexes: number[] | null;
+  /**
+   * Categoria escolhida pelo usuário por item de `preview.novos` (Refino 3,
+   * select por linha na prévia) — mesmo índice de `novosParsedIndexes`.
+   * `null` = "Sem categoria" (sem override, cai no fallback de histórico do
+   * backend de qualquer forma — `modules/imports/service.ts` `resolveCommitCategoryId`).
+   * Inicializado no `analyze()` com a categoria sugerida (`categoryName`) quando
+   * ela casar com uma categoria existente do usuário.
+   */
+  categoryOverrides: (string | null)[];
 };
 
 export type ImportStep = "select" | "preview" | "result";
