@@ -22,6 +22,11 @@ export const transactionItemSchema = z.object({
   amount: decimalStringSchema,
   type: z.enum(["EXPENSE", "INCOME"]),
   description: z.string().min(1),
+  /** Sugestão de categoria da IA a partir do estabelecimento/descrição (só
+   * `card-invoice-parser.ts` manda isso — `pdf-parser.ts` de extrato nunca
+   * pede no prompt, então some fica `undefined` pra esse caso, sem afetar o
+   * contrato de extrato). `null`/ausente = IA não soube sugerir. */
+  categoryName: z.string().nullable().optional(),
 });
 
 export function safeSnippet(raw: unknown): string {
@@ -49,6 +54,29 @@ export function normalizeAmount(amount: string): string {
   return new Prisma.Decimal(amount).toFixed(2);
 }
 
+/**
+ * A IA extrai a fatura pedindo ponto decimal no prompt (`buildInvoicePrompt`), mas às vezes
+ * devolve uma linha em formato BR mesmo assim (vírgula decimal, com ou sem separador de
+ * milhar — ex.: "1.486,64" ou "1486,64") — isso quebrava `decimalStringSchema` com "esperado
+ * string decimal com ponto" (bug real, fatura real). Normaliza ANTES de validar: só mexe
+ * quando tem vírgula (string já canônica com ponto passa intocada); com vírgula, remove
+ * pontos de milhar e troca a vírgula decimal por ponto.
+ */
+function normalizeBRAmount(amount: string): string {
+  if (!amount.includes(",")) return amount;
+  return amount.replace(/\./g, "").replace(",", ".");
+}
+
+/** Só normaliza o campo `amount` quando `raw` já é um objeto plano com uma string nele — item
+ * malformado (não-objeto, `amount` ausente/não-string) segue intocado pro
+ * `transactionItemSchema` reportar o erro de shape de sempre em `normalizeTransactionItem`. */
+function normalizeRawAmount(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null || !("amount" in raw)) return raw;
+  const amount = (raw as { amount: unknown }).amount;
+  if (typeof amount !== "string") return raw;
+  return { ...raw, amount: normalizeBRAmount(amount) };
+}
+
 /** Só valida a ENVOLTÓRIA `{ transactions: [...] }` — cada item é validado individualmente
  * por `normalizeTransactionItem`, pra um item malformado virar erro isolado em vez de
  * descartar o documento inteiro. */
@@ -58,7 +86,7 @@ export function parseTransactionEnvelope(rawJson: unknown): unknown[] | null {
 }
 
 export function normalizeTransactionItem(raw: unknown): { transaction: ParsedTransaction } | { error: ImportParseError } {
-  const parsed = transactionItemSchema.safeParse(raw);
+  const parsed = transactionItemSchema.safeParse(normalizeRawAmount(raw));
   if (!parsed.success) {
     return {
       error: {
@@ -80,6 +108,7 @@ export function normalizeTransactionItem(raw: unknown): { transaction: ParsedTra
       amount: normalizeAmount(parsed.data.amount),
       type: parsed.data.type,
       description: parsed.data.description.trim(),
+      suggestedCategoryName: parsed.data.categoryName,
     },
   };
 }

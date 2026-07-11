@@ -1,8 +1,10 @@
+import { CategoryType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db/client";
 import { accountRepository } from "@/modules/accounts/repository";
 import { cardRepository } from "@/modules/cards/repository";
 import { categoryRepository } from "@/modules/categories/repository";
 import { transactionService } from "@/modules/transactions/service";
+import { normalizeWord } from "@/modules/telegram/normalize";
 import { calendarPartsSP } from "@/lib/date/calendar-sp";
 import { parseImportFile } from "./parsers";
 import { importRepository, type FallbackRow } from "./repository";
@@ -13,6 +15,7 @@ import type {
   ImportPreviewItem,
   ImportPreviewResult,
   ImportTarget,
+  ImportTransactionType,
   ParsedTransaction,
 } from "./types";
 
@@ -98,14 +101,48 @@ function isDuplicate(target: ImportTarget, item: ParsedTransaction, state: Dedup
 }
 
 /**
- * Categoria sugerida por descrição — `transactionService.
- * lastCategoryForDescription` (já existente — reusado, nunca reimplementado).
- * `null` quando o histórico não resolve — jamais inventa categoria (instrução
- * explícita do dono). Preview (`resolveCategoryName`) e commit
- * (`resolveCategoryId`) aplicam a MESMA regra, senão a prévia mostraria uma
- * categoria diferente da que realmente é gravada.
+ * Casa o `suggestedCategoryName` da IA (só a fatura manda isso, ver
+ * `card-invoice-parser.ts`) contra as categorias REAIS do usuário do MESMO `type`
+ * (EXPENSE/INCOME) — match exato por nome, case/acento-insensível (`normalizeWord`, reusado de
+ * `modules/telegram/resolve.ts` `resolveCategoryByName`, mesma regra — DRY a partir do 2º caso
+ * concreto, ~/.claude/rules/02-dry-kiss-yagni.md). Sem match, `null` — nunca inventa categoria
+ * nova a partir do texto solto da IA, só sugere se o usuário já tem uma equivalente.
  */
-async function resolveCategoryName(userId: string, description: string): Promise<string | null> {
+async function matchCategoryByName(
+  userId: string,
+  type: ImportTransactionType,
+  categoryName: string,
+): Promise<{ id: string; name: string } | null> {
+  const expectedType = type === "INCOME" ? CategoryType.INCOME : CategoryType.EXPENSE;
+  const categories = await categoryRepository.listAll(userId);
+  const normalizedTarget = normalizeWord(categoryName);
+
+  const match = categories.find(
+    (category) => category.type === expectedType && normalizeWord(category.name) === normalizedTarget,
+  );
+  return match ? { id: match.id, name: match.name } : null;
+}
+
+/**
+ * Categoria sugerida pra prévia — 1) `item.suggestedCategoryName` (IA da fatura) casado contra
+ * categoria REAL do usuário (`matchCategoryByName`); 2) sem sugestão ou sem match, cai no
+ * histórico de sempre (`transactionService.lastCategoryForDescription`, já existente —
+ * reusado, nunca reimplementado); 3) `null` quando nada resolve — jamais inventa categoria
+ * (instrução explícita do dono). Preview (`resolveCategoryName`) e commit
+ * (`resolveCommitCategoryId`/`resolveCategoryId`) aplicam a MESMA regra de histórico, senão a
+ * prévia mostraria uma categoria diferente da que realmente é gravada.
+ */
+async function resolveCategoryName(
+  userId: string,
+  type: ImportTransactionType,
+  description: string,
+  suggestedCategoryName: string | null | undefined,
+): Promise<string | null> {
+  if (suggestedCategoryName) {
+    const matched = await matchCategoryByName(userId, type, suggestedCategoryName);
+    if (matched) return matched.name;
+  }
+
   const category = await transactionService.lastCategoryForDescription(userId, description);
   return category?.name ?? null;
 }
@@ -189,7 +226,7 @@ async function previewImport(
       amount: item.amount,
       type: item.type,
       description: item.description,
-      categoryName: await resolveCategoryName(userId, item.description),
+      categoryName: await resolveCategoryName(userId, item.type, item.description, item.suggestedCategoryName),
     })),
   );
 

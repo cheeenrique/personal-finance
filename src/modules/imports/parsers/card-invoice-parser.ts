@@ -30,6 +30,14 @@ import { normalizeTransactionItem, parseTransactionEnvelope } from "./normalize"
  * ar, JSON malformado) viram `ImportParseError` isolado — mesmo contrato de
  * `pdf-parser.ts`/`ofx-parser.ts`/`csv-parser.ts`. NUNCA loga o texto do documento nem a
  * senha (mesmo racional de `lib/ai/gemini.ts`).
+ *
+ * Cada item também pede `categoryName` (`suggestedCategoryName` em `ParsedTransaction`) — a
+ * IA sugere uma categoria a partir do estabelecimento (bug real: 1º import de cartão sempre
+ * caía "Sem categoria" porque a única sugestão vinha do histórico, `lastCategoryForDescription`,
+ * vazio nesse caso). `previewImport` (`../service.ts`) casa essa sugestão contra as categorias
+ * REAIS do usuário antes de usar — nunca inventa categoria nova a partir do texto solto da IA.
+ * SÓ este parser manda `categoryName`; `pdf-parser.ts` de extrato não pede no prompt, contrato
+ * de extrato inalterado.
  */
 
 /** Extração de documento é lenta (modelo lê a fatura inteira + gera JSON) — 90s cobre o
@@ -49,6 +57,7 @@ const INVOICE_RESPONSE_SCHEMA: JsonSchema = {
           amount: { type: "string" },
           type: { type: "string", enum: ["EXPENSE", "INCOME"] },
           description: { type: "string" },
+          categoryName: { type: "string", nullable: true },
         },
         required: ["date", "amount", "type", "description"],
       },
@@ -66,6 +75,7 @@ function buildInvoicePrompt(): string {
     '- `amount`: valor ABSOLUTO (sempre positivo, sem sinal), string decimal com PONTO decimal, sem separador de milhar e sem símbolo de moeda (ex.: "150.30"). Converta vírgula decimal (padrão BR) para ponto.',
     '- `type`: "EXPENSE" pra compras E encargos (juros, IOF, anuidade, multa) — "INCOME" SÓ pra estorno/devolução de uma COMPRA (crédito que anula uma compra específica feita antes).',
     "- `description`: descrição da compra como aparece na fatura (nome do estabelecimento), resumida.",
+    '- `categoryName`: sua MELHOR sugestão de categoria pra esse lançamento, a partir do nome do estabelecimento/descrição (ex.: "AZUL SEGUROS" → "Seguros"; "IOF TRANSACOES" → "Impostos"; "KaBuM" → "Informática"; assinatura de software/streaming (ex. "ANTHROPIC", "NETFLIX") → "Assinaturas"; "iFood"/restaurante → "Alimentação"; posto de combustível → "Transporte"). Categoria genérica em pt-BR, NUNCA o nome exato de uma categoria que você não viu na fatura. Sem certeza nenhuma → `null`, nunca force um palpite ruim.',
     "",
     'Se a compra estiver PARCELADA (ex.: "Loja X 3/12"), cada parcela listada na fatura é um item INDEPENDENTE — NÃO some as parcelas, NÃO tente reconstruir o valor total da compra, cada linha vira 1 item.',
     "",

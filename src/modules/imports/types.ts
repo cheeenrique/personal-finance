@@ -35,6 +35,15 @@ export type ParsedTransaction = {
    * tivesse vindo nada (docs/10-AUTH.md, isolamento por userId).
    */
   categoryId?: string | null;
+  /**
+   * Sugestão de categoria da IA a partir do estabelecimento/descrição — só
+   * `card-invoice-parser.ts` preenche isso (a IA infere pela FATURA, ex.: "AZUL SEGUROS" →
+   * "Seguros"); `pdf-parser.ts` de extrato nunca pede no prompt, então fica `undefined` nesse
+   * caso (contrato de extrato inalterado). `previewImport` (`service.ts`, `resolveCategoryName`)
+   * tenta casar isso com uma categoria REAL do usuário antes de cair no fallback de histórico —
+   * nunca inventa categoria nova, só sugere se casar.
+   */
+  suggestedCategoryName?: string | null;
 };
 
 /** Uma linha/bloco do arquivo que falhou o parse — trecho cru + motivo, pro usuário identificar o lançamento no arquivo original. */
