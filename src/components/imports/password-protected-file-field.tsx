@@ -1,11 +1,13 @@
 "use client";
 
 import { type ChangeEvent } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, UploadCloud } from "lucide-react";
 
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 type PasswordProtectedFileFieldBaseProps = {
   idPrefix: string;
@@ -92,19 +94,33 @@ export function PasswordProtectedFileField(props: PasswordProtectedFileFieldProp
     if (file) standaloneProps.onFileSelect(file);
   }
 
+  const fileDisabled = disabled || standaloneProps.loading;
+
   return (
     <div className="flex flex-col gap-2 rounded-[10px] border border-dashed border-border p-3">
-      <Label htmlFor={`${idPrefix}-file`} className="text-[12.5px]">
-        {standaloneProps.label}
-      </Label>
-      <Input
+      <span className="text-[12.5px] font-medium text-muted-foreground">{standaloneProps.label}</span>
+      {/* Input nativo escondido — o trigger é um botão estilizado do DS (nada de "Choose File" cru). */}
+      <input
         key={standaloneProps.inputKey}
         id={`${idPrefix}-file`}
         type="file"
         accept={standaloneProps.accept}
         onChange={handleChange}
-        disabled={disabled || standaloneProps.loading}
+        disabled={fileDisabled}
+        className="sr-only"
       />
+      <label
+        htmlFor={`${idPrefix}-file`}
+        aria-disabled={fileDisabled}
+        className={cn(
+          buttonVariants({ variant: "neutral", size: "lg" }),
+          "w-full cursor-pointer justify-center gap-2",
+          fileDisabled && "pointer-events-none opacity-50",
+        )}
+      >
+        <UploadCloud className="size-4" aria-hidden="true" />
+        Escolher arquivo (PDF ou foto)
+      </label>
       {toggle}
       {passwordField}
       {standaloneProps.loading && (
