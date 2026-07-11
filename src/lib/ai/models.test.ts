@@ -6,7 +6,7 @@ describe("resolveAiModel", () => {
     const config = resolveAiModel("document-text");
     expect(config).toEqual({
       provider: "nvidia",
-      model: "deepseek-ai/deepseek-v4-pro",
+      model: "deepseek-ai/deepseek-v4-flash",
       modality: "text",
       params: { thinking: false },
       fallback: "gemini",

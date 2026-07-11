@@ -226,5 +226,6 @@ export async function parseFinancingFromDocument(
     prompt,
     FINANCING_RESPONSE_SCHEMA,
     parseFinancingResponse,
+    { timeoutMs: DOCUMENT_TIMEOUT_MS },
   );
 }

@@ -35,7 +35,7 @@ describe("extractStructured", () => {
     expect(result).toEqual({ ok: true });
     expect(nvidiaExtractMock).toHaveBeenCalledTimes(1);
     const [, , , , model] = nvidiaExtractMock.mock.calls[0];
-    expect(model.model).toBe("deepseek-ai/deepseek-v4-pro");
+    expect(model.model).toBe("deepseek-ai/deepseek-v4-flash");
     expect(geminiExtractMock).not.toHaveBeenCalled();
   });
 
