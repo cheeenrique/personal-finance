@@ -42,16 +42,17 @@ function DialogOverlay({
 /**
  * Largura/altura do modal. `sm` (default) — comportamento original, inalterado.
  * `wide` — mais largo (formulários com mais campos), altura ainda automática.
- * `tall` — largo E alto (perto da altura da tela), pensado pra conteúdo extenso
- * (import de fatura/contrato). Use com `DialogHeader`/`DialogBody`/`DialogFooter`
- * pra manter header e footer fixos e só o corpo (`DialogBody`) scrollar.
+ * `tall` — largo E alto (praticamente a altura da tela, `100dvh` menos 2rem de
+ * margem — não só um teto de altura), pensado pra conteúdo extenso (import de
+ * fatura/contrato). Use com `DialogHeader`/`DialogBody`/`DialogFooter` pra
+ * manter header e footer fixos e só o corpo (`DialogBody`) scrollar.
  */
 type DialogContentSize = "sm" | "wide" | "tall"
 
 const dialogContentSizeClassName: Record<DialogContentSize, string> = {
   sm: "top-1/2 left-1/2 grid grid-cols-[minmax(0,1fr)] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 sm:max-w-sm",
   wide: "top-1/2 left-1/2 grid grid-cols-[minmax(0,1fr)] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 sm:max-w-2xl",
-  tall: "top-[4vh] left-1/2 flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] -translate-x-1/2 translate-y-0 flex-col gap-4 overflow-hidden sm:max-w-2xl",
+  tall: "top-4 left-1/2 flex h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] -translate-x-1/2 translate-y-0 flex-col gap-4 overflow-hidden sm:max-w-4xl",
 }
 
 function DialogContent({
