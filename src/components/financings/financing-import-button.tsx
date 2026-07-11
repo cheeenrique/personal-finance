@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 
-import { PasswordProtectedFileField } from "@/components/imports/password-protected-file-field";
+import { STEP_TRANSITION, stepVariants } from "@/components/imports/import-motion";
 import { parseFinancingDocumentAction } from "@/app/(app)/financings/actions";
 import { notifyError } from "@/lib/toast";
 import type { ParsedFinancing } from "@/modules/telegram/types";
-
-const ACCEPTED_MIME_TYPES = "application/pdf,image/jpeg,image/png,image/webp";
+import { FinancingImportDropzone } from "./financing-import-dropzone";
+import { FinancingImportAnalyzing } from "./financing-import-analyzing";
 
 type FinancingImportButtonProps = {
   onParsed: (parsed: ParsedFinancing) => void;
@@ -25,18 +26,26 @@ async function fileToBase64(file: File): Promise<string> {
 
 /**
  * "Importar de documento" — sobe PDF/foto do CCB/contrato de banco (inclusive PDF
- * cifrado, `PasswordProtectedFileField`), chama `parseFinancingDocumentAction`
+ * cifrado, toggle "tem senha?" do `FinancingImportDropzone`), chama `parseFinancingDocumentAction`
  * (docs/superpowers/specs/2026-07-11-import-fatura-cartao-credito-design.md, "Fluxo 2")
  * e devolve o `ParsedFinancing` pro `FinancingFormModal` pré-preencher via `onParsed`.
  * Sem passo de prévia separado: o próprio form de criação JÁ é a prévia.
+ *
+ * Padrão dropzone (`FinancingImportDropzone`, igual ao import de fatura/conta)
+ * enquanto ocioso; troca pro painel de análise (`FinancingImportAnalyzing`,
+ * beam de scan + fases rotativas) durante `importing` — fade+slide de 220ms
+ * (`stepVariants`/`STEP_TRANSITION`, mesma transição de troca de step do
+ * import de extrato/fatura) entre os dois.
  */
 export function FinancingImportButton({ onParsed, disabled }: FinancingImportButtonProps) {
   const [importing, setImporting] = useState(false);
   const [inputKey, setInputKey] = useState(0);
   const [hasPassword, setHasPassword] = useState(false);
   const [password, setPassword] = useState("");
+  const [fileName, setFileName] = useState("");
 
   async function handleFileSelect(file: File) {
+    setFileName(file.name);
     setImporting(true);
     try {
       const base64 = await fileToBase64(file);
@@ -58,21 +67,30 @@ export function FinancingImportButton({ onParsed, disabled }: FinancingImportBut
   }
 
   return (
-    <PasswordProtectedFileField
-      idPrefix="financing-import"
-      mode="standalone"
-      label="Importar de documento (opcional)"
-      helperText="PDF ou foto do CCB/contrato do banco — os campos abaixo são pré-preenchidos automaticamente. Revise antes de salvar."
-      accept={ACCEPTED_MIME_TYPES}
-      onFileSelect={(file) => void handleFileSelect(file)}
-      loading={importing}
-      loadingLabel="Lendo e extraindo os dados do contrato…"
-      inputKey={inputKey}
-      hasPassword={hasPassword}
-      onHasPasswordChange={setHasPassword}
-      password={password}
-      onPasswordChange={setPassword}
-      disabled={disabled}
-    />
+    <div className="flex flex-col gap-2">
+      <span className="text-[12.5px] font-medium text-muted-foreground">Importar de documento (opcional)</span>
+      <AnimatePresence mode="wait" initial={false}>
+        {importing ? (
+          <motion.div key="analyzing" variants={stepVariants} initial="enter" animate="center" exit="exit" transition={STEP_TRANSITION}>
+            <FinancingImportAnalyzing fileName={fileName} />
+          </motion.div>
+        ) : (
+          <motion.div key="dropzone" variants={stepVariants} initial="enter" animate="center" exit="exit" transition={STEP_TRANSITION}>
+            <FinancingImportDropzone
+              onFileSelect={(file) => void handleFileSelect(file)}
+              disabled={disabled}
+              hasPassword={hasPassword}
+              onHasPasswordChange={setHasPassword}
+              password={password}
+              onPasswordChange={setPassword}
+              inputKey={inputKey}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <p className="text-[11.5px] font-medium text-muted-foreground">
+        PDF ou foto do CCB/contrato do banco — os campos abaixo são pré-preenchidos automaticamente. Revise antes de salvar.
+      </p>
+    </div>
   );
 }
