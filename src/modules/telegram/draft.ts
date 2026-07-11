@@ -142,7 +142,10 @@ async function createTransactionFromDraft(
 
   // Limpa o pending ANTES de qualquer early-return — completo ou inválido, o
   // rascunho em progresso não deve sobreviver a este ponto (evita re-perguntar
-  // um draft que já tentamos finalizar).
+  // um draft que já tentamos finalizar). Se `createTransaction` falhar
+  // abaixo, o pending já foi perdido — mas isso não duplica nada: o dedup por
+  // `update_id` (route.ts, `modules/telegram/dedup.ts`) já garante que um
+  // retry do Telegram é descartado antes de chegar aqui.
   await telegramPendingRepository.remove(userId);
 
   if (!parsed.success) {

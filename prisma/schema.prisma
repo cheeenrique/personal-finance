@@ -140,20 +140,21 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  accounts              Account[]
-  cards                 Card[]
-  categories            Category[]
-  tags                  Tag[]
-  transactions          Transaction[]
-  budgets               Budget[]
-  assets                Asset[]
-  installmentPurchases  InstallmentPurchase[]
-  loans                 Loan[]
-  recurringTransactions RecurringTransaction[]
-  alerts                Alert[]
-  merchantCategoryRules MerchantCategoryRule[]
-  settings              UserSettings?
-  telegramPendingEntry  TelegramPendingEntry?
+  accounts                 Account[]
+  cards                    Card[]
+  categories               Category[]
+  tags                     Tag[]
+  transactions             Transaction[]
+  budgets                  Budget[]
+  assets                   Asset[]
+  installmentPurchases     InstallmentPurchase[]
+  loans                    Loan[]
+  recurringTransactions    RecurringTransaction[]
+  alerts                   Alert[]
+  merchantCategoryRules    MerchantCategoryRule[]
+  settings                 UserSettings?
+  telegramPendingEntry     TelegramPendingEntry?
+  telegramProcessedUpdates TelegramProcessedUpdate[]
 }
 
 // ---------------------------------------------------------------------------
@@ -779,4 +780,27 @@ model TelegramPendingEntry {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// TelegramProcessedUpdate (dedup de update_id, ver 30-TELEGRAM.md)
+// ---------------------------------------------------------------------------
+
+model TelegramProcessedUpdate {
+  id     String @id @default(cuid())
+  userId String
+
+  // `update_id` do Telegram (único por bot) — a chave composta (userId,
+  // updateId) é a garantia correta no modelo multi-bot BYO: cada usuário tem
+  // seu próprio bot, então o mesmo update_id pode existir em usuários
+  // diferentes. Evita processar (e duplicar) o mesmo update quando o
+  // Telegram reenvia por timeout de resposta (route.ts).
+  updateId BigInt
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, updateId])
+  @@index([createdAt])
 }

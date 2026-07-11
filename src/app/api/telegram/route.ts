@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { handleCallbackQuery } from "@/modules/telegram/callback";
 import { resolveUserByWebhookSecret } from "@/modules/telegram/webhook-auth";
 import { isLinkedChat } from "@/modules/telegram/allowlist";
+import { telegramDedupRepository } from "@/modules/telegram/dedup";
 import { telegramParser } from "@/modules/telegram/parser";
 import { telegramHandlers } from "@/modules/telegram/handlers";
 import { telegramApi } from "@/modules/telegram/telegram-api";
@@ -11,6 +12,7 @@ import { extractDocument } from "@/modules/telegram/document";
 import { extractVoiceLike, extractVideoNote } from "@/modules/telegram/voice";
 import {
   buildDocumentUnreadableReply,
+  buildErrorReply,
   buildImageUnreadableReply,
   buildTelegramLinkedReply,
   buildTelegramLinkFailedReply,
@@ -19,6 +21,7 @@ import {
   buildVoiceUnreadableReply,
 } from "@/modules/telegram/reply";
 import type { TelegramPhotoSize } from "@/modules/telegram/types";
+import type { UserSettings } from "@/generated/prisma/client";
 
 const WEBHOOK_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 
@@ -26,6 +29,7 @@ const WEBHOOK_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 const MAX_VOICE_DURATION_SECONDS = 60;
 
 type TelegramUpdate = {
+  update_id?: number;
   message?: {
     chat?: { id?: number | string };
     text?: string;
@@ -77,6 +81,57 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const update = (await request.json().catch(() => null)) as TelegramUpdate | null;
 
+  // Dedup por `update_id` (docs/30-TELEGRAM.md): o Telegram reenvia o MESMO
+  // update se não receber 200 a tempo — download + Gemini + createTransaction
+  // rodam síncronos abaixo e podem passar do timeout dele. Roda ANTES de
+  // qualquer processamento pesado, pra qualquer tipo de update (message ou
+  // callback_query).
+  if (update?.update_id !== undefined && update.update_id !== null) {
+    const { isDuplicate } = await telegramDedupRepository.markProcessed(userId, update.update_id);
+
+    if (isDuplicate) {
+      const chatId = update.message?.chat?.id ?? update.callback_query?.message?.chat?.id ?? "unknown";
+      console.log(`chat_id=${chatId} -> duplicate_update_skipped`);
+      return NextResponse.json({ ok: true });
+    }
+  }
+
+  // Boundary de erro final: NENHUM caminho abaixo pode resultar em 500 pro
+  // Telegram (senão ele reenvia o update e, sem o dedup acima cobrir o
+  // próximo update_id, a próxima falha ainda vale a pena não derrubar aqui).
+  // Os try/catch e replies específicos por caminho (voz, etc.) continuam
+  // valendo — isto é só a rede de segurança final.
+  try {
+    return await dispatchUpdate(userId, botToken, settings, update);
+  } catch (error) {
+    console.error(`[api/telegram] dispatch failed`, {
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+
+    const chatId = update?.message?.chat?.id ?? update?.callback_query?.message?.chat?.id;
+
+    if (chatId !== undefined && chatId !== null) {
+      try {
+        await telegramApi.sendMessage(
+          botToken,
+          chatId,
+          buildErrorReply("Não foi possível processar sua mensagem agora."),
+        );
+      } catch {
+        // Já estamos no boundary final — se o próprio send falhar, engole.
+      }
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+}
+
+async function dispatchUpdate(
+  userId: string,
+  botToken: string,
+  settings: UserSettings,
+  update: TelegramUpdate | null,
+): Promise<NextResponse> {
   if (update?.callback_query) {
     return handleCallbackUpdate(userId, botToken, settings, update.callback_query);
   }
