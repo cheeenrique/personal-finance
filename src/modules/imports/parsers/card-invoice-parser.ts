@@ -9,8 +9,8 @@ import { normalizeTransactionItem, parseTransactionEnvelope } from "./normalize"
  * "Fluxo 1") — via camada de IA nova (`@/lib/ai/extract`), NUNCA chama `nvidia.ts`/`gemini.ts`
  * direto (DIP — só conhece a porta `extractStructured`, nem sabe que hoje é NVIDIA).
  *
- * PDF com text layer → `extractPdfText` → texto → `role: "document-text"` (deepseek,
- * text-only). PDF escaneado/foto (sem text layer) → `role: "document-vision"` (qwen VLM) —
+ * PDF com text layer → `extractPdfText` → texto → `role: "document-text"` (gpt-oss,
+ * text-only). PDF escaneado/foto (sem text layer) → `role: "document-vision"` (VLM nemotron) —
  * ATENÇÃO: este caminho manda os BYTES CRUS do PDF como `image_url` com
  * `mimeType: "application/pdf"`; se o spike (T2) confirmar que o qwen da NIM não aceita PDF
  * inline pra visão (só imagem rasterizada), essa combinação específica retorna `null` (vira
@@ -41,7 +41,7 @@ import { normalizeTransactionItem, parseTransactionEnvelope } from "./normalize"
  */
 
 /** Extração de documento é lenta (modelo lê a fatura inteira + gera JSON) — 90s cobre o
- * NVIDIA (deepseek-v4-flash ~8s, com folga) E o fallback Gemini (que sem isso usaria o
+ * NVIDIA (gpt-oss reasoning low ~5s, com folga) E o fallback Gemini (que sem isso usaria o
  * default curto de `callGemini` e abortava no documento). Abaixo do maxDuration serverless. */
 const DOCUMENT_TIMEOUT_MS = 90_000;
 
@@ -79,8 +79,8 @@ function buildInvoicePrompt(): string {
     "",
     'Se a compra estiver PARCELADA (ex.: "Loja X 3/12"), cada parcela listada na fatura é um item INDEPENDENTE — NÃO some as parcelas, NÃO tente reconstruir o valor total da compra, cada linha vira 1 item.',
     "",
-    "IGNORE completamente (NÃO viram item, NUNCA são INCOME): QUALQUER linha de PAGAMENTO DA FATURA — descrição começando com \"Pagamento\", \"Pagto\", \"Pgto\" ou variações (\"PAGAMENTO\", \"Pagamento em 04 JUN\", \"Pagamento em 30 JUN\", \"Pagamento recebido\", \"Pagto fatura\"), saldo anterior, total da fatura, limite disponível, cabeçalho, rodapé, número de página.",
-    "ATENÇÃO — pagamento de fatura vs. estorno de compra são coisas DIFERENTES: pagamento da fatura é o titular quitando a fatura anterior (aparece como crédito na fatura, mas NUNCA é lançamento, NUNCA é INCOME — é sempre IGNORADO). Estorno é a devolução de UMA compra específica (ex.: \"Estorno Loja X\", \"Devolução compra\") — esse SIM é INCOME. Na dúvida se a linha é pagamento de fatura, IGNORE — não classifique como INCOME.",
+    "IGNORE completamente (NÃO viram item — nem EXPENSE nem INCOME): QUALQUER linha de PAGAMENTO DA FATURA. É pagamento da fatura toda descrição que começa com \"Pagamento\"/\"PAGAMENTO\"/\"Pagto\"/\"Pgto\", INDEPENDENTE do canal que vier depois — inclui \"PAGAMENTO PIX\", \"PAGAMENTO BOLETO\", \"PAGAMENTO DEBITO AUTOMATICO\", \"PAGAMENTO EFETUADO\", \"Pagamento em 04 JUN\", \"Pagamento recebido\", \"Pagto fatura\". Ignore TAMBÉM: saldo anterior, total da fatura, limite disponível, cabeçalho, rodapé, número de página.",
+    "ATENÇÃO CRÍTICA: pagamento da fatura é o titular QUITANDO a fatura (o dinheiro que ele pagou pra abater a fatura) — NÃO é compra nem estorno. Pode vir com sinal NEGATIVO ou POSITIVO na fatura; em QUALQUER caso é IGNORADO, NUNCA vira lançamento (nem EXPENSE nem INCOME) — senão o valor conta em dobro (as compras já foram lançadas). \"PAGAMENTO PIX\" É pagamento da fatura → IGNORE. Só é INCOME o ESTORNO/DEVOLUÇÃO de UMA compra específica (ex.: \"Estorno Loja X\", \"Devolução compra\"). Na dúvida, se a descrição tem \"Pagamento\", IGNORE.",
     "Se a fatura não tiver NENHUM lançamento identificável, retorne `transactions: []` — NUNCA invente um lançamento que não está no documento.",
   ].join("\n");
 }

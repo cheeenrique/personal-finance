@@ -18,8 +18,11 @@ export type AiRole = "document-text" | "document-text-reasoning" | "document-vis
 export type AiModelParams = {
   /** deepseek: liga/desliga "thinking" (`extra_body.chat_template_kwargs.thinking`). */
   thinking?: boolean;
-  /** nemotron: orçamento de raciocínio (`extra_body.reasoning_budget`). */
+  /** nemotron: orçamento de raciocínio (`reasoning_budget`). */
   reasoningBudget?: number;
+  /** gpt-oss: nível de raciocínio (`reasoning_effort`) — "low" mantém o JSON limpo e rápido
+   * (modelos de reasoning senão pensam em texto puro e estouram o max_tokens antes do JSON). */
+  reasoningEffort?: "low" | "medium" | "high";
   /** qwen (visão): amostragem — valores do spec (0.6/0.95). */
   temperature?: number;
   topP?: number;

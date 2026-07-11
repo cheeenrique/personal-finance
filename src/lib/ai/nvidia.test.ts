@@ -77,6 +77,24 @@ describe("NvidiaNimExtractor", () => {
     expect(init.headers.Authorization).toBe("Bearer test-key");
   });
 
+  it("manda reasoning_effort no TOPO do body pro gpt-oss (nunca em extra_body)", async () => {
+    process.env.NVIDIA_API_KEY = "test-key";
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(JSON.stringify({ ok: true })));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await extractor.extract(
+      { kind: "text", text: "doc" },
+      "prompt",
+      { type: "object" },
+      (raw) => raw,
+      { provider: "nvidia", model: "openai/gpt-oss-120b", modality: "text", params: { reasoningEffort: "low" } },
+    );
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+    expect(body.reasoning_effort).toBe("low");
+    expect(body.extra_body).toBeUndefined();
+  });
+
   it("monta messages de VISÃO com content array (text + image_url data URL)", async () => {
     process.env.NVIDIA_API_KEY = "test-key";
     const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(JSON.stringify({ ok: true })));

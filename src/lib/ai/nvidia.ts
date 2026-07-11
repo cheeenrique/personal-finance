@@ -62,13 +62,14 @@ function buildMessages(input: ExtractionInput, prompt: string, schema: JsonSchem
  * mandar `extra_body` literal retorna `400 Unsupported parameter(s): extra_body`.
  */
 function buildModelParams(config: AiModelConfig): Record<string, unknown> | undefined {
-  if (config.params?.thinking !== undefined) {
-    return { chat_template_kwargs: { thinking: config.params.thinking } };
-  }
-  if (config.params?.reasoningBudget !== undefined) {
-    return { reasoning_budget: config.params.reasoningBudget };
-  }
-  return undefined;
+  const params = config.params;
+  if (!params) return undefined;
+
+  const out: Record<string, unknown> = {};
+  if (params.thinking !== undefined) out.chat_template_kwargs = { thinking: params.thinking };
+  if (params.reasoningBudget !== undefined) out.reasoning_budget = params.reasoningBudget;
+  if (params.reasoningEffort !== undefined) out.reasoning_effort = params.reasoningEffort;
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** `choices[0].message.content` às vezes vem cru (JSON puro) ou envolto em texto/markdown

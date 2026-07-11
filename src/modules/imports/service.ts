@@ -115,11 +115,20 @@ async function matchCategoryByName(
 ): Promise<{ id: string; name: string } | null> {
   const expectedType = type === "INCOME" ? CategoryType.INCOME : CategoryType.EXPENSE;
   const categories = await categoryRepository.listAll(userId);
-  const normalizedTarget = normalizeWord(categoryName);
 
-  const match = categories.find(
-    (category) => category.type === expectedType && normalizeWord(category.name) === normalizedTarget,
-  );
+  // Match tolerante a plural/singular: a IA sugere no plural ("Seguros", "Assinaturas") e a
+  // categoria do usuário costuma ser singular ("Seguro", "Assinatura") — o match exato falhava
+  // e mandava "Criar" pra uma categoria que já existe. Compara o nome normalizado E a versão
+  // sem "s" final (singularização crua, suficiente pra pt-BR de nome de categoria).
+  const singular = (value: string) => value.replace(/s$/, "");
+  const targetNorm = normalizeWord(categoryName);
+  const targetSing = singular(targetNorm);
+
+  const match = categories.find((category) => {
+    if (category.type !== expectedType) return false;
+    const catNorm = normalizeWord(category.name);
+    return catNorm === targetNorm || singular(catNorm) === targetSing;
+  });
   return match ? { id: match.id, name: match.name } : null;
 }
 

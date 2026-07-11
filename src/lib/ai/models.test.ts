@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { resolveAiModel } from "./models";
 
 describe("resolveAiModel", () => {
-  it("document-text resolve pra nvidia nemotron-super com thinking desligado + fallback gemini", () => {
+  it("document-text resolve pra nvidia gpt-oss-120b com reasoning_effort low + fallback gemini", () => {
     const config = resolveAiModel("document-text");
     expect(config).toEqual({
       provider: "nvidia",
-      model: "nvidia/nemotron-3-super-120b-a12b",
+      model: "openai/gpt-oss-120b",
       modality: "text",
-      params: { thinking: false },
+      params: { reasoningEffort: "low" },
       fallback: "gemini",
     });
   });

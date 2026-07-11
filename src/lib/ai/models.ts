@@ -20,13 +20,13 @@ import type { AiModelConfig, AiRole } from "./types";
 const REGISTRY: Record<AiRole, AiModelConfig> = {
   "document-text": {
     provider: "nvidia",
-    // nemotron-3-super-120b: o -nano-30b era rápido (~2s) mas FRACO (alucinava principal,
-    // pegava só 1 parcela). O super-120b é honesto (deixa null em vez de inventar) e pega o
-    // cronograma completo em ~16s — melhor qualidade pro caso "form/preview que o user revisa"
-    // (deepseek-v4-flash morreu 404). (`nvidia.ts` remove `<think>` da resposta.)
-    model: "nvidia/nemotron-3-super-120b-a12b",
+    // gpt-oss-120b com reasoning_effort "low": honesto (null em vez de alucinar), extrai a
+    // fatura/contrato completos, ignora pagamento de fatura, ~5s. Melhor que nemotron-30b
+    // (fraco/alucinava), nemotron-super-120b (pensa em texto puro e estoura max_tokens antes
+    // do JSON) e deepseek-pro (enfileira). deepseek-v4-flash morreu 404.
+    model: "openai/gpt-oss-120b",
     modality: "text",
-    params: { thinking: false },
+    params: { reasoningEffort: "low" },
     fallback: "gemini",
   },
   "document-text-reasoning": {
