@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { SectionCard } from "./section-card";
+import { HealthScoreInfoButton } from "./health-score-info-button";
 import type { HealthScore, ScoreBreakdown, ScoreTone } from "@/modules/insights/types";
 
 type HealthScoreCardProps = {
@@ -32,7 +33,7 @@ function formatBreakdownValue(item: ScoreBreakdown): string {
  */
 export function HealthScoreCard({ healthScore }: HealthScoreCardProps) {
   return (
-    <SectionCard title="Saúde financeira">
+    <SectionCard title="Saúde financeira" titleAdornment={<HealthScoreInfoButton />}>
       <div className="flex items-center gap-4">
         <div className="flex shrink-0 flex-col items-center">
           <span className={cn("font-mono text-[32px] font-black leading-none", SCORE_TEXT_TONE[healthScore.tone])}>

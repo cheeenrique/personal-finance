@@ -6,6 +6,8 @@ import { buttonVariants } from "@/components/ui/button";
 
 type SectionCardProps = {
   title: string;
+  /** Elemento renderizado logo após o `<h3>` do título (ex.: botão de ajuda) — não confundir com `action`, que fica à direita do header. */
+  titleAdornment?: ReactNode;
   action?: { label: string; href: string };
   children: ReactNode;
   className?: string;
@@ -17,11 +19,14 @@ type SectionCardProps = {
  * shadow + header com título 14px/800), sem repetir o header de gráfico
  * (que já tem legenda inline própria).
  */
-export function SectionCard({ title, action, children, className }: SectionCardProps) {
+export function SectionCard({ title, titleAdornment, action, children, className }: SectionCardProps) {
   return (
     <div className={cn("rounded-xl border border-border bg-card", CARD_SHADOW_CLASS, className)}>
       <div className="flex items-center justify-between gap-3 border-b border-border px-[18px] py-[15px]">
-        <h3 className="text-sm font-extrabold text-foreground">{title}</h3>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h3 className="text-sm font-extrabold text-foreground">{title}</h3>
+          {titleAdornment}
+        </div>
         {action && (
           <Link href={action.href} className={cn(buttonVariants({ variant: "neutral", size: "sm" }))}>
             {action.label}
