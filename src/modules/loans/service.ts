@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { Prisma } from "@/generated/prisma/client";
-import { TransactionType } from "@/generated/prisma/enums";
+import { TransactionType, LoanKind } from "@/generated/prisma/enums";
 import { loanRepository } from "./repository";
 import { loanOwnership } from "./ownership";
 import { monthlyRate, monthsEarly, presentValue, earlyPaymentSuggestion, distributeProportionally } from "./interest";
@@ -117,7 +117,11 @@ async function getLoanDetail(userId: string, id: string): Promise<LoanWithInstal
  */
 async function listActiveLoans(userId: string): Promise<LoanWithProgress[]> {
   const loans = await listLoans(userId);
-  return loans.filter((loan) => loan.paidCount < loan.installmentsCount);
+  // Só kind=LOAN — financiamento (FINANCING) tem seção própria (/financings).
+  // Bloco "Empréstimos ativos" do Dashboard; saldo devedor = paidCount < installmentsCount.
+  return loans.filter(
+    (loan) => loan.kind === LoanKind.LOAN && loan.paidCount < loan.installmentsCount,
+  );
 }
 
 /**

@@ -1,7 +1,7 @@
 import { toZonedTime } from "date-fns-tz";
 import { Prisma } from "@/generated/prisma/client";
 import { CardType, TransactionType } from "@/generated/prisma/enums";
-import { TIMEZONE, parseInSaoPaulo } from "@/lib/date/timezone";
+import { TIMEZONE, parseInSaoPaulo, nowInSaoPaulo } from "@/lib/date/timezone";
 import { transactionService } from "@/modules/transactions/service";
 import { assetService } from "@/modules/assets/service";
 import { reportRepository, type DateRange } from "./repository";
@@ -129,6 +129,18 @@ async function cashflowByMonth(
   }
 
   return buckets;
+}
+
+/**
+ * "Evolução mensal" do Dashboard — mesma série de `cashflowByMonth`, mas o ANO
+ * CORRENTE é cortado nos meses já decorridos (série zero-preenchida não achata
+ * meses futuros em zero na linha do tempo). Anos passados mostram os 12 meses.
+ * A regra de "meses decorridos" vive aqui (service), não na página (R5).
+ */
+async function cashflowByMonthElapsed(userId: string, year: number): Promise<IncomeExpenseMonthPoint[]> {
+  const points = await cashflowByMonth(userId, year);
+  const now = nowInSaoPaulo();
+  return year === now.getFullYear() ? points.slice(0, now.getMonth() + 1) : points;
 }
 
 /**
@@ -354,6 +366,7 @@ async function patrimonyEvolution(userId: string): Promise<TotalEvolutionPoint[]
 export const reportService = {
   incomeVsExpenseByMonth,
   cashflowByMonth,
+  cashflowByMonthElapsed,
   expenseByCategory,
   categoryTotals,
   expenseByCardTree,

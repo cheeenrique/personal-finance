@@ -66,7 +66,10 @@ async function markRead(userId: string, id: string): Promise<Alert> {
 }
 
 async function listActiveForDashboard(userId: string): Promise<Alert[]> {
-  return alertRepository.listActiveForDashboard(userId);
+  const alerts = await alertRepository.listActiveForDashboard(userId);
+  // WEEKLY_SUMMARY tem box dedicado no Dashboard (getWeeklySummaryForDashboard) —
+  // nunca aparece na lista de alertas ativos (docs/29-ALERTS.md).
+  return alerts.filter((alert) => alert.type !== AlertType.WEEKLY_SUMMARY);
 }
 
 /**

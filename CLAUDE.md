@@ -11,4 +11,8 @@ sempre antes de mexer no código:
 - `docs/04-DESIGN_SYSTEM.md` — design system e tokens
 - `docs/10-AUTH.md` — autenticação e isolamento por `userId`
 
+Regras duras (auto-carregadas no pre-flight, sobrescrevem best-practice genérica):
+
+- `.claude/rules/01-server-components-data.md` — data fetching e streaming em Server Components (fronteiras Suspense, best-effort fora do caminho crítico, timeout de I/O externo)
+
 Regra de ouro do projeto: se a lógica não estiver em `src/modules/`, ela não é regra de negócio válida — Server Actions/Route Handlers só delegam.

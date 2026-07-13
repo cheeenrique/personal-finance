@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 
 import { auth } from "@/lib/auth";
-import { AlertType, LoanKind } from "@/generated/prisma/enums";
 import { accountService } from "@/modules/accounts/service";
 import { transactionService } from "@/modules/transactions/service";
 import { alertService } from "@/modules/alerts/service";
@@ -11,7 +10,6 @@ import { loanService } from "@/modules/loans/service";
 import { reportService } from "@/modules/reports/service";
 import { insightsService } from "@/modules/insights/service";
 import { goalService } from "@/modules/goals/service";
-import { nowInSaoPaulo } from "@/lib/date/timezone";
 import { parseFlexibleDate } from "@/lib/date/schema";
 import { PERIOD_OPTIONS, type PeriodPreset } from "@/components/transactions/period-presets";
 import { resolveDateRange, deriveYearMonth } from "@/components/reports/report-filters";
@@ -29,8 +27,8 @@ import { ExpenseCategoryChart } from "@/components/dashboard/expense-category-ch
 import { MonthlyEvolutionChart } from "@/components/dashboard/monthly-evolution-chart";
 import { RecentTransactionsTable } from "@/components/dashboard/recent-transactions-table";
 import { HealthScoreCard } from "@/components/dashboard/health-score-card";
-import { MonthlyNarrativeCard } from "@/components/dashboard/monthly-narrative-card";
 import { GoalsSummary } from "@/components/dashboard/goals-summary";
+import { MonthlyNarrativeSection, MonthlyNarrativeSkeleton } from "./monthly-narrative-section";
 
 const RECENT_TRANSACTIONS_LIMIT = 5;
 const DEFAULT_PERIOD: PeriodPreset = "this_month";
@@ -91,13 +89,6 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
   const parsedDateTo = parseFlexibleDate(dateTo);
   const { year } = deriveYearMonth(dateTo);
 
-  // "Hoje" em America/Sao_Paulo — usado tanto pra fatiar a evolução mensal
-  // (abaixo) quanto pro mês-alvo da narrativa mensal (sempre o mês CORRENTE,
-  // independente do filtro de período do Dashboard).
-  const nowMonth = nowInSaoPaulo();
-  const currentYear = nowMonth.getFullYear();
-  const currentMonth = nowMonth.getMonth() + 1;
-
   const [
     insufficientBalanceReport,
     totalBalance,
@@ -105,15 +96,14 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     unpaidExpense,
     totalPatrimony,
     weeklySummary,
-    activeAlertsRaw,
+    activeAlerts,
     cards,
     installmentPurchases,
-    activeLoansRaw,
+    activeLoans,
     expenseByCardTree,
-    monthlyCashflow,
+    monthlyEvolutionPoints,
     recentTransactions,
     healthScoreResult,
-    monthlyNarrativeResult,
     goalsWithProgress,
   ] = await Promise.all([
     accountService.getInsufficientBalanceReport(userId),
@@ -141,14 +131,12 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     // COALESCE(paidAt, date), ver `cashflowByMonth`) — o ponto do mês corrente
     // bate exato com os cards "Receitas/Despesas do mês". NÃO usa
     // `incomeVsExpenseByMonth` (accrual por competência, inclui cartão): mesma
-    // tela mostrando dois números pro mesmo mês confundia (parecia bug).
-    reportService.cashflowByMonth(userId, year),
+    // tela mostrando dois números pro mesmo mês confundia (parecia bug). Já
+    // vem cortada nos meses decorridos do ano corrente (`cashflowByMonthElapsed`).
+    reportService.cashflowByMonthElapsed(userId, year),
     transactionService.listRecentForDashboard(userId, RECENT_TRANSACTIONS_LIMIT),
     // "Saúde financeira" — score 0-100 + breakdown, sempre do mês corrente.
     insightsService.healthScore(userId),
-    // "Resumo do mês" via IA — mês CORRENTE (`currentYear`/`currentMonth`),
-    // não o mês do filtro de período selecionado.
-    insightsService.monthlyNarrative(userId, currentYear, currentMonth),
     // "Metas" — progresso derivado (saldo de conta/ativo vinculado ou valor manual).
     goalService.listWithProgress(userId),
   ]);
@@ -161,25 +149,6 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     monthlyResult: cashflowSummary.net.toNumber(),
     totalPatrimony: totalBalance.plus(totalPatrimony).toNumber(),
   };
-
-  // WEEKLY_SUMMARY já tem o box dedicado acima — não duplicar na lista de
-  // alertas ativos (docs/29-ALERTS.md, "Interface no Dashboard": só anomalia/verde).
-  const activeAlerts = activeAlertsRaw.filter((alert) => alert.type !== AlertType.WEEKLY_SUMMARY);
-
-  // `loanService.listActiveLoans` traz LOAN e FINANCING juntos (mesma entidade
-  // `Loan`, ver docs/03-DATABASE.md) — o bloco "Empréstimos ativos" só cobre
-  // `kind=LOAN` e linka pra `/loans/[id]`; financiamento tem seção própria
-  // (`/financings`), mesmo filtro de `app/(app)/loans/page.tsx`.
-  const activeLoans = activeLoansRaw.filter((loan) => loan.kind === LoanKind.LOAN);
-
-  // Só os meses já decorridos do ANO CORRENTE — série zero-preenchida evita
-  // meses futuros "achatados" em zero na linha do tempo. Anos passados (ex.:
-  // período "Este ano" olhando pra trás não existe hoje, mas `cashflowByMonth`
-  // é sempre o ano do período, que pode divergir do ano corrente em casos de borda
-  // como "Mês passado" em janeiro) mostram os 12 meses cheios — mesmo tratamento
-  // de `/reports` (`cashflowPoints`). `nowMonth` já calculado acima (currentYear/currentMonth).
-  const monthlyEvolutionPoints =
-    year === nowMonth.getFullYear() ? monthlyCashflow.slice(0, nowMonth.getMonth() + 1) : monthlyCashflow;
 
   return (
     <div className="flex flex-col gap-5">
@@ -197,7 +166,9 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
 
       <AlertsSection alerts={activeAlerts} />
 
-      <MonthlyNarrativeCard narrative={monthlyNarrativeResult} />
+      <Suspense fallback={<MonthlyNarrativeSkeleton />}>
+        <MonthlyNarrativeSection userId={userId} />
+      </Suspense>
 
       <KPIGrid data={kpiData} period={period} />
 
