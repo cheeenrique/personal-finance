@@ -214,3 +214,19 @@ export function cycleForClosingMonth(
 
   return { periodStart, periodEnd, dueDate };
 }
+
+/**
+ * Ciclo imediatamente ANTERIOR a `openCycle` — a fatura que JÁ FECHOU e está
+ * aguardando pagamento, distinta de `cycleContaining(now)` (ciclo ABERTO,
+ * ainda em formação). Ver "achado central" em
+ * `docs/superpowers/specs/2026-07-13-cartao-vencimento-fatura-status-design.md`:
+ * `invoiceDueDate`/`currentInvoice` só refletem "a fatura que devo pagar
+ * agora" durante a JANELA entre o vencimento e o próximo fechamento — na
+ * maior parte do mês eles já apontam pro ciclo seguinte.
+ *
+ * Cálculo: 1ms antes do início de `openCycle` cai, por definição, dentro do
+ * ciclo anterior — reaproveita `cycleContaining` sem escrever data-math nova.
+ */
+export function previousClosedCycle(cycles: CycleRule[], fallback: CycleFallback, openCycle: CardCycle): CardCycle {
+  return cycleContaining(cycles, fallback, new Date(openCycle.periodStart.getTime() - 1));
+}

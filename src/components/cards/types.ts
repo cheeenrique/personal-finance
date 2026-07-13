@@ -38,6 +38,12 @@ export type CardSummaryView = {
   mealRecharged: string | null;
   /** `null` para CREDIT. Total gasto (Σ EXPENSE) para MEAL — "usado" da barra `gasto / recarga`. */
   mealSpent: string | null;
+  /** Vencimento da última fatura FECHADA (aguardando pagamento) — distinto de `invoiceDueDate` (ciclo aberto em formação). `null` para MEAL, cartão sem fatura anterior, ou fatura sem compra (`total=0` — a UI esconde a faixa). */
+  lastInvoiceDueDate: string | null;
+  /** `paidAmount >= total` da última fatura fechada (heurística por janela de data de `CARD_PAYMENT`). `null` junto com `lastInvoiceDueDate`. */
+  lastInvoiceIsPaid: boolean | null;
+  /** Não paga E hoje (SP) estritamente depois do vencimento. `null` junto com `lastInvoiceDueDate`. */
+  lastInvoiceIsOverdue: boolean | null;
 };
 
 export type InvoiceView = {

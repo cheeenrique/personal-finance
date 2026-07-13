@@ -1,6 +1,7 @@
 import { Prisma, type Card, type CardCycle as CardCycleRow, type CardInvoice } from "@/generated/prisma/client";
 import { TransactionType, CardType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db/client";
+import { calendarPartsSP, startOfDaySP } from "@/lib/date/calendar-sp";
 import {
   cardRepository,
   type CreateCardData,
@@ -8,9 +9,16 @@ import {
   type InvoiceItemRow,
   type CardWithCycles,
 } from "./repository";
-import { cycleContaining, cycleForClosingMonth, type CardCycle, type CycleRule } from "./cycle";
+import {
+  cycleContaining,
+  cycleForClosingMonth,
+  previousClosedCycle,
+  type CardCycle,
+  type CycleRule,
+  type CycleFallback,
+} from "./cycle";
 import { CardNotFoundError, CardTypeNotSupportedError } from "./errors";
-import type { CardWithSummary, Invoice, Money } from "./types";
+import type { CardWithSummary, Invoice, InvoiceStatus, Money } from "./types";
 
 /** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `pay-invoice.ts`). */
 type Db = Prisma.TransactionClient;
@@ -147,6 +155,125 @@ async function invoiceFor(userId: string, cardId: string, year: number, month: n
 }
 
 /**
+ * Meia-noite de hoje em America/Sao_Paulo — comparação de DIA CIVIL (não de
+ * instante) pra `isOverdue`. Usa `calendarPartsSP(new Date())` (instante REAL),
+ * nunca `nowInSaoPaulo()` (epoch já deslocado — mesma ressalva de `currentInvoice`
+ * acima, só que aqui o deslocamento quebraria a comparação de dia, não de ciclo).
+ */
+function startOfTodaySP(): Date {
+  const { year, month, day } = calendarPartsSP(new Date());
+  return startOfDaySP(year, month, day);
+}
+
+/**
+ * Regra pura `isPaid`/`isOverdue` da última fatura fechada (design doc
+ * `docs/superpowers/specs/2026-07-13-cartao-vencimento-fatura-status-design.md`)
+ * — sem I/O, testável isoladamente (SRP, `~/.claude/rules/01-solid.md`).
+ *
+ * - `isPaid`: `paidAmount >= total` — fatura com `total=0` (sem compra no
+ *   ciclo) é trivialmente paga.
+ * - `isOverdue`: só quando NÃO paga E `today` (meia-noite SP) é
+ *   ESTRITAMENTE depois de `dueDate` (também meia-noite SP) — o próprio dia
+ *   do vencimento ainda NÃO é atraso (decisão do dono).
+ * - Pagamento PARCIAL (`0 < paidAmount < total`) conta como "não paga" —
+ *   binário, sem terceiro estado "parcial" neste escopo (decisão do dono).
+ */
+export function evaluateInvoiceStatus(params: {
+  total: Money;
+  paidAmount: Money;
+  dueDate: Date;
+  today: Date;
+}): { isPaid: boolean; isOverdue: boolean } {
+  const { total, paidAmount, dueDate, today } = params;
+  const isPaid = paidAmount.greaterThanOrEqualTo(total);
+  const isOverdue = !isPaid && today.getTime() > dueDate.getTime();
+  return { isPaid, isOverdue };
+}
+
+/**
+ * Status (vencimento/paga/atrasada) da ÚLTIMA fatura FECHADA — distinta de
+ * `currentInvoice` (ciclo ABERTO, ainda em formação; ver "achado central" no
+ * design doc citado acima). "Paga" é heurística por JANELA DE DATA (sem
+ * coluna que ligue `CARD_PAYMENT` a um invoice/período — Premissa 1 do
+ * design doc): soma `CARD_PAYMENT` datado dentro de
+ * `[fechamento da fatura fechada, fechamento do PRÓXIMO ciclo)` e compara com
+ * o total. Retorna `null` quando o cartão ainda não completou nenhum ciclo
+ * desde a criação (`openCycle.periodStart <= card.createdAt`). CREDIT-only —
+ * ver `assertCreditCard`. Exportada (não só consumida por `listWithSummary`)
+ * pra reuso futuro no detalhe do cartão (`/cards/[id]`), fora do escopo desta
+ * entrega (só a listagem `/cards`).
+ */
+async function lastClosedInvoiceStatus(
+  userId: string,
+  cardId: string,
+  refDate: Date = new Date(),
+): Promise<InvoiceStatus | null> {
+  const card = await getCard(userId, cardId);
+  assertCreditCard(card, "lastClosedInvoiceStatus");
+
+  const fallback = { closingDay: card.closingDay, dueDay: card.dueDay };
+  const rules = toCycleRules(card.cycles);
+  const openCycle = cycleContaining(rules, fallback, refDate);
+
+  if (openCycle.periodStart.getTime() <= card.createdAt.getTime()) return null;
+
+  const closedCycle = previousClosedCycle(rules, fallback, openCycle);
+  const invoice = await buildInvoice(userId, cardId, closedCycle);
+  const paymentRows = await cardRepository.findCardPaymentsInRange(userId, cardId, {
+    gte: closedCycle.periodEnd,
+    lt: openCycle.periodEnd,
+  });
+  const paidAmount = sumAmounts(paymentRows);
+  const { isPaid, isOverdue } = evaluateInvoiceStatus({
+    total: invoice.total,
+    paidAmount,
+    dueDate: invoice.dueDate,
+    today: startOfTodaySP(),
+  });
+
+  return { invoice, paidAmount, isPaid, isOverdue };
+}
+
+/**
+ * Campos "última fatura fechada" pro branch CREDIT de `listWithSummary` —
+ * mesma regra de `lastClosedInvoiceStatus` acima, mas 100% em memória (sem
+ * query extra por cartão — ver JSDoc de `listWithSummary`, "Evita N+1" no
+ * design doc): reaproveita os buckets `cardExpenses`/`cardPayments` já
+ * carregados em lote. `total=0` (sem compra no ciclo fechado) some com a
+ * faixa inteira na UI (Premissa 3 do design doc) — retorna os 3 campos
+ * `null`, mesmo tratamento de "sem fatura anterior".
+ */
+export function computeLastInvoiceFields(
+  card: Pick<Card, "createdAt">,
+  rules: CycleRule[],
+  fallback: CycleFallback,
+  openCycle: CardCycle,
+  cardExpenses: Array<{ amount: Prisma.Decimal; date: Date }>,
+  cardPayments: Array<{ amount: Prisma.Decimal; date: Date }>,
+  today: Date,
+): { dueDate: Date | null; isPaid: boolean | null; isOverdue: boolean | null } {
+  if (openCycle.periodStart.getTime() <= card.createdAt.getTime()) {
+    return { dueDate: null, isPaid: null, isOverdue: null };
+  }
+
+  const closedCycle = previousClosedCycle(rules, fallback, openCycle);
+  const total = sumAmounts(
+    cardExpenses.filter((row) => row.date >= closedCycle.periodStart && row.date < closedCycle.periodEnd),
+  );
+
+  if (total.isZero()) {
+    return { dueDate: null, isPaid: null, isOverdue: null };
+  }
+
+  const paidAmount = sumAmounts(
+    cardPayments.filter((row) => row.date >= closedCycle.periodEnd && row.date < openCycle.periodEnd),
+  );
+  const { isPaid, isOverdue } = evaluateInvoiceStatus({ total, paidAmount, dueDate: closedCycle.dueDate, today });
+
+  return { dueDate: closedCycle.dueDate, isPaid, isOverdue };
+}
+
+/**
  * Saldo devedor TOTAL do cartão (docs/22-CREDIT_CARDS.md, "Limite" + Regra 2):
  * soma de TODAS as compras (EXPENSE) já lançadas — inclusive parcelas
  * futuras, que já reservam limite desde a criação (docs/23-INSTALLMENTS.md,
@@ -190,26 +317,28 @@ async function mealBalance(userId: string, cardId: string, db: Db = prisma): Pro
 }
 
 /**
- * Cartões + resumo derivado, sem N+1 (docs/22, "Cards na listagem"). 3 queries
- * no total (compras + soma por tipo + histórico de ciclo), independente do
- * número de cartões — o agrupamento por ciclo (janela de data diferente por
- * cartão, já que cada um tem seu próprio closingDay/dueDay, e pode ainda ter
- * mudado ao longo do tempo via `CardCycle`) é feito em memória sobre o
- * resultado já carregado.
+ * Cartões + resumo derivado, sem N+1 (docs/22, "Cards na listagem"). 4 queries
+ * no total (compras + soma por tipo + histórico de ciclo + pagamentos de
+ * fatura), independente do número de cartões — o agrupamento por ciclo
+ * (janela de data diferente por cartão, já que cada um tem seu próprio
+ * closingDay/dueDay, e pode ainda ter mudado ao longo do tempo via
+ * `CardCycle`) é feito em memória sobre o resultado já carregado.
  *
  * Ramifica por `card.type` (ver types.ts `CardWithSummary` — shape único, não
  * discriminado, de propósito: task é só backend, ver JSDoc do tipo): CREDIT
  * calcula fatura atual + devedor + limite disponível igual a antes (fluxo
- * INTACTO, zero regressão) e `mealBalance`/`mealRecharged`/`mealSpent=null`;
+ * INTACTO, zero regressão), `mealBalance`/`mealRecharged`/`mealSpent=null` e
+ * os 3 campos de status da última fatura FECHADA (`lastInvoiceDueDate`/
+ * `lastInvoiceIsPaid`/`lastInvoiceIsOverdue`, ver `computeLastInvoiceFields`);
  * MEAL preenche os 4 campos CREDIT com placeholder neutro (nunca consumido
  * por UI hoje — nenhum cartão MEAL existe ainda) e calcula `mealBalance`,
  * `mealRecharged` (Σ INCOME) e `mealSpent` (Σ EXPENSE) de verdade a partir do
  * MESMO `sumByCardAndType` (sem query nova) — a UI usa `mealSpent`/
  * `mealRecharged` pra desenhar a barra `gasto / recarga` igual à de limite do
  * CREDIT (`mealBalance` continua sendo só o saldo derivado). `expenseRows`/
- * `cycleRows` são buscados pra TODOS os cartões (query única, sem N+1) mas só
- * usados no ramo CREDIT — overhead desprezível pro volume do app (poucos
- * cartões por usuário).
+ * `cycleRows`/`paymentRows` são buscados pra TODOS os cartões (query única,
+ * sem N+1) mas só usados no ramo CREDIT — overhead desprezível pro volume do
+ * app (poucos cartões por usuário).
  */
 async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
   const cards = await cardRepository.list(userId);
@@ -220,11 +349,16 @@ async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
   // `cycleContaining` espera um epoch verdadeiro, não o Date deslocado de
   // `nowInSaoPaulo()`.
   const refDate = new Date();
+  // Dia civil SP (uma vez só, reaproveitado por todos os cartões) — mesmo
+  // instante que `startOfTodaySP()`/`lastClosedInvoiceStatus` usam pra
+  // `isOverdue`.
+  const today = startOfTodaySP();
 
-  const [expenseRows, typeSums, cycleRows] = await Promise.all([
+  const [expenseRows, typeSums, cycleRows, paymentRows] = await Promise.all([
     cardRepository.listExpensesForCards(userId, cardIds),
     cardRepository.sumByCardAndType(userId, cardIds),
     cardRepository.listCyclesForCards(cardIds),
+    cardRepository.listCardPaymentsForCards(userId, cardIds),
   ]);
 
   const expensesByCard = new Map<string, Array<{ amount: Prisma.Decimal; date: Date }>>();
@@ -248,6 +382,13 @@ async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
     cyclesByCard.set(row.cardId, bucket);
   }
 
+  const paymentsByCard = new Map<string, Array<{ amount: Prisma.Decimal; date: Date }>>();
+  for (const row of paymentRows) {
+    const bucket = paymentsByCard.get(row.cardId) ?? [];
+    bucket.push({ amount: row.amount, date: row.date });
+    paymentsByCard.set(row.cardId, bucket);
+  }
+
   return cards.map((card): CardWithSummary => {
     const sums = sumsByCard.get(card.id) ?? [];
 
@@ -265,16 +406,22 @@ async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
         mealBalance: computeMealBalance(sums),
         mealRecharged: sumMealRecharged(sums),
         mealSpent: sumMealSpent(sums),
+        lastInvoiceDueDate: null,
+        lastInvoiceIsPaid: null,
+        lastInvoiceIsOverdue: null,
       };
     }
 
+    const rules = toCycleRules(cyclesByCard.get(card.id) ?? []);
     const fallback = { closingDay: card.closingDay, dueDay: card.dueDay };
-    const cycle = cycleContaining(toCycleRules(cyclesByCard.get(card.id) ?? []), fallback, refDate);
+    const cycle = cycleContaining(rules, fallback, refDate);
     const cardExpenses = expensesByCard.get(card.id) ?? [];
     const currentInvoiceTotal = sumAmounts(
       cardExpenses.filter((row) => row.date >= cycle.periodStart && row.date < cycle.periodEnd),
     );
     const outstanding = computeOutstanding(sums);
+    const cardPayments = paymentsByCard.get(card.id) ?? [];
+    const lastInvoice = computeLastInvoiceFields(card, rules, fallback, cycle, cardExpenses, cardPayments, today);
 
     return {
       ...card,
@@ -285,6 +432,9 @@ async function listWithSummary(userId: string): Promise<CardWithSummary[]> {
       mealBalance: null,
       mealRecharged: null,
       mealSpent: null,
+      lastInvoiceDueDate: lastInvoice.dueDate,
+      lastInvoiceIsPaid: lastInvoice.isPaid,
+      lastInvoiceIsOverdue: lastInvoice.isOverdue,
     };
   });
 }
@@ -310,6 +460,7 @@ export const cardService = {
   listCards,
   currentInvoice,
   invoiceFor,
+  lastClosedInvoiceStatus,
   outstandingBalance,
   availableLimit,
   mealBalance,

@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil, Trash2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { AlertTriangle, Pencil, Trash2 } from "lucide-react";
 
 import { IconActionButton } from "@/components/shared/icon-action-button";
 import { formatBRL } from "@/lib/money/format";
+import { formatDateShortSaoPaulo } from "@/lib/date/format";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
 import { CardType } from "@/generated/prisma/enums";
 import { CardLimitProgress, computeUsagePercent, usageToneTextClass } from "./card-limit-progress";
@@ -17,6 +19,35 @@ type CardTileProps = {
   onEdit: (card: CardSummaryView) => void;
   onDelete: (card: CardSummaryView) => void;
 };
+
+type InvoiceStatusBadge = { label: string; className: string; icon?: LucideIcon; dueDate: string };
+
+/**
+ * Faixa "vence {data} + status" do tile (docs/superpowers/specs/
+ * 2026-07-13-cartao-vencimento-fatura-status-design.md) — só CREDIT e só
+ * quando existe uma fatura fechada aplicável (`lastInvoiceDueDate !== null`;
+ * `null` cobre MEAL, cartão sem fatura anterior E fatura com `total=0`, ver
+ * `modules/cards/service.ts` `computeLastInvoiceFields`). Tom por prioridade:
+ * atrasada (destructive) > paga (success) > em aberto (warning) — nunca
+ * vermelho hardcoded, sempre os tokens do design system
+ * (docs/04-DESIGN_SYSTEM.md, "Regra on-* vs. base").
+ */
+function resolveInvoiceStatusBadge(card: CardSummaryView): InvoiceStatusBadge | null {
+  if (card.type !== CardType.CREDIT) return null;
+  if (card.lastInvoiceDueDate === null || card.lastInvoiceIsPaid === null || card.lastInvoiceIsOverdue === null) {
+    return null;
+  }
+
+  const dueDate = card.lastInvoiceDueDate;
+
+  if (card.lastInvoiceIsOverdue) {
+    return { label: "Fatura atrasada", className: "bg-destructive/16 text-on-danger", icon: AlertTriangle, dueDate };
+  }
+  if (card.lastInvoiceIsPaid) {
+    return { label: "Paga", className: "bg-success/16 text-success", dueDate };
+  }
+  return { label: "Em aberto", className: "bg-warning/14 text-on-warning", dueDate };
+}
 
 /**
  * Tile de cartão na grid de `/cards` (fonte visual: `Personal Finance -
@@ -35,6 +66,8 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
   const footerLeftValue = isMeal ? (card.mealRecharged ?? "0") : card.currentInvoiceTotal;
   const footerRightLabel = isMeal ? "Saldo" : "Disponível";
   const footerRightValue = isMeal ? (card.mealBalance ?? "0") : card.availableLimit;
+  const invoiceStatusBadge = resolveInvoiceStatusBadge(card);
+  const InvoiceStatusIcon = invoiceStatusBadge?.icon;
 
   return (
     <div className="flex flex-col gap-3.5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
@@ -69,6 +102,23 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
             </p>
           </div>
         </div>
+
+        {invoiceStatusBadge && (
+          <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
+            <p className="text-[11px] font-semibold text-muted-foreground">
+              vence {formatDateShortSaoPaulo(invoiceStatusBadge.dueDate)}
+            </p>
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap",
+                invoiceStatusBadge.className,
+              )}
+            >
+              {InvoiceStatusIcon && <InvoiceStatusIcon className="size-3" aria-hidden="true" />}
+              {invoiceStatusBadge.label}
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
           <div className="min-w-0">

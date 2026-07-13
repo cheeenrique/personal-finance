@@ -27,6 +27,9 @@ export function serializeCardSummary(card: CardWithSummary): CardSummaryView {
     mealBalance: card.mealBalance ? card.mealBalance.toString() : null,
     mealRecharged: card.mealRecharged ? card.mealRecharged.toString() : null,
     mealSpent: card.mealSpent ? card.mealSpent.toString() : null,
+    lastInvoiceDueDate: card.lastInvoiceDueDate ? card.lastInvoiceDueDate.toISOString() : null,
+    lastInvoiceIsPaid: card.lastInvoiceIsPaid,
+    lastInvoiceIsOverdue: card.lastInvoiceIsOverdue,
   };
 }
 

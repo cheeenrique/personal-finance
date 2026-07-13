@@ -30,6 +30,12 @@ export type UpdateCardData = Partial<CreateCardData> & { isActive?: boolean };
 /** Uma compra (EXPENSE) crua, usada tanto na fatura de um ciclo quanto no agrupamento em memória de `listWithSummary`. */
 export type CardExpenseRow = { cardId: string; amount: Prisma.Decimal; date: Date };
 
+/** Um pagamento (CARD_PAYMENT) cru dentro de uma janela — insumo de `paidAmount` em `cardService.lastClosedInvoiceStatus` (mesmo papel de `InvoiceItemRow`/`findExpensesInRange`, mas sem os campos de detalhe que só fazem sentido pra EXPENSE). */
+export type CardPaymentRow = { amount: Prisma.Decimal; date: Date };
+
+/** Um pagamento (CARD_PAYMENT) cru com `cardId` — insumo do agrupamento em memória de `listWithSummary` (mesmo papel de `CardExpenseRow`, mas pro tipo CARD_PAYMENT). */
+export type CardPaymentBatchRow = { cardId: string; amount: Prisma.Decimal; date: Date };
+
 /** Soma agregada de Transactions por cartão+tipo — insumo de `outstandingBalance` (ver service.ts). */
 export type CardTypeSum = { cardId: string; type: string; sum: Prisma.Decimal };
 
@@ -240,6 +246,59 @@ async function listExpensesForCards(userId: string, cardIds: string[]): Promise<
 }
 
 /**
+ * Pagamentos (CARD_PAYMENT) do cartão dentro de um intervalo — insumo de
+ * `paidAmount` em `cardService.lastClosedInvoiceStatus` (heurística de
+ * "fatura paga" por janela de data — sem coluna que ligue `CARD_PAYMENT` a um
+ * invoice/período, ver design doc `2026-07-13-cartao-vencimento-fatura-status`).
+ * Mesmo padrão de `findExpensesInRange` (acima), filtrando `CARD_PAYMENT` em
+ * vez de `EXPENSE`.
+ */
+async function findCardPaymentsInRange(
+  userId: string,
+  cardId: string,
+  range: { gte: Date; lt: Date },
+  db: Db = prisma,
+): Promise<CardPaymentRow[]> {
+  return db.transaction.findMany({
+    where: {
+      userId,
+      cardId,
+      type: TransactionType.CARD_PAYMENT,
+      isPaid: true,
+      deletedAt: null,
+      date: { gte: range.gte, lt: range.lt },
+    },
+    select: { amount: true, date: true },
+    orderBy: { date: "asc" },
+  });
+}
+
+/**
+ * TODOS os pagamentos (CARD_PAYMENT) dos cartões informados, sem filtro de
+ * data — insumo de `listWithSummary` (mesma razão de `listExpensesForCards`:
+ * evita 1 query de pagamento por cartão). O agrupamento pela janela da fatura
+ * fechada de cada cartão é feito em memória no service.
+ */
+async function listCardPaymentsForCards(userId: string, cardIds: string[]): Promise<CardPaymentBatchRow[]> {
+  if (cardIds.length === 0) return [];
+
+  const rows = await prisma.transaction.findMany({
+    where: {
+      userId,
+      cardId: { in: cardIds },
+      type: TransactionType.CARD_PAYMENT,
+      isPaid: true,
+      deletedAt: null,
+    },
+    select: { cardId: true, amount: true, date: true },
+  });
+
+  return rows
+    .filter((row): row is typeof row & { cardId: string } => row.cardId !== null)
+    .map((row) => ({ cardId: row.cardId, amount: row.amount, date: row.date }));
+}
+
+/**
  * Soma de EXPENSE/CARD_PAYMENT/INCOME por cartão, agrupada por tipo — insumo
  * de `outstandingBalance`/`availableLimit` (CREDIT, docs/22, "Limite
  * disponível = limite total - fatura atual" / Regra 2) e de `mealBalance`
@@ -323,6 +382,8 @@ export const cardRepository = {
   listCyclesForCards,
   findExpensesInRange,
   listExpensesForCards,
+  findCardPaymentsInRange,
+  listCardPaymentsForCards,
   sumByCardAndType,
   listInvoices,
 };

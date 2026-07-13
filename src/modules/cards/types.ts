@@ -26,6 +26,18 @@ export type Invoice = {
 };
 
 /**
+ * Status (vencimento/paga/atrasada) da última fatura FECHADA — ver
+ * `service.ts` `lastClosedInvoiceStatus` e o design doc
+ * `docs/superpowers/specs/2026-07-13-cartao-vencimento-fatura-status-design.md`.
+ */
+export type InvoiceStatus = {
+  invoice: Invoice;
+  paidAmount: Money;
+  isPaid: boolean;
+  isOverdue: boolean;
+};
+
+/**
  * Card + resumo derivado — ver service.ts `listWithSummary`.
  *
  * Shape único (não discriminado) de propósito: esta task é só backend
@@ -47,6 +59,15 @@ export type Invoice = {
  *   dois lados desse cálculo separados — a UI usa os dois pra desenhar a
  *   barra `gasto / recarga` (mesmo componente da barra `usado / limite` do
  *   CREDIT).
+ * - `lastInvoiceDueDate`/`lastInvoiceIsPaid`/`lastInvoiceIsOverdue`: status da
+ *   ÚLTIMA FATURA FECHADA (distinta de `invoiceDueDate`, que é o ciclo ABERTO
+ *   em formação — ver "achado central" no design doc
+ *   `docs/superpowers/specs/2026-07-13-cartao-vencimento-fatura-status-design.md`).
+ *   `null` para MEAL, para cartão que ainda não completou nenhum ciclo desde
+ *   a criação, ou quando a fatura fechada não teve nenhuma compra (`total=0`
+ *   — a UI esconde a faixa de vencimento nesse caso, Premissa 3 do design
+ *   doc). `isPaid` é heurística por janela de data de `CARD_PAYMENT` (sem
+ *   coluna que ligue pagamento a invoice/período — Premissa 1 do design doc).
  */
 export type CardWithSummary = Card & {
   currentInvoiceTotal: Money;
@@ -59,6 +80,12 @@ export type CardWithSummary = Card & {
   mealRecharged: Money | null;
   /** `null` para CREDIT. Total gasto (Σ EXPENSE isPaid) para MEAL — "usado" da barra `gasto / recarga`. */
   mealSpent: Money | null;
+  /** Vencimento da última fatura FECHADA (aguardando pagamento). `null` quando não há fatura anterior aplicável — ver doc do tipo acima. */
+  lastInvoiceDueDate: Date | null;
+  /** `paidAmount >= total` da última fatura fechada (heurística por janela de data). `null` junto com `lastInvoiceDueDate`. */
+  lastInvoiceIsPaid: boolean | null;
+  /** `!isPaid && hoje (SP) > lastInvoiceDueDate` (estritamente depois — o próprio dia do vencimento ainda não é atraso). `null` junto com `lastInvoiceDueDate`. */
+  lastInvoiceIsOverdue: boolean | null;
 };
 
 export type PayInvoiceResult = {
