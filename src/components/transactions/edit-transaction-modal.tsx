@@ -60,6 +60,14 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [origin, setOrigin] = useState<string | undefined>(undefined);
+  /**
+   * `CARD_PAYMENT` não pode fundir conta+cartão num único `origin` — precisa
+   * dos dois IDs ao mesmo tempo (docs/22-CREDIT_CARDS.md:145-149, ver JSDoc
+   * de `assertSourceAndCategoryInvariant` em `modules/transactions/service.ts`).
+   * Estado dedicado, populado direto de `transaction.accountId`/`cardId`.
+   */
+  const [cardPaymentAccountId, setCardPaymentAccountId] = useState<string | undefined>(undefined);
+  const [cardPaymentCardId, setCardPaymentCardId] = useState<string | undefined>(undefined);
   const [date, setDate] = useState(toDateInputValueSaoPaulo());
   const [notes, setNotes] = useState("");
   const [isPaid, setIsPaid] = useState(true);
@@ -82,9 +90,17 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
       setDescription(transaction.description);
       setAmount(transaction.amount);
       setCategoryId(transaction.categoryId ?? undefined);
-      setOrigin(
-        transaction.accountId ? `account:${transaction.accountId}` : transaction.cardId ? `card:${transaction.cardId}` : undefined,
-      );
+      if (transaction.type === TransactionType.CARD_PAYMENT) {
+        setCardPaymentAccountId(transaction.accountId ?? undefined);
+        setCardPaymentCardId(transaction.cardId ?? undefined);
+        setOrigin(undefined);
+      } else {
+        setOrigin(
+          transaction.accountId ? `account:${transaction.accountId}` : transaction.cardId ? `card:${transaction.cardId}` : undefined,
+        );
+        setCardPaymentAccountId(undefined);
+        setCardPaymentCardId(undefined);
+      }
       setDate(toDateInputValueSaoPaulo(transaction.date));
       setNotes(transaction.notes ?? "");
       setIsPaid(transaction.isPaid);
@@ -107,19 +123,34 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
     if (isBlank(amount)) errors.amount = "Informe um valor.";
     if (isBlank(description)) errors.description = "Descrição é obrigatória.";
     if (!isCardPayment && !categoryId) errors.categoryId = "Selecione uma categoria.";
-    if (!origin) errors.origin = "Selecione a conta ou cartão de origem.";
+    if (isCardPayment) {
+      if (!cardPaymentAccountId) errors.accountId = "Selecione a conta pagadora.";
+      if (!cardPaymentCardId) errors.cardId = "Selecione o cartão da fatura.";
+    } else if (!origin) {
+      errors.origin = "Selecione a conta ou cartão de origem.";
+    }
     setFieldErrors(errors);
-    if (Object.keys(errors).length > 0 || !origin) return;
+    if (Object.keys(errors).length > 0) return;
 
-    const [originKind, originId] = origin.split(":") as ["account" | "card", string];
+    // `CARD_PAYMENT` exige os dois IDs simultâneos — enviados DIRETO, sem
+    // passar pelo split de `origin` (que só carrega um dos dois e é a causa
+    // raiz do bug de `cardId` zerado no submit, ver spec).
+    const source = isCardPayment
+      ? { accountId: cardPaymentAccountId ?? null, cardId: cardPaymentCardId ?? null }
+      : (() => {
+          const [originKind, originId] = origin!.split(":") as ["account" | "card", string];
+          return {
+            accountId: originKind === "account" ? originId : null,
+            cardId: originKind === "card" ? originId : null,
+          };
+        })();
 
     startTransition(async () => {
       const result = await updateTransactionAction(transaction.id, {
         description,
         amount,
         ...(isCardPayment ? {} : { type, categoryId }),
-        accountId: originKind === "account" ? originId : null,
-        cardId: originKind === "card" ? originId : null,
+        ...source,
         date,
         notes: notes.trim() || null,
         isPaid,
@@ -219,20 +250,54 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
           </FormField>
         )}
 
-        <FormField label="Conta / Cartão" htmlFor="edit-tx-origin" required error={fieldErrors.origin}>
-          <EntitySelect
-            id="edit-tx-origin"
-            options={referenceData.originOptions}
-            value={origin}
-            onValueChange={(value) => {
-              setOrigin(value);
-              clearFieldError("origin");
-            }}
-            placeholder="Selecione a origem"
-            disabled={isPending || referenceData.loading}
-            aria-invalid={Boolean(fieldErrors.origin)}
-          />
-        </FormField>
+        {isCardPayment ? (
+          <>
+            <FormField label="Conta pagadora" htmlFor="edit-tx-account" required error={fieldErrors.accountId}>
+              <EntitySelect
+                id="edit-tx-account"
+                options={referenceData.accountOptions}
+                value={cardPaymentAccountId}
+                onValueChange={(value) => {
+                  setCardPaymentAccountId(value);
+                  clearFieldError("accountId");
+                }}
+                placeholder="Selecione a conta"
+                disabled={isPending || referenceData.loading}
+                aria-invalid={Boolean(fieldErrors.accountId)}
+              />
+            </FormField>
+
+            <FormField label="Cartão" htmlFor="edit-tx-card" required error={fieldErrors.cardId}>
+              <EntitySelect
+                id="edit-tx-card"
+                options={referenceData.cardOptions}
+                value={cardPaymentCardId}
+                onValueChange={(value) => {
+                  setCardPaymentCardId(value);
+                  clearFieldError("cardId");
+                }}
+                placeholder="Selecione o cartão"
+                disabled={isPending || referenceData.loading}
+                aria-invalid={Boolean(fieldErrors.cardId)}
+              />
+            </FormField>
+          </>
+        ) : (
+          <FormField label="Conta / Cartão" htmlFor="edit-tx-origin" required error={fieldErrors.origin}>
+            <EntitySelect
+              id="edit-tx-origin"
+              options={referenceData.originOptions}
+              value={origin}
+              onValueChange={(value) => {
+                setOrigin(value);
+                clearFieldError("origin");
+              }}
+              placeholder="Selecione a origem"
+              disabled={isPending || referenceData.loading}
+              aria-invalid={Boolean(fieldErrors.origin)}
+            />
+          </FormField>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="edit-tx-date">Data</Label>

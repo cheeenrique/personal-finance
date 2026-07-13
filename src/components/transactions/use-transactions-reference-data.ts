@@ -31,6 +31,10 @@ export type TransactionsReferenceData = {
   loading: boolean;
   categoryOptions: EntitySelectOption[];
   originOptions: EntitySelectOption[];
+  /** Contas puras (`value` = id sem prefixo) — selects dedicados de `CARD_PAYMENT` no `EditTransactionModal`, que não pode fundir conta/cartão num único `origin` (precisa dos dois ao mesmo tempo). */
+  accountOptions: EntitySelectOption[];
+  /** Cartões puros (`value` = id sem prefixo) — par de `accountOptions`, mesmo motivo. */
+  cardOptions: EntitySelectOption[];
   tags: Tag[];
   categoryById: Map<string, CategoryRef>;
   accountNameById: Map<string, string>;
@@ -40,6 +44,8 @@ export type TransactionsReferenceData = {
 const EMPTY: Omit<TransactionsReferenceData, "loading"> = {
   categoryOptions: [],
   originOptions: [],
+  accountOptions: [],
+  cardOptions: [],
   tags: [],
   categoryById: new Map(),
   accountNameById: new Map(),
@@ -68,6 +74,8 @@ async function fetchTransactionsReferenceData(): Promise<Omit<TransactionsRefere
       ...accounts.map((account) => ({ value: `account:${account.id}`, label: account.name, group: "Contas" })),
       ...cards.map((card) => ({ value: `card:${card.id}`, label: card.name, group: "Cartões" })),
     ],
+    accountOptions: accounts.map((account) => ({ value: account.id, label: account.name })),
+    cardOptions: cards.map((card) => ({ value: card.id, label: card.name })),
     tags,
     categoryById: new Map(flattenCategoryRefs(categories)),
     accountNameById: new Map(accounts.map((account) => [account.id, account.name])),

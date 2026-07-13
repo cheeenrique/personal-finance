@@ -35,9 +35,32 @@ export const createTransactionSchema = z
     isPaid: z.boolean().default(true),
     tagIds: z.array(z.string().trim().min(1)).max(20).default([]),
   })
-  .refine((data) => Boolean(data.accountId) !== Boolean(data.cardId), {
-    message: "Informe exatamente uma origem: conta ou cartão",
-    path: ["accountId"],
+  .superRefine((data, ctx) => {
+    if (data.type === TransactionType.CARD_PAYMENT) {
+      if (!data.accountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Informe a conta pagadora",
+          path: ["accountId"],
+        });
+      }
+      if (!data.cardId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Informe o cartão da fatura",
+          path: ["cardId"],
+        });
+      }
+      return;
+    }
+
+    if (Boolean(data.accountId) === Boolean(data.cardId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Informe exatamente uma origem: conta ou cartão",
+        path: ["accountId"],
+      });
+    }
   })
   .refine((data) => data.type === TransactionType.CARD_PAYMENT || Boolean(data.categoryId), {
     message: "Categoria é obrigatória",
@@ -53,7 +76,9 @@ export const createTransactionSchema = z
  * categoria por tipo são reavaliadas no service.ts contra o estado MESCLADO
  * (existente + patch), não só contra o payload isolado (ver service.ts
  * `assertSourceAndCategoryInvariant`). Aqui só barra o caso óbvio: os dois
- * campos preenchidos no mesmo payload.
+ * campos preenchidos no mesmo payload — exceto `CARD_PAYMENT`, que EXIGE os
+ * dois (conta pagadora + cartão da fatura), então o refine abaixo abre
+ * exceção pra esse tipo e deixa a checagem fina pro service.
  */
 export const updateTransactionSchema = z
   .object({
@@ -68,7 +93,7 @@ export const updateTransactionSchema = z
     isPaid: z.boolean().optional(),
     tagIds: z.array(z.string().trim().min(1)).max(20).optional(),
   })
-  .refine((data) => !(data.accountId && data.cardId), {
+  .refine((data) => data.type === TransactionType.CARD_PAYMENT || !(data.accountId && data.cardId), {
     message: "Informe exatamente uma origem: conta ou cartão",
     path: ["accountId"],
   });

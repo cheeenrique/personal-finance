@@ -26,10 +26,15 @@ import type {
 } from "./types";
 
 /**
- * Invariante central da transação (docs/03-DATABASE.md, docs/24-CATEGORIES.md):
- * exatamente uma origem (conta OU cartão) e categoria obrigatória, exceto
- * CARD_PAYMENT (categoria sempre null — pagamento de fatura não é gasto novo
- * por categoria). Reavaliada contra o estado MESCLADO em updates parciais.
+ * Invariante central da transação (docs/03-DATABASE.md, docs/24-CATEGORIES.md),
+ * type-aware — reavaliada contra o estado MESCLADO (existente + patch) em
+ * updates parciais:
+ * - CARD_PAYMENT: exige AMBOS `accountId` (conta pagadora) e `cardId`
+ *   (fatura abatida) — nunca XOR aqui, ver docs/22-CREDIT_CARDS.md:145-149 e
+ *   `modules/cards/pay-invoice.ts`, que já persiste os dois. Categoria segue
+ *   sempre proibida (pagamento de fatura não é gasto novo por categoria).
+ * - INCOME/EXPENSE: mantém o XOR estrito (exatamente uma origem) e categoria
+ *   obrigatória.
  */
 function assertSourceAndCategoryInvariant(
   type: TransactionType,
@@ -37,18 +42,23 @@ function assertSourceAndCategoryInvariant(
   accountId: string | null,
   cardId: string | null,
 ): void {
+  if (type === TransactionType.CARD_PAYMENT) {
+    if (!accountId || !cardId) {
+      throw new InvalidSourceError("Pagamento de fatura exige conta pagadora e cartão da fatura", {
+        accountId,
+        cardId,
+      });
+    }
+    if (categoryId) throw new CategoryNotAllowedError();
+    return;
+  }
+
   if (Boolean(accountId) === Boolean(cardId)) {
     throw new InvalidSourceError("Informe exatamente uma origem: conta ou cartão", {
       accountId,
       cardId,
     });
   }
-
-  if (type === TransactionType.CARD_PAYMENT) {
-    if (categoryId) throw new CategoryNotAllowedError();
-    return;
-  }
-
   if (!categoryId) throw new CategoryRequiredError();
 }
 
