@@ -22,7 +22,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Personal Finance",
-  description: "Painel de finanças pessoais do casal.",
+  description: "Painel de finanças pessoais.",
 };
 
 export default function RootLayout({
