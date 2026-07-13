@@ -29,13 +29,13 @@ type ImportModalProps = { open: boolean; onOpenChange: (open: boolean) => void; 
 const COPY: Record<ImportTarget["kind"], { title: string; description: string; extractingLabel: string; successMessage: string }> = {
   account: {
     title: "Importar extrato",
-    description: "Arraste um ou mais extratos (OFX, CSV, XLS, XLSX ou PDF), confira a prévia agregada e só grava depois de confirmar.",
+    description: "Acesse o site ou app do seu banco e exporte o extrato em OFX, CSV, XLS, XLSX ou PDF. Depois arraste os arquivos abaixo para importar.",
     extractingLabel: "Extraindo lançamentos do PDF com IA (pode levar alguns segundos)…",
     successMessage: "Extrato importado",
   },
   card: {
     title: "Importar fatura",
-    description: "Arraste uma ou mais faturas em PDF (inclusive com senha), confira a prévia agregada e só grava depois de confirmar.",
+    description: "Acesse o site ou app do seu banco e exporte a fatura em OFX, PDF, XLS ou CSV (PDF com senha também funciona). Depois arraste os arquivos abaixo para importar.",
     extractingLabel: "Extraindo lançamentos da fatura com IA (pode levar até 1-2 minutos)…",
     successMessage: "Fatura importada",
   },
