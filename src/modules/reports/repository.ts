@@ -68,14 +68,17 @@ async function listIncomeExpenseInRange(userId: string, range: DateRange): Promi
 /**
  * Condições SQL compartilhadas do Fluxo de Caixa CORRETO (docs/28-REPORTS.md
  * "Exclusão de Transfer e Pagamento de Fatura" + regra de caixa do Dashboard):
- * só conta (`cardId IS NULL`), só paga, sem transferência (`transferId IS
- * NULL`). `CARD_PAYMENT` agora ENTRA como saída de caixa (dinheiro saindo da
- * conta pra pagar a fatura) — decisão do dono, sem double-count porque a
- * compra no cartão (`cardId` não-nulo) já fica fora daqui e só vira caixa
- * quando a fatura é paga. `type` restringe a INCOME só quando o filtro pede
- * explicitamente; qualquer outro valor (ou ausência de filtro) inclui
- * EXPENSE + CARD_PAYMENT no lado de saída (ver `CashflowFilters`, types.ts).
- * `accountId`/`categoryId` narrow quando informados.
+ * só paga, sem transferência (`transferId IS NULL`). `cardId IS NULL` só vale
+ * pra INCOME/EXPENSE — exclui compra no cartão (accrual, não é caixa ainda).
+ * `CARD_PAYMENT` (pagamento de fatura) conta SEMPRE como saída de caixa, com
+ * ou sem `cardId` (pode ter `cardId` quando pago via pay-invoice.ts — o
+ * `cardId` ali só identifica QUAL fatura foi paga, não é uma compra), sem
+ * double-count porque a compra no cartão em si (EXPENSE com `cardId`) já fica
+ * fora daqui e só vira caixa quando a fatura é paga. `type` restringe a
+ * INCOME só quando o filtro pede explicitamente; qualquer outro valor (ou
+ * ausência de filtro) inclui EXPENSE + CARD_PAYMENT no lado de saída (ver
+ * `CashflowFilters`, types.ts). `accountId`/`categoryId` narrow quando
+ * informados.
  */
 function buildCashflowConditions(userId: string, filters: CashflowFilters): Prisma.Sql[] {
   const conditions: Prisma.Sql[] = [
@@ -83,15 +86,14 @@ function buildCashflowConditions(userId: string, filters: CashflowFilters): Pris
     Prisma.sql`"deletedAt" IS NULL`,
     Prisma.sql`"isPaid" = true`,
     Prisma.sql`"transferId" IS NULL`,
-    Prisma.sql`"cardId" IS NULL`,
   ];
 
   conditions.push(
     filters.type === TransactionType.INCOME
-      ? Prisma.sql`"type" = 'INCOME'::"TransactionType"`
+      ? Prisma.sql`("type" = 'INCOME'::"TransactionType" AND "cardId" IS NULL)`
       : filters.type === TransactionType.EXPENSE
-        ? Prisma.sql`"type" IN ('EXPENSE', 'CARD_PAYMENT')`
-        : Prisma.sql`"type" IN ('INCOME', 'EXPENSE', 'CARD_PAYMENT')`,
+        ? Prisma.sql`(("type" = 'EXPENSE' AND "cardId" IS NULL) OR "type" = 'CARD_PAYMENT')`
+        : Prisma.sql`(("type" IN ('INCOME', 'EXPENSE') AND "cardId" IS NULL) OR "type" = 'CARD_PAYMENT')`,
   );
 
   if (filters.accountId) conditions.push(Prisma.sql`"accountId" = ${filters.accountId}`);

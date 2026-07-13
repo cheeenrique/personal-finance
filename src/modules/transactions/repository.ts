@@ -483,11 +483,15 @@ async function sumAmountByTypeInRange(
 
 /**
  * Despesa do FLUXO DE CAIXA numa janela — EXPENSE (gasto direto na conta) +
- * CARD_PAYMENT (pagamento de fatura = saída de caixa). Mesma base conta-only de
+ * CARD_PAYMENT (pagamento de fatura = saída de caixa, SEMPRE, com ou sem
+ * `cardId` — pode ter `cardId` quando pago via pay-invoice.ts, que só
+ * identifica qual fatura foi paga, não é uma compra). Mesma base conta-only de
  * `sumAmountByTypeInRange`, mas soma os DOIS tipos que compõem a saída de caixa
- * (docs/28-REPORTS.md): compra no cartão entra só quando a fatura é paga, sem
- * double-count. Insumo do Weekly Summary e dos Green alerts, pra bater com o KPI
- * "Despesas" do Dashboard (`reports` `sumCashflowInRange`, mesma regra).
+ * (docs/28-REPORTS.md). `cardId IS NULL` só vale pra EXPENSE — exclui a compra
+ * no cartão em si (accrual, não é caixa ainda); compra no cartão entra só
+ * quando a fatura é paga, sem double-count. Insumo do Weekly Summary e dos
+ * Green alerts, pra bater com o KPI "Despesas" do Dashboard (`reports`
+ * `sumCashflowInRange`, mesma regra).
  */
 async function sumCashExpenseInRange(
   userId: string,
@@ -500,9 +504,8 @@ async function sumCashExpenseInRange(
     WHERE "userId" = ${userId}
       AND "deletedAt" IS NULL
       AND "isPaid" = ${isPaid}
-      AND "type" IN ('EXPENSE', 'CARD_PAYMENT')
+      AND (("type" = 'EXPENSE' AND "cardId" IS NULL) OR "type" = 'CARD_PAYMENT')
       AND "transferId" IS NULL
-      AND "cardId" IS NULL
       AND COALESCE("paidAt", "date") >= ${range.gte}
       AND COALESCE("paidAt", "date") < ${range.lt}
   `;

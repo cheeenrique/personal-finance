@@ -158,18 +158,19 @@ export type AccountTypeRangeSum = { type: string; sum: Prisma.Decimal; count: nu
  * Soma + contagem de INCOME/EXPENSE/CARD_PAYMENT de UMA conta num range de
  * datas — insumo dos KPIs "Entradas/Saídas do período" e do resumo de fluxo
  * do detalhe de conta (ver service.ts `accountPeriodSummary`). CARD_PAYMENT
- * (pagamento de fatura) CONTA como saída de caixa da conta — dinheiro
+ * (pagamento de fatura) CONTA SEMPRE como saída de caixa da conta, com ou
+ * sem `cardId` (pode ter `cardId` quando pago via pay-invoice.ts — ali o
+ * `cardId` só identifica qual fatura foi paga, não é uma compra) — dinheiro
  * efetivamente saindo da conta pra pagar a fatura, consistente com o SALDO
  * da conta (que já subtrai CARD_PAYMENT, ver `service.ts`
  * `applyToBalance`/`getBalance`) e com o Fluxo de Caixa do Dashboard
  * (`reports/repository.ts` `buildCashflowConditions`, docs/28-REPORTS.md).
- * Mantém a exclusão de pernas de transferência (`transferId IS NULL`) e de
- * compras no cartão (`cardId IS NULL` — CARD_PAYMENT tem `cardId` null; só a
- * compra em si, com `cardId` não-nulo, fica de fora, evitando double-count
- * com o pagamento da fatura). Considera só pagas (`isPaid`), data EFETIVA
- * (`COALESCE("paidAt", "date")`, mesma semântica de
- * `buildListConditions`/`sumAmountByTypeInRange`). `$queryRaw` (não
- * `groupBy`) porque o Prisma não expressa COALESCE no filtro.
+ * `cardId IS NULL` só vale pra INCOME/EXPENSE — exclui a compra no cartão em
+ * si (accrual, não é caixa ainda), evitando double-count com o pagamento da
+ * fatura. Mantém a exclusão de pernas de transferência (`transferId IS
+ * NULL`). Considera só pagas (`isPaid`), data EFETIVA (`COALESCE("paidAt",
+ * "date")`, mesma semântica de `buildListConditions`/`sumAmountByTypeInRange`).
+ * `$queryRaw` (não `groupBy`) porque o Prisma não expressa COALESCE no filtro.
  */
 async function sumAmountsByTypeInRange(
   userId: string,
@@ -182,8 +183,7 @@ async function sumAmountsByTypeInRange(
     Prisma.sql`"deletedAt" IS NULL`,
     Prisma.sql`"isPaid" = true`,
     Prisma.sql`"transferId" IS NULL`,
-    Prisma.sql`"cardId" IS NULL`,
-    Prisma.sql`"type" IN ('INCOME', 'EXPENSE', 'CARD_PAYMENT')`,
+    Prisma.sql`(("type" IN ('INCOME', 'EXPENSE') AND "cardId" IS NULL) OR "type" = 'CARD_PAYMENT')`,
   ];
   if (range.dateFrom) conditions.push(Prisma.sql`COALESCE("paidAt", "date") >= ${range.dateFrom}`);
   if (range.dateTo) conditions.push(Prisma.sql`COALESCE("paidAt", "date") <= ${range.dateTo}`);
