@@ -1,4 +1,4 @@
-import { Banknote, Clock3, Landmark, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { Banknote, Clock3, Landmark, PiggyBank, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { formatBRL } from "@/lib/money/format";
@@ -11,6 +11,7 @@ export type KPIGridData = {
   unpaidExpense: number;
   monthlyResult: number;
   totalPatrimony: number;
+  totalInvested: number;
 };
 
 type KPIGridProps = {
@@ -20,7 +21,7 @@ type KPIGridProps = {
 };
 
 /**
- * 6 KPIs obrigatórios do Dashboard (docs/11-DASHBOARD.md, "2. KPIs
+ * 7 KPIs obrigatórios do Dashboard (docs/11-DASHBOARD.md, "2. KPIs
  * Principais"). Grid 3 colunas desktop (`lg:`) / 2 tablet (`sm:`) / 1 mobile
  * — nunca mostra mais de uma informação principal por card. Títulos dos KPIs
  * de fluxo (receita/despesa/previsto/resultado) reforçam "do mês" só no
@@ -56,6 +57,7 @@ export function KPIGrid({ data, period }: KPIGridProps) {
         tone={data.monthlyResult >= 0 ? "success" : "danger"}
       />
       <KPICard icon={Landmark} title="Patrimônio total" value={formatBRL(data.totalPatrimony)} tone="asset" />
+      <KPICard icon={PiggyBank} title="Total investido" value={formatBRL(data.totalInvested)} tone="asset" />
     </div>
   );
 }

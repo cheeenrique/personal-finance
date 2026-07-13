@@ -1,4 +1,4 @@
-import type { Asset } from "@/generated/prisma/client";
+import type { Asset, Prisma } from "@/generated/prisma/client";
 import { investmentRepository } from "./repository";
 import { contributeToInvestment, createInvestmentWithOptionalContribution } from "./contribute";
 import { getCdiAnnualRate, upsertCdiManual } from "./cdi";
@@ -67,6 +67,11 @@ function project(input: ProjectYieldInput): YieldProjection {
   return projectYield(input);
 }
 
+/** Soma de `currentValue` de todos os investimentos ativos — valor investido total (box do Dashboard). */
+async function totalInvested(userId: string): Promise<Prisma.Decimal> {
+  return investmentRepository.sumInvestedTotal(userId);
+}
+
 export const investmentService = {
   list,
   getDetail,
@@ -77,4 +82,5 @@ export const investmentService = {
   getCdi,
   setCdiManual,
   project,
+  totalInvested,
 };

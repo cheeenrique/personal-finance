@@ -210,6 +210,16 @@ async function upsertCdiQuote(data: {
   });
 }
 
+/** Soma de `currentValue` de todos os investimentos ativos do usuário — valor investido total (box do Dashboard). */
+async function sumInvestedTotal(userId: string): Promise<Prisma.Decimal> {
+  const result = await prisma.asset.aggregate({
+    where: { userId, type: AssetType.INVESTMENT, deletedAt: null },
+    _sum: { currentValue: true },
+  });
+
+  return result._sum.currentValue ?? new Prisma.Decimal(0);
+}
+
 export const investmentRepository = {
   listInvestments,
   findInvestment,
@@ -221,4 +231,5 @@ export const investmentRepository = {
   softDeleteInvestment,
   findCdiQuote,
   upsertCdiQuote,
+  sumInvestedTotal,
 };

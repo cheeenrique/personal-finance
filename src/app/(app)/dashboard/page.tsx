@@ -10,6 +10,7 @@ import { loanService } from "@/modules/loans/service";
 import { reportService } from "@/modules/reports/service";
 import { insightsService } from "@/modules/insights/service";
 import { goalService } from "@/modules/goals/service";
+import { investmentService } from "@/modules/investments/service";
 import { parseFlexibleDate } from "@/lib/date/schema";
 import { PERIOD_OPTIONS, type PeriodPreset } from "@/components/transactions/period-presets";
 import { resolveDateRange, deriveYearMonth } from "@/components/reports/report-filters";
@@ -94,6 +95,7 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     cashflowSummary,
     unpaidExpense,
     totalPatrimony,
+    totalInvested,
     weeklySummary,
     activeAlerts,
     cards,
@@ -117,6 +119,7 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     // `monthlyUnpaidExpenseTotal` pro filtro (ver `modules/transactions/service.ts`).
     transactionService.unpaidExpenseTotalInRange(userId, parsedDateFrom, parsedDateTo),
     assetService.totalPatrimony(userId),
+    investmentService.totalInvested(userId),
     alertService.getWeeklySummaryForDashboard(userId),
     alertService.listActiveForDashboard(userId),
     cardService.listWithSummary(userId),
@@ -147,6 +150,7 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
     unpaidExpense: unpaidExpense.toNumber(),
     monthlyResult: cashflowSummary.net.toNumber(),
     totalPatrimony: totalBalance.plus(totalPatrimony).toNumber(),
+    totalInvested: totalInvested.toNumber(),
   };
 
   return (
@@ -228,7 +232,7 @@ function DashboardSkeleton() {
       <Skeleton className="h-28 w-full rounded-xl" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, index) => (
+        {Array.from({ length: 7 }).map((_, index) => (
           <Skeleton key={index} className="h-40 w-full rounded-xl" />
         ))}
       </div>
