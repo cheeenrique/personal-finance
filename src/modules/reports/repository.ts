@@ -11,7 +11,9 @@ export type IncomeExpenseRow = Pick<Transaction, "date" | "type" | "amount">;
 /**
  * Linha crua do Fluxo de Caixa CORRETO (conta-only) — `effectiveDate` é
  * `COALESCE("paidAt", "date")`, mesma regra de caixa do Dashboard
- * (`transactions/repository.ts` `sumAmountByTypeInRange`). Não confundir com
+ * (`transactions/repository.ts` `sumAmountByTypeInRange`). `type` pode ser
+ * INCOME, EXPENSE ou CARD_PAYMENT (pagamento de fatura conta como saída de
+ * caixa, ver `buildCashflowConditions`). Não confundir com
  * `IncomeExpenseRow.date`: aquele insumo alimenta `incomeVsExpenseByMonth`
  * (série histórica por `date`/accrual, ainda usada pela "Evolução mensal" do
  * Dashboard) — mantido intocado de propósito.
@@ -66,9 +68,13 @@ async function listIncomeExpenseInRange(userId: string, range: DateRange): Promi
 /**
  * Condições SQL compartilhadas do Fluxo de Caixa CORRETO (docs/28-REPORTS.md
  * "Exclusão de Transfer e Pagamento de Fatura" + regra de caixa do Dashboard):
- * só conta (`cardId IS NULL`), só paga, sem transferência. `type` restringe a
- * INCOME/EXPENSE só quando o filtro pede um desses dois — outro valor (ou
- * ausência de filtro) inclui os dois tipos (ver `CashflowFilters`, types.ts).
+ * só conta (`cardId IS NULL`), só paga, sem transferência (`transferId IS
+ * NULL`). `CARD_PAYMENT` agora ENTRA como saída de caixa (dinheiro saindo da
+ * conta pra pagar a fatura) — decisão do dono, sem double-count porque a
+ * compra no cartão (`cardId` não-nulo) já fica fora daqui e só vira caixa
+ * quando a fatura é paga. `type` restringe a INCOME só quando o filtro pede
+ * explicitamente; qualquer outro valor (ou ausência de filtro) inclui
+ * EXPENSE + CARD_PAYMENT no lado de saída (ver `CashflowFilters`, types.ts).
  * `accountId`/`categoryId` narrow quando informados.
  */
 function buildCashflowConditions(userId: string, filters: CashflowFilters): Prisma.Sql[] {
@@ -81,9 +87,11 @@ function buildCashflowConditions(userId: string, filters: CashflowFilters): Pris
   ];
 
   conditions.push(
-    filters.type === TransactionType.INCOME || filters.type === TransactionType.EXPENSE
-      ? Prisma.sql`"type" = ${filters.type}::"TransactionType"`
-      : Prisma.sql`"type" IN ('INCOME', 'EXPENSE')`,
+    filters.type === TransactionType.INCOME
+      ? Prisma.sql`"type" = 'INCOME'::"TransactionType"`
+      : filters.type === TransactionType.EXPENSE
+        ? Prisma.sql`"type" IN ('EXPENSE', 'CARD_PAYMENT')`
+        : Prisma.sql`"type" IN ('INCOME', 'EXPENSE', 'CARD_PAYMENT')`,
   );
 
   if (filters.accountId) conditions.push(Prisma.sql`"accountId" = ${filters.accountId}`);
@@ -95,7 +103,10 @@ function buildCashflowConditions(userId: string, filters: CashflowFilters): Pris
 /**
  * Fluxo de Caixa mês a mês CORRETO (conta-only) — insumo de
  * `reportService.cashflowByMonth` (gráfico "Fluxo de caixa" de `/reports`).
- * Rows crus (sem agregação no banco), bucketizados por mês SP em
+ * `CARD_PAYMENT` entra como saída de caixa junto com `EXPENSE` (ver
+ * `buildCashflowConditions`) — o `service.ts` bucketiza tudo que não é
+ * INCOME como despesa, então CARD_PAYMENT cai automaticamente no bucket
+ * certo. Rows crus (sem agregação no banco), bucketizados por mês SP em
  * `service.ts` a partir de `effectiveDate` — mesma técnica de
  * `listIncomeExpenseInRange` (que fica intocada, ver seu comentário).
  */
@@ -117,10 +128,12 @@ async function listCashflowByMonthInRange(
 
 /**
  * Soma de receita/despesa CORRETA (conta-only) num período arbitrário —
- * insumo do "Resumo do período" (`reportService.cashflow`). `range` já deve
- * vir com o fim do dia estendido quando o filtro é por `paidAt` (ver
- * `service.ts` `endOfDayInclusive`) — `paidAt` carrega hora real, diferente
- * de `date` (sempre meia-noite).
+ * insumo do "Resumo do período" (`reportService.cashflow`). Despesa agora
+ * soma EXPENSE + CARD_PAYMENT (ver `buildCashflowConditions`) — sem
+ * double-count com compra no cartão, que fica fora do caixa até a fatura ser
+ * paga. `range` já deve vir com o fim do dia estendido quando o filtro é por
+ * `paidAt` (ver `service.ts` `endOfDayInclusive`) — `paidAt` carrega hora
+ * real, diferente de `date` (sempre meia-noite).
  */
 async function sumCashflowInRange(
   userId: string,
@@ -139,9 +152,13 @@ async function sumCashflowInRange(
   `;
 
   const income = rows.find((row) => row.type === TransactionType.INCOME)?.total ?? 0;
-  const expense = rows.find((row) => row.type === TransactionType.EXPENSE)?.total ?? 0;
+  // EXPENSE (gasto direto na conta) + CARD_PAYMENT (pagamento de fatura = saída de caixa)
+  // compõem a despesa do regime de caixa (docs/28-REPORTS.md).
+  const expense = rows
+    .filter((row) => row.type === TransactionType.EXPENSE || row.type === TransactionType.CARD_PAYMENT)
+    .reduce((total, row) => total.plus(row.total), new Prisma.Decimal(0));
 
-  return { income: new Prisma.Decimal(income), expense: new Prisma.Decimal(expense) };
+  return { income: new Prisma.Decimal(income), expense };
 }
 
 /**

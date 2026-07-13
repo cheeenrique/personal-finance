@@ -70,11 +70,13 @@ function buildMessage(payload: WeeklySummaryPayload): string {
  * Severity `INFO`, sempre no máximo 1 por usuário/semana — dedup via
  * `alertRepository.findByDedupKey` (`weekKey`).
  *
- * `TRANSFER` e `CARD_PAYMENT` nunca entram nos totais — naturalmente
- * excluídos por `transactionRepository.sumAmountByTypeInRange` (income/expense)
- * e `reportService.categoryTotals` (topCategories), MESMA base de Fluxo de
- * Caixa nos dois (`type` exato + `transferId IS NULL` + `cardId IS NULL`, ver
- * `topCategoriesInWindow` acima).
+ * Despesa é FLUXO DE CAIXA: EXPENSE (gasto direto na conta) + CARD_PAYMENT
+ * (pagamento de fatura) via `transactionRepository.sumCashExpenseInRange` —
+ * mesma base do KPI "Despesas" do Dashboard (`reportService.sumCashflowInRange`),
+ * pra não mostrar 2 números diferentes na mesma tela. `TRANSFER` continua
+ * excluído. `topCategories` é a exceção: usa `reportService.categoryTotals`
+ * (accrual, inclui compra no cartão por `date`, ver `topCategoriesInWindow`
+ * acima) — breakdown por categoria, base intencionalmente diferente do total.
  */
 export async function generateWeeklySummary(
   userId: string,
@@ -90,16 +92,12 @@ export async function generateWeeklySummary(
 
   const [income, expense, topCategories] = await Promise.all([
     transactionRepository.sumAmountByTypeInRange(userId, TransactionType.INCOME, window),
-    transactionRepository.sumAmountByTypeInRange(userId, TransactionType.EXPENSE, window),
+    transactionRepository.sumCashExpenseInRange(userId, window),
     topCategoriesInWindow(userId, window),
   ]);
 
   const previousWindow = getPrecedingWeekWindows(window.gte, 1)[0];
-  const previousExpense = await transactionRepository.sumAmountByTypeInRange(
-    userId,
-    TransactionType.EXPENSE,
-    previousWindow,
-  );
+  const previousExpense = await transactionRepository.sumCashExpenseInRange(userId, previousWindow);
 
   const balance = income.minus(expense);
 

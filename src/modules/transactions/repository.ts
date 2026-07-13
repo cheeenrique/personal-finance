@@ -481,6 +481,34 @@ async function sumAmountByTypeInRange(
   return new Prisma.Decimal(rows[0]?.total ?? 0);
 }
 
+/**
+ * Despesa do FLUXO DE CAIXA numa janela — EXPENSE (gasto direto na conta) +
+ * CARD_PAYMENT (pagamento de fatura = saída de caixa). Mesma base conta-only de
+ * `sumAmountByTypeInRange`, mas soma os DOIS tipos que compõem a saída de caixa
+ * (docs/28-REPORTS.md): compra no cartão entra só quando a fatura é paga, sem
+ * double-count. Insumo do Weekly Summary e dos Green alerts, pra bater com o KPI
+ * "Despesas" do Dashboard (`reports` `sumCashflowInRange`, mesma regra).
+ */
+async function sumCashExpenseInRange(
+  userId: string,
+  range: { gte: Date; lt: Date },
+  isPaid = true,
+): Promise<Prisma.Decimal> {
+  const rows = await prisma.$queryRaw<{ total: Prisma.Decimal | string | number }[]>`
+    SELECT COALESCE(SUM("amount"), 0) AS total
+    FROM "Transaction"
+    WHERE "userId" = ${userId}
+      AND "deletedAt" IS NULL
+      AND "isPaid" = ${isPaid}
+      AND "type" IN ('EXPENSE', 'CARD_PAYMENT')
+      AND "transferId" IS NULL
+      AND "cardId" IS NULL
+      AND COALESCE("paidAt", "date") >= ${range.gte}
+      AND COALESCE("paidAt", "date") < ${range.lt}
+  `;
+  return new Prisma.Decimal(rows[0]?.total ?? 0);
+}
+
 /** Agrupamento de despesas por categoria numa janela — insumo do gráfico de gastos por categoria. */
 async function groupExpensesByCategoryInRange(
   userId: string,
@@ -701,6 +729,7 @@ export const transactionRepository = {
   findCategoryCountsByDescriptions,
   findMostRecentByDescription,
   sumAmountByTypeInRange,
+  sumCashExpenseInRange,
   groupExpensesByCategoryInRange,
   findCategoryNamesByIds,
   findInstallmentTotalsByIds,

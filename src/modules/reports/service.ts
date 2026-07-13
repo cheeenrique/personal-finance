@@ -98,11 +98,14 @@ async function incomeVsExpenseByMonth(userId: string, year: number): Promise<Inc
  * Fluxo de Caixa mês a mês CORRETO — MESMA regra de caixa do Dashboard
  * (`transactions/repository.ts` `sumAmountByTypeInRange`): só conta (`cardId
  * IS NULL`), mês pelo MOVIMENTO do dinheiro (`COALESCE(paidAt, date)`), não
- * pela data de competência. Alimenta SÓ o gráfico "Fluxo de caixa" de
- * `/reports` — `incomeVsExpenseByMonth` (acima) fica intocada porque também
- * alimenta a "Evolução mensal" do Dashboard (série histórica por
- * `date`/competência); mudar sua base regrediria aquela tela, fora do escopo
- * deste relatório.
+ * pela data de competência. `CARD_PAYMENT` conta como despesa aqui (todo row
+ * que não é INCOME cai no bucket `expense`, ver `buildCashflowConditions` no
+ * repository) — pagamento de fatura é saída de caixa, sem double-count com a
+ * compra no cartão (fora do caixa até a fatura ser paga). Alimenta SÓ o
+ * gráfico "Fluxo de caixa" de `/reports` e a "Evolução mensal" do Dashboard
+ * (via `cashflowByMonthElapsed`) — `incomeVsExpenseByMonth` (acima) fica
+ * intocada porque alimenta outra série (accrual por `date`/competência),
+ * fora do escopo deste relatório.
  */
 async function cashflowByMonth(
   userId: string,

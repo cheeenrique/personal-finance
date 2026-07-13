@@ -87,7 +87,8 @@ async function detectCategoryGreen(
 async function weekBalance(userId: string, window: WeekWindow): Promise<Prisma.Decimal> {
   const [income, expense] = await Promise.all([
     transactionRepository.sumAmountByTypeInRange(userId, TransactionType.INCOME, window),
-    transactionRepository.sumAmountByTypeInRange(userId, TransactionType.EXPENSE, window),
+    // Despesa é FLUXO DE CAIXA (EXPENSE + CARD_PAYMENT) — mesma base do KPI "Despesas" do Dashboard.
+    transactionRepository.sumCashExpenseInRange(userId, window),
   ]);
   return income.minus(expense);
 }

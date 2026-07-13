@@ -50,12 +50,13 @@ export type { TotalEvolutionPoint };
  * Filtros globais aplicáveis ao Fluxo de Caixa (12m, `cashflowByMonth`) e ao
  * Resumo do período (`cashflow`) — docs/28-REPORTS.md "Filtros Globais":
  * período (via `dateFrom`/`dateTo` ou `year`, já são parâmetros posicionais),
- * conta, categoria e tipo. `type` só restringe de fato quando é INCOME ou
- * EXPENSE — qualquer outro valor (CARD_PAYMENT, TRANSFER, ou filtro não
- * aplicado) é ignorado aqui: fluxo de caixa já é só INCOME/EXPENSE por
- * definição (docs/28-REPORTS.md "Exclusão de Transfer e Pagamento de
- * Fatura"), então filtrar por um tipo fora desse par não faz sentido pra essa
- * seção (N/A, mostra os dois tipos normalmente).
+ * conta, categoria e tipo. `type === INCOME` restringe só à entrada;
+ * `type === EXPENSE` restringe à saída, que agora inclui `CARD_PAYMENT`
+ * (pagamento de fatura conta como saída de caixa, docs/28-REPORTS.md
+ * "Exclusão de Transfer e Pagamento de Fatura") — sem double-count porque
+ * compra no cartão fica fora até a fatura ser paga. Qualquer outro valor
+ * (CARD_PAYMENT, TRANSFER, ou filtro não aplicado) mostra os dois lados
+ * (entrada + saída) sem restringir por tipo.
  */
 export type CashflowFilters = {
   accountId?: string;

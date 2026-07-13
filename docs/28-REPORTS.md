@@ -32,11 +32,13 @@ Nenhuma outra fonte é considerada primária.
 
 # Exclusão de Transfer e Pagamento de Fatura
 
-KPIs e relatórios de receita/despesa excluem transferências filtrando `transferId IS NOT NULL` (as 2 pernas de uma transferência são `EXPENSE`/`INCOME` com `transferId` compartilhado — nunca existe `type=TRANSFER` persistido), e **excluem `type=CARD_PAYMENT`**.
+KPIs e relatórios de receita/despesa excluem transferências filtrando `transferId IS NOT NULL` (as 2 pernas de uma transferência são `EXPENSE`/`INCOME` com `transferId` compartilhado — nunca existe `type=TRANSFER` persistido).
 
-Transfer é movimentação entre contas próprias, não é ganho nem gasto. `CARD_PAYMENT` (pagamento de fatura) já foi contabilizado como despesa por categoria no momento de cada compra (`EXPENSE`) — contar de novo no pagamento duplicaria o gasto. Ver `03-DATABASE.md` e `22-CREDIT_CARDS.md`.
+Transfer é movimentação entre contas próprias, não é ganho nem gasto — sempre excluído dos totais de receita/despesa.
 
-Relatório de Fluxo de Caixa, Relatório por Categoria e demais totais de receita/despesa devem filtrar `type IN (INCOME, EXPENSE)` e `transferId IS NULL`.
+O **Fluxo de Caixa** (KPI "Despesas do mês" do Dashboard, Relatório de Fluxo de Caixa e a evolução mensal em `/reports`) segue o regime de caixa: `type=CARD_PAYMENT` **conta como despesa** (dinheiro saindo da conta pra pagar a fatura), junto com `EXPENSE` sem cartão (`cardId IS NULL`). Compra no cartão (`EXPENSE` com `cardId` não-nulo) fica de fora do caixa — só vira despesa quando a fatura é paga (`CARD_PAYMENT`) — então não há double-count. Filtra `type IN (INCOME, EXPENSE, CARD_PAYMENT)`, `transferId IS NULL` e `cardId IS NULL`. Ver `03-DATABASE.md` e `22-CREDIT_CARDS.md`.
+
+O **Relatório por Categoria** é accrual (regime de competência), não de caixa: soma o gasto no momento da compra, incluindo compra no cartão (`cardId` não-nulo). `CARD_PAYMENT` não tem categoria (`22-CREDIT_CARDS.md`), então nunca aparece aqui — contar o pagamento de fatura por categoria duplicaria o gasto já lançado na compra. Filtra `type IN (INCOME, EXPENSE)` e `transferId IS NULL`.
 
 Relatório por Conta continua considerando Transfer e CARD_PAYMENT, pois ali o que importa é a movimentação da conta, não o ganho/gasto por categoria.
 
