@@ -155,6 +155,29 @@ export async function matchExpenseCategoryByName(
   return match ? { id: match.id, name: match.name } : null;
 }
 
+/**
+ * Resolve categoria PAI por nome pra criar filha via Telegram
+ * (`intent="create_category"`, `category.ts`) — busca em AMBOS os tipos
+ * (EXPENSE/INCOME), match EXATO normalizado, sem fallback inventado. `null`
+ * se não achar. DIFERENTE de `matchExpenseCategoryByName` (restrito a
+ * EXPENSE, usado por consulta): aqui o pai citado pode ser INCOME (ex.:
+ * "cria categoria bônus dentro de salário"). Sem "contém" fallback (diferente
+ * de `matchInvestmentByName`) — nome de categoria pai deveria ser citado com
+ * precisão razoável; ambiguidade por "contém" arrisca criar filha sob o pai
+ * errado (custo de engano mais alto que investimento).
+ */
+export async function matchCategoryByName(
+  userId: string,
+  name: string,
+): Promise<{ id: string; name: string; type: CategoryType } | null> {
+  const tree = await categoryService.listTree(userId);
+  const categories = flattenTree(tree);
+  const normalizedTarget = normalizeWord(name);
+
+  const match = categories.find((category) => normalizeWord(category.name) === normalizedTarget);
+  return match ? { id: match.id, name: match.name, type: match.type } : null;
+}
+
 /** Conta ATIVA mais antiga (1ª criada) do usuário — origem default quando nada mais resolve. */
 async function findDefaultActiveAccount(userId: string) {
   const accounts = await accountService.listWithBalances(userId);

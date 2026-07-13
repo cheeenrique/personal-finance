@@ -2,16 +2,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AiParsedTransaction, CommandResult, TelegramOrigin } from "./types";
 
 const parseTransactionFromImageMock = vi.fn();
+const parseTransactionFromVoiceMock = vi.fn();
+const parseTransactionWithAIMock = vi.fn();
 const createBotTransactionMock = vi.fn();
 const processDraftMock = vi.fn();
 const draftFromAiMock = vi.fn();
 const resolveCategoryByNameMock = vi.fn();
 const resolveOriginMock = vi.fn();
+const pendingGetActiveMock = vi.fn();
+const answerQuestionMock = vi.fn();
+const handleCreateCategoryMock = vi.fn();
 
 vi.mock("./ai-parser", () => ({
   parseTransactionFromImage: parseTransactionFromImageMock,
-  parseTransactionFromVoice: vi.fn(),
-  parseTransactionWithAI: vi.fn(),
+  parseTransactionFromVoice: parseTransactionFromVoiceMock,
+  parseTransactionWithAI: parseTransactionWithAIMock,
 }));
 vi.mock("./financing-parser", () => ({ parseFinancingFromDocument: vi.fn() }));
 vi.mock("./create", () => ({ createBotTransaction: createBotTransactionMock }));
@@ -20,7 +25,9 @@ vi.mock("./draft", () => ({
   handlePendingReply: vi.fn(),
   processDraft: processDraftMock,
 }));
-vi.mock("./pending", () => ({ telegramPendingRepository: { getActive: vi.fn(), upsert: vi.fn(), remove: vi.fn() } }));
+vi.mock("./pending", () => ({
+  telegramPendingRepository: { getActive: pendingGetActiveMock, upsert: vi.fn(), remove: vi.fn() },
+}));
 vi.mock("./resolve", () => ({
   listCategoryNamesForAI: vi.fn().mockResolvedValue([]),
   listInvestmentNamesForAI: vi.fn().mockResolvedValue([]),
@@ -32,8 +39,10 @@ vi.mock("./resolve", () => ({
 }));
 vi.mock("./query", () => ({ executeTelegramQuery: vi.fn(), resolvePeriodRange: vi.fn() }));
 vi.mock("./invest", () => ({ handleInvestContribution: vi.fn() }));
+vi.mock("./ask", () => ({ answerQuestion: answerQuestionMock }));
+vi.mock("./category", () => ({ handleCreateCategory: handleCreateCategoryMock }));
 
-const { handleImageEntry } = await import("./handlers");
+const { handleImageEntry, handleVoiceEntry, telegramHandlers } = await import("./handlers");
 
 function aiItem(overrides: Partial<AiParsedTransaction> = {}): AiParsedTransaction {
   return {
@@ -152,5 +161,110 @@ describe("handleImageEntry", () => {
     const result = await handleImageEntry("user-1", Buffer.from("x"), "image/jpeg", null);
 
     expect(result.resultCode).toBe("image_multi_all_failed");
+  });
+});
+
+function aiText(overrides: Partial<AiParsedTransaction> = {}): AiParsedTransaction {
+  return {
+    isTransaction: false,
+    type: "EXPENSE",
+    amount: null,
+    description: "",
+    date: null,
+    categoryName: null,
+    paymentMethod: null,
+    originKind: null,
+    originName: null,
+    ...overrides,
+  };
+}
+
+describe("executeCommand — handleFreeformEntry (responder inteligente + criar categoria)", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("!ai.isTransaction (intent unknown) — desvia pro responder inteligente em vez de buildUnknownReply", async () => {
+    pendingGetActiveMock.mockResolvedValueOnce(null);
+    parseTransactionWithAIMock.mockResolvedValueOnce(aiText({ intent: "unknown" }));
+    answerQuestionMock.mockResolvedValueOnce("Resposta da IA.");
+
+    const result = await telegramHandlers.executeCommand("user-1", { kind: "unknown" }, "oi tudo bem?");
+
+    expect(answerQuestionMock).toHaveBeenCalledWith("user-1", "oi tudo bem?");
+    expect(result.resultCode).toBe("ask_answered");
+    expect(result.text).toBe("Resposta da IA.");
+  });
+
+  it("intent=create_category com createCategory preenchido — delega pra handleCreateCategory", async () => {
+    pendingGetActiveMock.mockResolvedValueOnce(null);
+    parseTransactionWithAIMock.mockResolvedValueOnce(
+      aiText({ intent: "create_category", createCategory: { categoryName: "Academia", parentName: null } }),
+    );
+    handleCreateCategoryMock.mockResolvedValueOnce({
+      text: "✅ Categoria criada.",
+      resultCode: "create_category_created",
+    } satisfies CommandResult);
+
+    const result = await telegramHandlers.executeCommand("user-1", { kind: "unknown" }, "cria categoria academia");
+
+    expect(handleCreateCategoryMock).toHaveBeenCalledWith("user-1", { categoryName: "Academia", parentName: null });
+    expect(result.resultCode).toBe("create_category_created");
+  });
+
+  it("intent=create_category sem ai.createCategory (inconsistente) — buildUnknownReply", async () => {
+    pendingGetActiveMock.mockResolvedValueOnce(null);
+    parseTransactionWithAIMock.mockResolvedValueOnce(aiText({ intent: "create_category", createCategory: null }));
+
+    const result = await telegramHandlers.executeCommand("user-1", { kind: "unknown" }, "cria categoria");
+
+    expect(result.resultCode).toBe("unknown_message");
+    expect(handleCreateCategoryMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleVoiceEntry (responder inteligente + criar categoria)", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("!ai.isTransaction (intent unknown) — desvia pro responder inteligente em vez de buildUnknownReply", async () => {
+    pendingGetActiveMock.mockResolvedValueOnce(null);
+    parseTransactionFromVoiceMock.mockResolvedValueOnce(aiText({ intent: "unknown", description: "oi tudo bem?" }));
+    answerQuestionMock.mockResolvedValueOnce("Resposta da IA.");
+
+    const result = await handleVoiceEntry("user-1", Buffer.from("audio"), "audio/ogg");
+
+    expect(answerQuestionMock).toHaveBeenCalledWith("user-1", "oi tudo bem?");
+    expect(result.resultCode).toBe("ask_answered");
+  });
+
+  it("intent=create_category com createCategory preenchido — delega pra handleCreateCategory", async () => {
+    pendingGetActiveMock.mockResolvedValueOnce(null);
+    parseTransactionFromVoiceMock.mockResolvedValueOnce(
+      aiText({ intent: "create_category", createCategory: { categoryName: "Pedágio", parentName: "Transporte" } }),
+    );
+    handleCreateCategoryMock.mockResolvedValueOnce({
+      text: "✅ Categoria criada dentro de Transporte.",
+      resultCode: "create_category_created",
+    } satisfies CommandResult);
+
+    const result = await handleVoiceEntry("user-1", Buffer.from("audio"), "audio/ogg");
+
+    expect(handleCreateCategoryMock).toHaveBeenCalledWith("user-1", {
+      categoryName: "Pedágio",
+      parentName: "Transporte",
+    });
+    expect(result.resultCode).toBe("create_category_created");
+  });
+
+  it("intent=create_category sem ai.createCategory (inconsistente) — buildUnknownReply", async () => {
+    pendingGetActiveMock.mockResolvedValueOnce(null);
+    parseTransactionFromVoiceMock.mockResolvedValueOnce(aiText({ intent: "create_category", createCategory: null }));
+
+    const result = await handleVoiceEntry("user-1", Buffer.from("audio"), "audio/ogg");
+
+    expect(result.resultCode).toBe("unknown_message");
+    expect(handleCreateCategoryMock).not.toHaveBeenCalled();
   });
 });

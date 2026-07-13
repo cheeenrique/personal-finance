@@ -53,7 +53,11 @@ const RESPONSE_SCHEMA = {
     // a extração de imagem (`buildImagePrompt`) nunca as menciona, então o
     // modelo tende a omiti-las nesse caminho (nenhuma delas é `required`
     // abaixo, de propósito — zero regressão no caminho de foto/register).
-    intent: { type: "STRING", enum: ["register", "query", "ask", "invest", "unknown"], nullable: true },
+    intent: {
+      type: "STRING",
+      enum: ["register", "query", "ask", "invest", "create_category", "unknown"],
+      nullable: true,
+    },
     query: {
       type: "OBJECT",
       nullable: true,
@@ -75,6 +79,15 @@ const RESPONSE_SCHEMA = {
       },
       required: [],
     },
+    createCategory: {
+      type: "OBJECT",
+      nullable: true,
+      properties: {
+        categoryName: { type: "STRING", nullable: true },
+        parentName: { type: "STRING", nullable: true },
+      },
+      required: [],
+    },
   },
   required: ["isTransaction", "type", "description"],
 } as const;
@@ -92,6 +105,11 @@ const investResponseSchema = z.object({
   accountName: z.string().nullable().optional(),
 });
 
+const createCategoryResponseSchema = z.object({
+  categoryName: z.string().nullable().optional(),
+  parentName: z.string().nullable().optional(),
+});
+
 /** Valida a saída do modelo — nunca confiamos no JSON de um LLM sem checar shape (mesmo com `responseSchema`). */
 const aiResponseSchema = z.object({
   isTransaction: z.boolean(),
@@ -105,9 +123,10 @@ const aiResponseSchema = z.object({
   paymentMethod: z.enum(["credit", "debit", "pix", "transfer", "cash"]).nullable().optional(),
   originKind: z.enum(["account", "card"]).nullable().optional(),
   originName: z.string().nullable().optional(),
-  intent: z.enum(["register", "query", "ask", "invest", "unknown"]).nullable().optional(),
+  intent: z.enum(["register", "query", "ask", "invest", "create_category", "unknown"]).nullable().optional(),
   query: queryResponseSchema.nullable().optional(),
   invest: investResponseSchema.nullable().optional(),
+  createCategory: createCategoryResponseSchema.nullable().optional(),
 });
 
 /**
@@ -271,13 +290,15 @@ const INTENT_CLASSIFICATION = [
   '- "invest": o usuário quer APORTAR / investir dinheiro num produto cadastrado — ex.: "investi 100 no Cofrinho Nubank", "aportei 200 no CDB", "coloquei 50 no cofrinho".',
   '- "query": o usuário está PERGUNTANDO sobre as finanças dele com uma pergunta ESTRUTURADA/ESPECÍFICA que bate 1:1 com um dos `queryType`s fechados abaixo ("Regras de pergunta") — ex.: "quanto gastei esse mês", "qual meu saldo", "quais meus investimentos", "fatura do Nubank", "quanto falta pagar", "quais minhas top categorias".',
   '- "ask": o usuário está fazendo uma pergunta ANALÍTICA/ABERTA sobre as finanças dele que NENHUM `queryType` fechado de "query" cobre — geralmente envolve "por quê", comparação, causa, previsão ou recomendação — ex.: "por que gastei mais em maio", "quanto posso guardar esse mês", "minhas finanças estão indo bem?", "dá pra economizar em quê". Use "ask" só quando a pergunta não reduz a um `queryType` fechado; se reduzir, prefira "query" (mais preciso e determinístico).',
-  '- "unknown": nem lançamento, nem aporte, nem pergunta reconhecível (saudação, ruído/áudio inaudível, mensagem aleatória, pergunta fora de escopo financeiro).',
+  '- "create_category": o usuário quer CRIAR uma categoria nova — ex.: "cria categoria pedágio", "cria a categoria pedágio dentro de transporte", "cria categoria academia em saúde". Preencha createCategory={categoryName, parentName}. parentName=null quando o usuário não citar "dentro de"/"em" <categoria pai> — nesse caso a categoria criada é PAI (top-level, EXPENSE). Quando citar, parentName = nome do pai como o usuário escreveu (a resolução contra as categorias REAIS do usuário acontece fora da IA, ver resolve.ts). NÃO INVENTE parentName se o usuário não mencionou nenhum pai.',
+  '- "unknown": nem lançamento, nem aporte, nem pergunta reconhecível, nem criação de categoria (saudação, ruído/áudio inaudível, mensagem aleatória, pergunta fora de escopo financeiro).',
   "",
-  'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null e invest=null.',
-  'Se intent="invest": preencha isTransaction=false, description curto, invest={amount, investmentName, accountName}, query=null.',
-  'Se intent="query": preencha isTransaction=false, description com qualquer texto curto (não é usado), e preencha o objeto `query` seguindo as "Regras de pergunta" abaixo. Deixe invest=null.',
-  'Se intent="ask": preencha isTransaction=false, description com a PERGUNTA transcrita na íntegra (fonte de texto do áudio pro `ask.ts` responder — texto digitado já usa a mensagem original bruta em vez de description, mas voz não tem outra fonte), e deixe query=null e invest=null (a pergunta em si é respondida fora deste parser, ver `ask.ts`).',
-  'Se intent="unknown": preencha isTransaction=false e deixe query=null e invest=null.',
+  'Se intent="register": preencha isTransaction=true e siga as "Regras de lançamento" abaixo. Deixe query=null, invest=null e createCategory=null.',
+  'Se intent="invest": preencha isTransaction=false, description curto, invest={amount, investmentName, accountName}, query=null e createCategory=null.',
+  'Se intent="query": preencha isTransaction=false, description com qualquer texto curto (não é usado), e preencha o objeto `query` seguindo as "Regras de pergunta" abaixo. Deixe invest=null e createCategory=null.',
+  'Se intent="ask": preencha isTransaction=false, description com a PERGUNTA transcrita na íntegra (fonte de texto do áudio pro `ask.ts` responder — texto digitado já usa a mensagem original bruta em vez de description, mas voz não tem outra fonte), e deixe query=null, invest=null e createCategory=null (a pergunta em si é respondida fora deste parser, ver `ask.ts`).',
+  'Se intent="create_category": preencha isTransaction=false, description curto, createCategory={categoryName, parentName}, e deixe query=null e invest=null.',
+  'Se intent="unknown": preencha isTransaction=false e deixe query=null, invest=null e createCategory=null.',
 ];
 
 function rulesLaunch(categoriesLabel: string): string[] {
@@ -486,6 +507,12 @@ function parseAiTransactionResponse(rawJson: unknown): AiParsedTransaction | nul
           amount: parsed.data.invest.amount ?? null,
           investmentName: parsed.data.invest.investmentName ?? null,
           accountName: parsed.data.invest.accountName ?? null,
+        }
+      : null,
+    createCategory: parsed.data.createCategory
+      ? {
+          categoryName: parsed.data.createCategory.categoryName ?? null,
+          parentName: parsed.data.createCategory.parentName ?? null,
         }
       : null,
   };

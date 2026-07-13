@@ -139,13 +139,21 @@ livre passa por IA.
   output) — **sem SDK**, `fetch` nativo (Vercel serverless já tem fetch).
 * A IA extrai, a partir da mensagem + do contexto do usuário (categorias,
   contas, cartões, **investimentos** reais, passados no prompt):
-  * `intent` — `register` | `query` | `invest` | `unknown`
+  * `intent` — `register` | `query` | `ask` | `invest` | `create_category` |
+    `unknown`
   * `isTransaction` — `false` se a mensagem não for um lançamento (saudação,
-    pergunta etc.), aí cai na resposta padrão de "não entendi".
+    pergunta etc.) — nesse caso o bot NUNCA fica mudo: cai no responder
+    inteligente (`ask.ts`, `answerQuestion` — ver "Responder inteligente"
+    abaixo), nunca numa resposta seca.
   * Para `intent=invest`: `invest.amount`, `invest.investmentName`,
     `invest.accountName` (opcional)
   * Para `intent=query`: `query.queryType` inclui `investments` (lista/
     posição/total) além de spent/received/balance/etc.
+  * Para `intent=create_category`: `createCategory.categoryName` (obrigatório),
+    `createCategory.parentName` (opcional) — ver "Criar categoria pelo
+    Telegram" abaixo.
+  * Para `intent=ask`: a pergunta cai no responder inteligente (`ask.ts`) —
+    ver seção própria abaixo.
   * `type` (EXPENSE/INCOME) — por DIREÇÃO do dinheiro: "recebido"/"recebi"/
     "caiu" (entrou) → INCOME; "paguei"/"comprei"/"para <alguém>" (saiu) →
     EXPENSE. Ambíguo assume EXPENSE.
@@ -331,6 +339,88 @@ pedindo nota de voz (microfone) ou texto — nunca fica mudo.
 
 ---
 
+# Responder inteligente (`intent="ask"` + mensagem sem intent reconhecida)
+
+O bot NUNCA fica mudo — toda mensagem de texto/voz que não vira lançamento,
+consulta, aporte ou criação de categoria cai no "assistente do bot"
+(`modules/telegram/ask.ts`, `answerQuestion`).
+
+* **Modelo** — `callGemini` (`@/lib/ai/gemini.ts`) DIRETO, mesma infra rápida
+  do parser de texto/voz (`ai-parser.ts`) — **não** usa mais
+  `extractStructured`/NVIDIA (cadeia antiga: 60s + retry 60s + fallback
+  Gemini 8s, pior caso ~128s, MUITO acima do `maxDuration=30` do webhook —
+  era a causa raiz do bot "ficar mudo" em pergunta livre). Timeout de 10s
+  (`ASK_TIMEOUT_MS`), sem retry — pior caso ~10s + latência de rede.
+* **4 comportamentos, numa ÚNICA chamada de IA** (mesmo padrão de
+  `ai-parser.ts`, que já classifica `intent` numa única chamada — sem 2ª
+  chamada de "classificar antes de responder"):
+  1. **Pergunta financeira** — responde ancorada nos números do
+     `buildNumbersText` (saldo, gastos/receitas do mês e do mês passado, top
+     categorias, score de saúde) — nunca inventa valor/categoria/período fora
+     da lista.
+  2. **Capacidade** ("o que você faz?", "o que você sabe fazer?") — lista o
+     que o bot faz, com base no `BOT_CAPABILITIES_BLOCK` (fonte única de
+     verdade do prompt).
+  3. **Fora de escopo** (editar/apagar conta, cartão ou transação já
+     lançada; editar categoria existente) — recusa curta + orienta a fazer
+     no app.
+  4. **Ambíguo** — pede a informação que falta, em 1 frase, sem inventar.
+* **Fallback determinístico** (`buildFallbackAnswer`) — só cobre o caso
+  "pergunta financeira" com os números-chave do mês; falha da IA (sem
+  `GEMINI_API_KEY`, timeout, JSON inválido) numa pergunta de
+  capacidade/fora-de-escopo ainda responde esse fallback genérico (nunca fica
+  mudo, mas não é o ideal — baixíssima frequência, aceito por ora).
+* **Roteamento** (`handlers.ts`, `handleFreeformEntry`/`handleVoiceEntry`) —
+  `intent="ask"` E o ramo `!ai.isTransaction` (mensagem que a IA classificou
+  como `unknown`, sem cair em nenhuma intent fechada) desviam pro
+  responder inteligente. `resultCode: "ask_answered"` nos dois casos.
+  `buildUnknownReply` (resposta seca de sempre) fica órfã nesse caminho —
+  continua usada só quando a IA classificou `intent="query"`/`"invest"`/
+  `"create_category"` mas não preencheu o objeto correspondente (situação
+  inconsistente rara) e no caminho `ai === null` (fallback determinístico sem
+  IA disponível, que não pode chamar `answerQuestion` — sem Gemini
+  disponível o `ask` também falharia).
+
+---
+
+# Criar categoria pelo Telegram
+
+`intent="create_category"` (`ai-parser.ts`) + `modules/telegram/category.ts`,
+`handleCreateCategory` — orquestra `categoryService.createCategory`
+(`modules/categories/service.ts`), sem lógica de domínio nova no bot (regra
+de ouro, docs/99-CLAUDE.md).
+
+```text
+cria categoria academia
+cria categoria pedágio dentro de transporte
+```
+
+* **Sem pai citado** ("cria categoria X") → categoria **PAI** top-level
+  (`parentId=null`), sempre `type=EXPENSE` — v1 não cria categoria de receita
+  via bot (se precisar de INCOME top-level, crie no app).
+* **Com pai citado** ("cria categoria X dentro de/em Y") → categoria
+  **FILHA** de `Y`, herdando o `type` de `Y` (mesma invariante de
+  docs/24-CATEGORIES.md, "Regra de Tipo" — `Y` pode ser EXPENSE OU INCOME).
+  `Y` é resolvido por nome EXATO normalizado contra as categorias REAIS do
+  usuário (`resolve.ts`, `matchCategoryByName`, busca nos dois tipos) — SEM
+  fallback "contém": nome levemente diferente do cadastrado (typo,
+  abreviação) responde "não encontrei o pai", nunca cria sob um pai errado
+  por engano.
+* **Duplicidade** — regra NOVA só do bot (o app web não valida isso hoje,
+  não há `@@unique` de nome no Prisma): antes de criar, o handler checa se já
+  existe uma categoria com o MESMO nome normalizado, mesmo `parentId`, mesmo
+  `type` — se sim, responde que já existe em vez de criar uma segunda
+  silenciosamente.
+* **Sem ícone/cor via bot** — categoria nasce com `icon=null`/`color=null`
+  (defaults do service); o usuário ajusta no app se quiser.
+* Erros de domínio (`CategoryParentTypeMismatchError` etc., ver
+  `modules/categories/errors.ts`) viram resposta amigável genérica
+  (`buildErrorReply`), nunca throw cru — o handler sempre passa
+  `type: parent.type` ao criar a filha, então esse erro específico não
+  deveria disparar na prática.
+
+---
+
 # Fluxo conversacional (rascunho pendente)
 
 Quando o lançamento livre passa pela IA com sucesso (`isTransaction=true`),
@@ -462,6 +552,31 @@ coloquei 50 no cofrinho pela conta Nubank
 
 Saldo insuficiente → erro explícito com disponível vs tentativa (não cria
 lançamento).
+
+---
+
+## Criar categoria
+
+Via IA (`intent=create_category`) — ver "Criar categoria pelo Telegram"
+acima.
+
+```text
+cria categoria academia
+cria categoria pedágio dentro de transporte
+```
+
+---
+
+## Pergunta livre / o que o bot faz
+
+Qualquer mensagem que não é lançamento, consulta, aporte nem criação de
+categoria cai no responder inteligente (ver "Responder inteligente" acima) —
+o bot nunca responde só "não entendi".
+
+```text
+o que você faz?
+por que gastei mais em maio?
+```
 
 ---
 
@@ -675,7 +790,6 @@ Telegram não pode criar dados inconsistentes.
 
 # Evolução Futura
 
-* comandos mais inteligentes
 * notificações de orçamento
 * alertas de cartão
 * resumo semanal automático (push no Telegram — docs/29 menciona; ainda não

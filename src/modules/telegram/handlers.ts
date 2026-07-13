@@ -22,6 +22,7 @@ import {
 } from "./resolve";
 import { executeTelegramQuery, resolvePeriodRange } from "./query";
 import { handleInvestContribution } from "./invest";
+import { handleCreateCategory } from "./category";
 import { answerQuestion } from "./ask";
 import {
   buildBalanceReply,
@@ -140,9 +141,15 @@ async function buildAiContext(userId: string) {
  * `intent="ask"` (pergunta analítica ABERTA que nenhum `queryType` fechado
  * cobre — "por que gastei mais em maio", "quanto posso guardar") desvia pro
  * `ask.ts` `answerQuestion`, que responde em texto livre ANCORADO em números
- * reais (nunca invents valor). `intent` ausente (resposta antiga/sem
- * classificação) cai no default de sempre (`isTransaction` decide register
- * vs. unknown), zero regressão pro comportamento pré-existente.
+ * reais (nunca invents valor). `intent="create_category"` desvia pro novo
+ * `category.ts` `handleCreateCategory` (criar categoria pelo Telegram, ver
+ * docs/30-TELEGRAM.md). `intent` ausente (resposta antiga/sem classificação)
+ * cai no default de sempre (`isTransaction` decide register vs. unknown).
+ * `!ai.isTransaction` (mensagem que a IA classificou como `unknown` — nem
+ * lançamento, nem query/invest/ask/create_category reconhecível) TAMBÉM
+ * desvia pro `answerQuestion` — o bot nunca mais responde a resposta seca de
+ * "não entendi" nesse ramo, o prompt do responder inteligente já cobre
+ * "mensagem sem sentido" (ver `ask.ts`, `buildAskPrompt`).
  */
 async function handleFreeformEntry(
   userId: string,
@@ -179,8 +186,14 @@ async function handleFreeformEntry(
     return { text, resultCode: "ask_answered" };
   }
 
+  if (intent === "create_category") {
+    if (!ai.createCategory) return { text: buildUnknownReply(), resultCode: "unknown_message" };
+    return handleCreateCategory(userId, ai.createCategory);
+  }
+
   if (!ai.isTransaction) {
-    return { text: buildUnknownReply(), resultCode: "unknown_message" };
+    const text = await answerQuestion(userId, rawText);
+    return { text, resultCode: "ask_answered" };
   }
 
   return processDraft(userId, draftFromAi(ai), 0);
@@ -400,8 +413,14 @@ export async function handleVoiceEntry(
     return { text, resultCode: "ask_answered" };
   }
 
+  if (intent === "create_category") {
+    if (!ai.createCategory) return { text: buildUnknownReply(), resultCode: "unknown_message" };
+    return handleCreateCategory(userId, ai.createCategory);
+  }
+
   if (!ai.isTransaction) {
-    return { text: buildUnknownReply(), resultCode: "unknown_message" };
+    const text = await answerQuestion(userId, ai.description);
+    return { text, resultCode: "ask_answered" };
   }
 
   return processDraft(userId, draftFromAi(ai), 0);

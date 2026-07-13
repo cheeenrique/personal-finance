@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AiParserContext } from "./ai-parser";
 
 const extractStructuredMock = vi.fn();
+const callGeminiMock = vi.fn();
 
 vi.mock("@/lib/ai/extract", () => ({ extractStructured: extractStructuredMock }));
+vi.mock("@/lib/ai/gemini", () => ({ callGemini: callGeminiMock }));
 
-const { parseTransactionFromImage } = await import("./ai-parser");
+const { parseTransactionFromImage, parseTransactionWithAI } = await import("./ai-parser");
 
 const baseCtx: AiParserContext = {
   todaySaoPaulo: "2026-07-11",
@@ -134,5 +136,59 @@ describe("parseTransactionFromImage", () => {
     const result = await parseTransactionFromImage(Buffer.from("bytes"), "image/jpeg", null, baseCtx);
 
     expect(result).toEqual([]);
+  });
+});
+
+describe("parseTransactionWithAI — create_category", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("intent=create_category com pai citado — mapeia categoryName e parentName", async () => {
+    callGeminiMock.mockImplementationOnce(async (_contents, _source, _schema, parse) =>
+      parse({
+        isTransaction: false,
+        type: "EXPENSE",
+        description: "criar categoria",
+        intent: "create_category",
+        createCategory: { categoryName: "Pedágio", parentName: "Transporte" },
+      }),
+    );
+
+    const result = await parseTransactionWithAI("cria categoria pedágio dentro de transporte", baseCtx);
+
+    expect(result?.intent).toBe("create_category");
+    expect(result?.createCategory).toEqual({ categoryName: "Pedágio", parentName: "Transporte" });
+  });
+
+  it("intent=create_category sem pai — parentName null", async () => {
+    callGeminiMock.mockImplementationOnce(async (_contents, _source, _schema, parse) =>
+      parse({
+        isTransaction: false,
+        type: "EXPENSE",
+        description: "criar categoria",
+        intent: "create_category",
+        createCategory: { categoryName: "Academia", parentName: null },
+      }),
+    );
+
+    const result = await parseTransactionWithAI("cria categoria academia", baseCtx);
+
+    expect(result?.createCategory).toEqual({ categoryName: "Academia", parentName: null });
+  });
+
+  it("intent diferente de create_category — createCategory vem null", async () => {
+    callGeminiMock.mockImplementationOnce(async (_contents, _source, _schema, parse) =>
+      parse({
+        isTransaction: true,
+        type: "EXPENSE",
+        description: "mercado",
+        intent: "register",
+      }),
+    );
+
+    const result = await parseTransactionWithAI("mercado 120", baseCtx);
+
+    expect(result?.createCategory).toBeNull();
   });
 });

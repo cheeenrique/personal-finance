@@ -74,8 +74,11 @@ export type TelegramPaymentMethod = "credit" | "debit" | "pix" | "transfer" | "c
 /**
  * "invest" = aporte em produto cadastrado em `/investments` (docs/28-INVESTMENTS.md
  * + docs/30-TELEGRAM.md) — não é lançamento genérico nem consulta.
+ * "create_category" = criar categoria nova (própria conta EXPENSE top-level, ou
+ * filha herdando o `type` de um pai citado) — ver `TelegramCreateCategoryParsed`,
+ * `category.ts` `handleCreateCategory`.
  */
-export type TelegramIntent = "register" | "query" | "ask" | "invest" | "unknown";
+export type TelegramIntent = "register" | "query" | "ask" | "invest" | "create_category" | "unknown";
 
 /** Tipo de pergunta reconhecido pela IA (docs/30-TELEGRAM.md, "Consulta por IA") — mapeado 1:1 pro executor (`query.ts`, `executeTelegramQuery`). */
 export type TelegramQueryType =
@@ -112,6 +115,19 @@ export type TelegramInvestParsed = {
   amount: string | null;
   investmentName: string | null;
   accountName: string | null;
+};
+
+/**
+ * Payload de criação de categoria via Telegram (`intent="create_category"`) —
+ * `categoryName` obrigatório (checado em código, não pela IA); `parentName`
+ * `null` quando o usuário não citou pai (categoria criada é PAI top-level,
+ * EXPENSE — decisão do dono, v1 só cria EXPENSE via bot). Resolução do pai
+ * contra as categorias REAIS do usuário acontece fora da IA (`resolve.ts`,
+ * `matchCategoryByName`).
+ */
+export type TelegramCreateCategoryParsed = {
+  categoryName: string | null;
+  parentName: string | null;
 };
 
 /**
@@ -167,6 +183,8 @@ export type AiParsedTransaction = {
   query?: TelegramQueryParsed | null;
   /** Só preenchido quando `intent="invest"` (aporte em investimento). */
   invest?: TelegramInvestParsed | null;
+  /** Só preenchido quando `intent="create_category"` (criar categoria nova). */
+  createCategory?: TelegramCreateCategoryParsed | null;
 };
 
 /** Campo obrigatório ainda faltando num lançamento em progresso (docs/30-TELEGRAM.md, "Fluxo conversacional"). Categoria nunca entra aqui — sempre tem fallback ("Outros"/"Outros (Receita)"), nunca bloqueia. */

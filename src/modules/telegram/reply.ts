@@ -253,6 +253,35 @@ export function buildInvestmentContributionReply(params: {
   ].join("\n");
 }
 
+/**
+ * Categoria criada via Telegram (`intent="create_category"`, `category.ts`)
+ * — `parentName=null` = categoria PAI top-level (EXPENSE, decisão do dono);
+ * preenchido = categoria FILHA (herdou o `type` do pai).
+ */
+export function buildCategoryCreatedReply(name: string, parentName: string | null): string {
+  return parentName
+    ? `${ICON_SUCCESS} Categoria "${name}" criada dentro de "${parentName}".`
+    : `${ICON_SUCCESS} Categoria "${name}" criada.`;
+}
+
+/** `categoryName` ausente na mensagem — falta info, não erro (⚠️, mesma convenção de `buildAskAmountReply`). */
+export function buildCategoryNeedNameReply(): string {
+  return `${ICON_WARNING} Qual o nome da categoria? Ex.: "cria categoria academia" ou "cria categoria pedágio dentro de transporte".`;
+}
+
+/** `parentName` citado não bate com nenhuma categoria REAL do usuário (match exato normalizado, `matchCategoryByName`) — nunca cria sob um pai "chutado". */
+export function buildCategoryParentNotFoundReply(parentName: string): string {
+  return [
+    `${ICON_WARNING} Não encontrei a categoria "${parentName}".`,
+    "Crie o pai primeiro no app, ou confira o nome exato em Categorias.",
+  ].join("\n");
+}
+
+/** Regra NOVA só do bot (docs/30-TELEGRAM.md, `category.ts`): já existe categoria com esse nome (mesmo pai/top-level, mesmo tipo) — bloqueia em vez de criar uma segunda silenciosamente. */
+export function buildCategoryDuplicateReply(name: string): string {
+  return `${ICON_WARNING} Já existe uma categoria "${name}" aí. Use outro nome ou edite a existente no app.`;
+}
+
 /** Rótulo pt-BR de um período de consulta (docs/30-TELEGRAM.md, "Consulta por IA") — usado nos títulos de `buildQueryReply`. */
 function periodLabel(period: TelegramQueryPeriod): string {
   switch (period) {
