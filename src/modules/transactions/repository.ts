@@ -248,16 +248,15 @@ function buildListConditions(userId: string, filters: TransactionListFilter): Pr
   return conditions;
 }
 
-// `COALESCE("paidAt", "date")` é a data EFETIVA (paga = quando o dinheiro
-// saiu; pendente = vencimento) — mesma regra do filtro de período acima e do
-// fluxo de caixa (`sumAmountByTypeInRange`). `createdAt` desempata pela ordem
-// de cadastro (o da tarde vem antes do da manhã no desc) quando duas
-// transações empatam na data efetiva, senão a ordem fica arbitrária (ordem
-// física). `amount_asc` mantém `createdAt DESC` no desempate — comportamento
-// pré-existente preservado (não é uma regra nova desta mudança).
+// Sort "Data" ordena por `createdAt` (ordem de CADASTRO), não pela data
+// efetiva (`COALESCE("paidAt", "date")`). Transação agendada/futura (ex.:
+// parcela de financiamento a pagar) tem `date` no futuro e não pode pular na
+// frente de lançamentos de hoje/ontem na listagem. `amount_asc` mantém
+// `createdAt DESC` no desempate — comportamento pré-existente preservado (não
+// é uma regra nova desta mudança).
 const SORT_ORDER_SQL: Record<TransactionSort, Prisma.Sql> = {
-  date_desc: Prisma.sql`COALESCE("paidAt", "date") DESC, "createdAt" DESC`,
-  date_asc: Prisma.sql`COALESCE("paidAt", "date") ASC, "createdAt" ASC`,
+  date_desc: Prisma.sql`"createdAt" DESC`,
+  date_asc: Prisma.sql`"createdAt" ASC`,
   amount_desc: Prisma.sql`"amount" DESC, "createdAt" DESC`,
   amount_asc: Prisma.sql`"amount" ASC, "createdAt" DESC`,
 };
@@ -625,7 +624,7 @@ async function updateCategoryForInstallmentPurchase(
 async function listRecentForDashboard(userId: string, limit: number): Promise<RecentTransactionRow[]> {
   const rows = await prisma.transaction.findMany({
     where: { userId, deletedAt: null },
-    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ createdAt: "desc" }],
     take: limit,
     select: {
       id: true,
