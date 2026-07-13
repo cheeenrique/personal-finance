@@ -28,7 +28,6 @@ import { MonthlyEvolutionChart } from "@/components/dashboard/monthly-evolution-
 import { RecentTransactionsTable } from "@/components/dashboard/recent-transactions-table";
 import { HealthScoreCard } from "@/components/dashboard/health-score-card";
 import { GoalsSummary } from "@/components/dashboard/goals-summary";
-import { MonthlyNarrativeSection, MonthlyNarrativeSkeleton } from "./monthly-narrative-section";
 
 const RECENT_TRANSACTIONS_LIMIT = 5;
 const DEFAULT_PERIOD: PeriodPreset = "this_month";
@@ -166,9 +165,9 @@ async function DashboardContent({ period, customFrom, customTo }: DashboardConte
 
       <AlertsSection alerts={activeAlerts} />
 
-      <Suspense fallback={<MonthlyNarrativeSkeleton />}>
-        <MonthlyNarrativeSection userId={userId} />
-      </Suspense>
+      {/* "Resumo do mês" (IA) desabilitado temporariamente — latência alta da IA.
+          Reativar: importar de `./monthly-narrative-section` e reinserir o
+          <Suspense><MonthlyNarrativeSection userId={userId} /></Suspense> aqui. */}
 
       <KPIGrid data={kpiData} period={period} />
 
