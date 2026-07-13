@@ -151,19 +151,23 @@ async function listUnpaidExpensesByAccount(
   return rows.filter((row): row is typeof row & { accountId: string } => row.accountId !== null);
 }
 
-/** Soma + contagem por tipo (INCOME/EXPENSE) de uma conta num range de datas — ver `sumAmountsByTypeInRange`. */
+/** Soma + contagem por tipo (INCOME/EXPENSE/CARD_PAYMENT) de uma conta num range de datas — ver `sumAmountsByTypeInRange`. */
 export type AccountTypeRangeSum = { type: string; sum: Prisma.Decimal; count: number };
 
 /**
- * Soma + contagem de INCOME/EXPENSE de UMA conta num range de datas — insumo
- * dos KPIs "Entradas/Saídas do período" e do resumo de fluxo do detalhe de
- * conta (ver service.ts `accountPeriodSummary`). Mesma regra de "fluxo de
- * caixa correto" já usada no resto do app (`reports/repository.ts`
- * `buildCashflowConditions`, docs/28-REPORTS.md "Exclusão de Transfer e
- * Pagamento de Fatura"): exclui pernas de transferência (`transferId IS
- * NULL`) e pagamento de fatura (`cardId IS NULL`) — só INCOME/EXPENSE "puros"
- * contam como entrada/saída de caixa da conta. Considera só pagas (`isPaid`),
- * data EFETIVA (`COALESCE("paidAt", "date")`, mesma semântica de
+ * Soma + contagem de INCOME/EXPENSE/CARD_PAYMENT de UMA conta num range de
+ * datas — insumo dos KPIs "Entradas/Saídas do período" e do resumo de fluxo
+ * do detalhe de conta (ver service.ts `accountPeriodSummary`). CARD_PAYMENT
+ * (pagamento de fatura) CONTA como saída de caixa da conta — dinheiro
+ * efetivamente saindo da conta pra pagar a fatura, consistente com o SALDO
+ * da conta (que já subtrai CARD_PAYMENT, ver `service.ts`
+ * `applyToBalance`/`getBalance`) e com o Fluxo de Caixa do Dashboard
+ * (`reports/repository.ts` `buildCashflowConditions`, docs/28-REPORTS.md).
+ * Mantém a exclusão de pernas de transferência (`transferId IS NULL`) e de
+ * compras no cartão (`cardId IS NULL` — CARD_PAYMENT tem `cardId` null; só a
+ * compra em si, com `cardId` não-nulo, fica de fora, evitando double-count
+ * com o pagamento da fatura). Considera só pagas (`isPaid`), data EFETIVA
+ * (`COALESCE("paidAt", "date")`, mesma semântica de
  * `buildListConditions`/`sumAmountByTypeInRange`). `$queryRaw` (não
  * `groupBy`) porque o Prisma não expressa COALESCE no filtro.
  */
@@ -179,7 +183,7 @@ async function sumAmountsByTypeInRange(
     Prisma.sql`"isPaid" = true`,
     Prisma.sql`"transferId" IS NULL`,
     Prisma.sql`"cardId" IS NULL`,
-    Prisma.sql`"type" IN ('INCOME', 'EXPENSE')`,
+    Prisma.sql`"type" IN ('INCOME', 'EXPENSE', 'CARD_PAYMENT')`,
   ];
   if (range.dateFrom) conditions.push(Prisma.sql`COALESCE("paidAt", "date") >= ${range.dateFrom}`);
   if (range.dateTo) conditions.push(Prisma.sql`COALESCE("paidAt", "date") <= ${range.dateTo}`);

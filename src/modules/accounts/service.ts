@@ -213,13 +213,19 @@ async function accountPeriodSummary(
 
   const rows = await accountRepository.sumAmountsByTypeInRange(userId, accountId, range);
   const income = rows.find((row) => row.type === TransactionType.INCOME);
-  const expense = rows.find((row) => row.type === TransactionType.EXPENSE);
+  // EXPENSE (gasto direto) + CARD_PAYMENT (pagamento de fatura = saída de caixa da conta,
+  // mesma base do saldo e do Fluxo de Caixa do Dashboard) compõem a "Saída do período".
+  const expenseRows = rows.filter(
+    (row) => row.type === TransactionType.EXPENSE || row.type === TransactionType.CARD_PAYMENT,
+  );
+  const expenseSum = expenseRows.reduce((sum, row) => sum.plus(row.sum), new Prisma.Decimal(0));
+  const expenseCount = expenseRows.reduce((sum, row) => sum + row.count, 0);
 
   return {
     income: (income?.sum ?? new Prisma.Decimal(0)).toString(),
-    expense: (expense?.sum ?? new Prisma.Decimal(0)).toString(),
+    expense: expenseSum.toString(),
     incomeCount: income?.count ?? 0,
-    expenseCount: expense?.count ?? 0,
+    expenseCount,
   };
 }
 
