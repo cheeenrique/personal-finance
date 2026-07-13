@@ -57,7 +57,13 @@ export function KPIGrid({ data, period }: KPIGridProps) {
         tone={data.monthlyResult >= 0 ? "success" : "danger"}
       />
       <KPICard icon={Landmark} title="Patrimônio total" value={formatBRL(data.totalPatrimony)} tone="asset" />
-      <KPICard icon={PiggyBank} title="Total investido" value={formatBRL(data.totalInvested)} tone="asset" />
+      <KPICard
+        icon={PiggyBank}
+        title="Total investido"
+        value={formatBRL(data.totalInvested)}
+        tone="success"
+        className="border-success/45 bg-success/[0.06] ring-1 ring-success/25"
+      />
     </div>
   );
 }
