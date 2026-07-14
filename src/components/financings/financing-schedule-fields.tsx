@@ -103,7 +103,7 @@ export function FinancingScheduleFields({
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="Nº de parcelas" htmlFor="financing-installments-count" required error={fieldErrors.installmentsCount}>
           <Input
             id="financing-installments-count"
@@ -131,7 +131,7 @@ export function FinancingScheduleFields({
       </div>
 
       {isPrice && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField label="Valor da parcela" htmlFor="financing-installment-amount" required error={fieldErrors.installmentAmount}>
             <CurrencyInput
               id="financing-installment-amount"
@@ -160,7 +160,7 @@ export function FinancingScheduleFields({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="Taxa de juros (%)" htmlFor="financing-interest-rate" required error={fieldErrors.interestRate}>
           <Input
             id="financing-interest-rate"

@@ -350,7 +350,7 @@ export function LoanFormModal({ open, onOpenChange, loan = null, onSaved }: Loan
           />
         </FormField>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField label="Valor emprestado" htmlFor="loan-principal" required error={fieldErrors.principal}>
             <CurrencyInput
               id="loan-principal"
@@ -378,7 +378,7 @@ export function LoanFormModal({ open, onOpenChange, loan = null, onSaved }: Loan
           </FormField>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField label="Valor da parcela" htmlFor="loan-installment-amount" required error={fieldErrors.installmentAmount}>
             <CurrencyInput
               id="loan-installment-amount"

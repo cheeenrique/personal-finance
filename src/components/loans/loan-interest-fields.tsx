@@ -57,7 +57,7 @@ export function LoanInterestFields({ value, onChange, error, disabled }: LoanInt
       </div>
 
       {value.hasInterest && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField label="Taxa de juros (%)" htmlFor="loan-interest-rate" required error={error}>
             <Input
               id="loan-interest-rate"

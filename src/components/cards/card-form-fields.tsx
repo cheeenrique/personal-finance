@@ -198,7 +198,7 @@ export function CardFormFields({
             />
           </FormField>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField label="Dia de fechamento" htmlFor="card-closing-day" required error={fieldErrors.closingDay}>
               <Input
                 id="card-closing-day"

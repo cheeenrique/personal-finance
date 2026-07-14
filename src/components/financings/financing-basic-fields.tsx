@@ -69,7 +69,7 @@ export function FinancingBasicFields({
         />
       </FormField>
 
-      <div className={cn("grid gap-3", isEditing ? "grid-cols-1" : "grid-cols-2")}>
+      <div className={cn("grid gap-3", isEditing ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
         <FormField label="Credor" htmlFor="financing-lender" error={fieldErrors.lender}>
           <Input
             id="financing-lender"
@@ -93,7 +93,7 @@ export function FinancingBasicFields({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="Valor financiado" htmlFor="financing-principal" required error={fieldErrors.principal}>
           <CurrencyInput
             id="financing-principal"
@@ -125,7 +125,7 @@ export function FinancingBasicFields({
 
       {!isEditing && (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField label="Entrada" htmlFor="financing-down-payment">
               <CurrencyInput
                 id="financing-down-payment"

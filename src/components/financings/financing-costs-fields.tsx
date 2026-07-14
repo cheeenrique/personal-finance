@@ -31,7 +31,7 @@ export function FinancingCostsFields({ value, onChange, disabled }: FinancingCos
   return (
     <div className="flex flex-col gap-3 rounded-[10px] border border-border p-3">
       <p className="text-sm font-semibold text-foreground">Custos embutidos (opcional)</p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="CET (% a.m.)" htmlFor="financing-cet">
           <Input
             id="financing-cet"
@@ -56,7 +56,7 @@ export function FinancingCostsFields({ value, onChange, disabled }: FinancingCos
         </FormField>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="Seguro financiado" htmlFor="financing-insurance">
           <CurrencyInput
             id="financing-insurance"
