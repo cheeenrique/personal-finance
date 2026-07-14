@@ -12,6 +12,14 @@ type ChartWrapperProps = {
   children: ReactNode;
   className?: string;
   height?: number;
+  /**
+   * Sobrescreve a altura fixa (`height`) por classes Tailwind responsivas —
+   * ex.: `"min-h-[480px] sm:h-[300px] sm:min-h-0"` pra um card que no mobile
+   * cresce com o conteúdo (lista longa) e no desktop trava. Quando passado,
+   * o `height` inline é ignorado. Charts recharts continuam usando `height`
+   * (precisam de altura fixa pro ResponsiveContainer).
+   */
+  heightClassName?: string;
 };
 
 /**
@@ -28,6 +36,7 @@ export function ChartWrapper({
   children,
   className,
   height = 260,
+  heightClassName,
 }: ChartWrapperProps) {
   return (
     <div
@@ -38,7 +47,7 @@ export function ChartWrapper({
         {legend && <div className="flex items-center gap-3 text-[11.5px] font-bold">{legend}</div>}
       </div>
 
-      <div className="p-[18px]" style={{ height }}>
+      <div className={cn("p-[18px]", heightClassName)} style={heightClassName ? undefined : { height }}>
         {loading ? (
           <Skeleton className="size-full" />
         ) : empty ? (

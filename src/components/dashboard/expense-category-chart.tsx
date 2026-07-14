@@ -91,6 +91,10 @@ export function ExpenseCategoryChart({ tree }: ExpenseCategoryChartProps) {
       empty={isEmpty}
       emptyMessage="Nenhum gasto registrado neste mês ainda."
       height={300}
+      // Mobile: card cresce com o conteúdo (donut empilhado + lista completa,
+      // ~10 itens) em vez de travar em 300px e mostrar só ~2 linhas. Desktop
+      // (`sm:`) mantém 300px lado a lado.
+      heightClassName="min-h-[480px] sm:h-[300px] sm:min-h-0"
     >
       <div className="flex h-full flex-col gap-4 sm:flex-row">
         <div className="relative mx-auto aspect-square w-full max-w-[200px] shrink-0 sm:mx-0 sm:aspect-auto sm:h-full sm:w-[42%] sm:max-w-none">
@@ -109,7 +113,7 @@ export function ExpenseCategoryChart({ tree }: ExpenseCategoryChartProps) {
           />
         </div>
 
-        <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pr-1">
+        <ul className="flex flex-col gap-0.5 pr-1 sm:min-h-0 sm:flex-1 sm:overflow-y-auto">
           {topRows.map((row) =>
             row.kind === "card" ? (
               <CardTreeRow key={`card-${row.id}`} row={row} total={total} />
