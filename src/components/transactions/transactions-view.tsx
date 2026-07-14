@@ -94,12 +94,12 @@ export function TransactionsView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+      <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
         <button
           type="button"
           onClick={() => setInstallmentOpen(true)}
           className={cn(
-            "inline-flex h-9 items-center gap-2 rounded-[10px] border border-border bg-transparent px-3.5 text-[13px] font-bold text-muted-foreground transition-colors duration-100 ease-pf-out hover:border-muted-foreground",
+            "inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-border bg-transparent px-3.5 text-[13px] font-bold text-muted-foreground transition-colors duration-100 ease-pf-out hover:border-muted-foreground sm:h-9 sm:w-auto sm:justify-start",
             FOCUS_RING_CLASS,
           )}
         >
@@ -110,7 +110,7 @@ export function TransactionsView() {
           type="button"
           onClick={() => setTransferOpen(true)}
           className={cn(
-            "inline-flex h-9 items-center gap-2 rounded-[10px] border border-border bg-transparent px-3.5 text-[13px] font-bold text-muted-foreground transition-colors duration-100 ease-pf-out hover:border-muted-foreground",
+            "inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-border bg-transparent px-3.5 text-[13px] font-bold text-muted-foreground transition-colors duration-100 ease-pf-out hover:border-muted-foreground sm:h-9 sm:w-auto sm:justify-start",
             FOCUS_RING_CLASS,
           )}
         >

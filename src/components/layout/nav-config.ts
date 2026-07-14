@@ -176,7 +176,7 @@ export const NAV_SECTIONS: NavSection[] = [
 export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((section) => section.items);
 
 /** Rotas fixadas na Bottom Navigation (mobile) — os 3 itens mais usados + [+] + Menu. */
-const BOTTOM_NAV_HREFS = ["/dashboard", "/transactions", "/cards"];
+const BOTTOM_NAV_HREFS = ["/dashboard", "/accounts", "/cards"];
 
 /** Itens visíveis na Bottom Navigation (mobile). Busca por `href` (não índice) porque `NAV_ITEMS` reflete a ordem agrupada por seção. */
 export const BOTTOM_NAV_ITEMS: NavItem[] = BOTTOM_NAV_HREFS.map((href) => {

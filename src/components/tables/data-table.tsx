@@ -57,16 +57,14 @@ type DataTableProps<T> = {
   /**
    * Opt-in: no desktop (`lg:`) estica a tabela pra altura disponível do
    * container pai (que precisa ter altura definida, ex.: `flex-1` num pai
-   * `h-full`) com a paginação fixada na base. No mobile capa em ~10 linhas
-   * (`max-h-[560px]`) com scroll vertical interno, em vez de esticar pro
-   * viewport inteiro. Só usado em `/transactions` (única tela full-page com
-   * `DataTable`).
+   * `h-full`) com scroll vertical interno e paginação fixada na base (thead
+   * sticky). Só usado em `/transactions` (única tela full-page com `DataTable`).
    *
-   * Sem esse flag (modo padrão, usado nas tabelas embutidas em cards/modais),
-   * o desktop mantém altura por conteúdo (sem cap); o mobile também capa em
-   * `max-h-[560px]` com scroll vertical interno (thead sticky só nesse
-   * breakpoint) — decisão do dono: tabela no mobile nunca cresce
-   * indefinidamente empurrando a página, ver memória `mobile-audit-standardization`.
+   * No MOBILE (tanto com `fillHeight` quanto no modo padrão) a tabela NÃO tem
+   * cap de altura nem scroll vertical interno — só `overflow-x-auto` pras
+   * colunas extras; a PÁGINA rola normal e a paginação (20/pág) limita o
+   * tamanho. Decisão do dono: scroll interno prendia o scroll da página no
+   * celular (ver memória `mobile-audit-standardization`).
    */
   fillHeight?: boolean;
 };
@@ -181,18 +179,11 @@ export function DataTable<T>({
       >
         <div
           className={cn(
-            fillHeight
-              ? "max-h-[560px] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
-              : "max-h-[560px] overflow-auto lg:max-h-none lg:overflow-x-auto lg:overflow-y-visible",
+            fillHeight ? "overflow-x-auto lg:min-h-0 lg:flex-1 lg:overflow-auto" : "overflow-x-auto",
           )}
         >
           <table className="w-full border-collapse text-left">
-            <thead
-              className={cn(
-                "bg-background",
-                fillHeight ? "sticky top-0 z-10" : "sticky top-0 z-10 lg:static",
-              )}
-            >
+            <thead className={cn("bg-background", fillHeight && "lg:sticky lg:top-0 lg:z-10")}>
               <tr>
                 {hasSelection && (
                   <th scope="col" className="w-10 px-4 py-[11px]">

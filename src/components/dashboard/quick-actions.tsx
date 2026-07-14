@@ -141,7 +141,7 @@ export function QuickActions() {
             type="button"
             onClick={() => handleClick(action)}
             className={cn(
-              "inline-flex h-11 items-center justify-center gap-[7px] rounded-[10px] border px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors duration-100 ease-pf-out sm:h-9 sm:justify-start",
+              "inline-flex h-11 w-full items-center justify-center gap-[7px] rounded-[10px] border px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors duration-100 ease-pf-out sm:h-9 sm:w-auto sm:justify-start",
               action.className,
               FOCUS_RING_CLASS,
             )}

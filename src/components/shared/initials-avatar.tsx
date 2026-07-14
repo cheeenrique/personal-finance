@@ -33,16 +33,17 @@ function getInitials(name?: string | null, email?: string | null): string {
  * hex cru, cálculo de iniciais diferente em cada uma —
  * docs/50-AUDITORIA-BACKLOG.md, D5).
  *
- * `bg-accent text-accent-foreground` (sólido, não gradiente + branco): a
- * combinação antiga falhava AA na ponta mais clara do gradiente (mesma causa
- * raiz do D1).
+ * `bg-accent text-white` (sólido, não gradiente): fundo sempre colorido
+ * (`--accent`) nos 3 usos (Header/`UserMenu`, `Sidebar`, `ProfileCard`), então
+ * a inicial fica sempre branca — sem depender de `--accent-foreground`, que
+ * falhava AA na ponta mais clara do gradiente antigo (mesma causa raiz do D1).
  */
 export function InitialsAvatar({ name, email, size = "md", className }: InitialsAvatarProps) {
   const initials = getInitials(name, email);
 
   return (
     <Avatar className={cn("shrink-0", SIZE_CLASSES[size], className)}>
-      <AvatarFallback className="bg-accent font-bold text-accent-foreground">{initials}</AvatarFallback>
+      <AvatarFallback className="bg-accent font-bold text-white">{initials}</AvatarFallback>
     </Avatar>
   );
 }
