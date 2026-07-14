@@ -322,9 +322,20 @@ export function LoanFormModal({ open, onOpenChange, loan = null, onSaved }: Loan
           ? "Parcelas ainda não pagas são recalculadas se o contrato mudar."
           : "As parcelas são criadas automaticamente na conta escolhida."
       }
-      size="wide"
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="loan-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Salvar
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="loan-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField label="Finalidade" htmlFor="loan-description" required error={fieldErrors.description}>
           <Input
             id="loan-description"
@@ -450,16 +461,6 @@ export function LoanFormModal({ open, onOpenChange, loan = null, onSaved }: Loan
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

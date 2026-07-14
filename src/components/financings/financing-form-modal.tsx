@@ -379,9 +379,20 @@ export function FinancingFormModal({ open, onOpenChange, financing = null, onSav
           ? "Entrada, valor do bem e demais dados do contrato não podem ser editados aqui."
           : "As parcelas são criadas automaticamente na conta escolhida."
       }
-      size="wide"
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="financing-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Salvar
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="financing-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         {!isEditing && <FinancingImportButton onParsed={handleParsed} disabled={isPending} />}
 
         <FinancingBasicFields
@@ -497,16 +508,6 @@ export function FinancingFormModal({ open, onOpenChange, financing = null, onSav
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </div>
       </form>
     </FormModal>
   );
