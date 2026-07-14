@@ -10,9 +10,10 @@ import {
   payInvoiceSchema,
   currentInvoiceQuerySchema,
   invoiceForQuerySchema,
+  setCardStatusSchema,
 } from "./schemas";
 import { CardDomainError } from "./errors";
-import type { ActionResult, Card, CardInvoice, CardWithSummary, Invoice, PayInvoiceResult } from "./types";
+import type { ActionResult, Card, CardInvoice, CardStatus, CardWithSummary, Invoice, PayInvoiceResult } from "./types";
 
 const CARDS_PATH = "/cards";
 const DASHBOARD_PATH = "/dashboard";
@@ -79,6 +80,28 @@ export async function updateCardAction(id: string, input: unknown): Promise<Acti
 
   try {
     const card = await cardService.updateCard(userId, id, parsed.data);
+    revalidateCardRoutes();
+    return { success: true, data: card };
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+/** Troca de status (ACTIVE/BLOCKED/CANCELLED) — `service.setStatus` sincroniza `isActive` (ver `prisma/schema.prisma` `Card.status`). */
+export async function setCardStatusAction(cardId: string, status: CardStatus): Promise<ActionResult<Card>> {
+  const userId = await requireUserId();
+  if (!userId) return { success: false, error: UNAUTHENTICATED_ERROR };
+
+  const parsed = setCardStatusSchema.safeParse({ status });
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Dados inválidos." },
+    };
+  }
+
+  try {
+    const card = await cardService.setStatus(userId, cardId, parsed.data.status);
     revalidateCardRoutes();
     return { success: true, data: card };
   } catch (error) {

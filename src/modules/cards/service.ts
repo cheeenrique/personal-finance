@@ -1,5 +1,5 @@
 import { Prisma, type Card, type CardCycle as CardCycleRow, type CardInvoice } from "@/generated/prisma/client";
-import { TransactionType, CardType } from "@/generated/prisma/enums";
+import { TransactionType, CardType, type CardStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db/client";
 import { calendarPartsSP, startOfDaySP } from "@/lib/date/calendar-sp";
 import {
@@ -77,6 +77,13 @@ async function createCard(userId: string, input: CreateCardData): Promise<Card> 
 
 async function updateCard(userId: string, id: string, input: UpdateCardData): Promise<Card> {
   const updated = await cardRepository.update(userId, id, input);
+  if (!updated) throw new CardNotFoundError(id);
+  return updated;
+}
+
+/** Troca de status (ACTIVE/BLOCKED/CANCELLED) — `repository.update` sincroniza `isActive` (ver `prisma/schema.prisma` `Card.status`). */
+async function setStatus(userId: string, id: string, status: CardStatus): Promise<Card> {
+  const updated = await cardRepository.update(userId, id, { status });
   if (!updated) throw new CardNotFoundError(id);
   return updated;
 }
@@ -455,6 +462,7 @@ async function listStoredInvoices(userId: string, cardId: string): Promise<CardI
 export const cardService = {
   createCard,
   updateCard,
+  setStatus,
   deleteCard,
   getCard,
   listCards,

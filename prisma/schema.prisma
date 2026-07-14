@@ -34,6 +34,17 @@ enum CardType {
   MEAL
 }
 
+// Status operacional do cartão. `Card.isActive` (abaixo) é derivado/
+// sincronizado a partir daqui (ACTIVE → true, BLOCKED/CANCELLED → false)
+// pelo module (src/modules/cards/repository.ts `update`) — nunca gravado
+// direto pela UI. Existe pra reusar o filtro `isActive` já usado por
+// modules/telegram/resolve.ts e o seletor de origem, sem alterá-los.
+enum CardStatus {
+  ACTIVE
+  BLOCKED
+  CANCELLED
+}
+
 enum CategoryType {
   INCOME
   EXPENSE
@@ -231,6 +242,11 @@ model Card {
   // regra de `lastFour`/`holderName` (opcional, sem cálculo de vencimento
   // real; validado em `src/modules/cards/schemas.ts`).
   expiry     String?
+  // Status operacional (docs acima, `enum CardStatus`). `isActive` é
+  // derivado/sincronizado a partir daqui pelo module (ACTIVE → true,
+  // BLOCKED/CANCELLED → false) — os filtros de telegram/seletor de origem
+  // continuam lendo `isActive`, sem precisar conhecer `status`.
+  status     CardStatus @default(ACTIVE)
   isActive   Boolean   @default(true)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt

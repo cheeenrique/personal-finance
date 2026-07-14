@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { CardType } from "@/generated/prisma/enums";
+import { CardType, CardStatus } from "@/generated/prisma/enums";
 import { positiveDecimalSchema } from "@/lib/money/schema";
 import { dateInputSchema } from "@/lib/date/schema";
 
 const CARD_TYPE_VALUES = Object.values(CardType) as [CardType, ...CardType[]];
+const CARD_STATUS_VALUES = Object.values(CardStatus) as [CardStatus, ...CardStatus[]];
 
 const dayOfMonthSchema = z.coerce
   .number()
@@ -116,6 +117,8 @@ export const updateCardSchema = z.object({
   holderName: holderNameSchema,
   expiry: expirySchema,
   isActive: z.boolean().optional(),
+  /** Sincroniza `isActive` no repository (ACTIVE → true, BLOCKED/CANCELLED → false — ver `prisma/schema.prisma` `Card.status`). Cartão novo nasce ACTIVE via default do banco, por isso não entra em `createCardSchema`. */
+  status: z.enum(CARD_STATUS_VALUES).optional(),
 });
 
 /**
@@ -136,6 +139,11 @@ export const currentInvoiceQuerySchema = z.object({
   refDate: dateInputSchema.optional(),
 });
 
+/** Input de `setCardStatusAction` (actions.ts) — valida o `status` recebido do client antes de chegar no service, mesmo tratamento de qualquer outro input de Server Action (boundary validation). */
+export const setCardStatusSchema = z.object({
+  status: z.enum(CARD_STATUS_VALUES),
+});
+
 export const invoiceForQuerySchema = z.object({
   cardId: z.string().trim().min(1, "Cartão é obrigatório"),
   year: z.coerce.number().int().min(2000).max(2100),
@@ -147,3 +155,4 @@ export type UpdateCardInput = z.infer<typeof updateCardSchema>;
 export type PayInvoiceInput = z.infer<typeof payInvoiceSchema>;
 export type CurrentInvoiceQueryInput = z.infer<typeof currentInvoiceQuerySchema>;
 export type InvoiceForQueryInput = z.infer<typeof invoiceForQuerySchema>;
+export type SetCardStatusInput = z.infer<typeof setCardStatusSchema>;

@@ -1,7 +1,7 @@
 import type { Card, CardInvoice, Prisma } from "@/generated/prisma/client";
-import type { CardType } from "@/generated/prisma/enums";
+import type { CardType, CardStatus } from "@/generated/prisma/enums";
 
-export type { Card, CardInvoice, CardType };
+export type { Card, CardInvoice, CardType, CardStatus };
 
 /** Dinheiro nunca é float no domínio — sempre Decimal (decimal.js via Prisma). */
 export type Money = Prisma.Decimal;

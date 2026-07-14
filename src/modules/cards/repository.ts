@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { Prisma, type Card, type CardCycle, type CardInvoice } from "@/generated/prisma/client";
-import { TransactionType, type CardType } from "@/generated/prisma/enums";
+import { TransactionType, CardStatus, type CardType } from "@/generated/prisma/enums";
 
 /** Client Prisma padrão ou escopado a uma `$transaction` interativa (ver `pay-invoice.ts`). */
 type Db = Prisma.TransactionClient;
@@ -25,7 +25,7 @@ export type CreateCardData = {
   expiry?: string | null;
 };
 
-export type UpdateCardData = Partial<CreateCardData> & { isActive?: boolean };
+export type UpdateCardData = Partial<CreateCardData> & { isActive?: boolean; status?: CardStatus };
 
 /** Uma compra (EXPENSE) crua, usada tanto na fatura de um ciclo quanto no agrupamento em memória de `listWithSummary`. */
 export type CardExpenseRow = { cardId: string; amount: Prisma.Decimal; date: Date };
@@ -168,7 +168,13 @@ async function update(userId: string, id: string, data: UpdateCardData): Promise
         ...(data.lastFour !== undefined && { lastFour: data.lastFour }),
         ...(data.holderName !== undefined && { holderName: data.holderName }),
         ...(data.expiry !== undefined && { expiry: data.expiry }),
-        ...(data.isActive !== undefined && { isActive: data.isActive }),
+        // `status` sincroniza `isActive` (ACTIVE → true, BLOCKED/CANCELLED →
+        // false — ver `prisma/schema.prisma` `Card.status`) pra reusar o
+        // filtro `isActive` já existente em telegram/seletor de origem sem
+        // alterá-los. `isActive` explícito no payload (sem `status`) continua
+        // valendo como antes — comportamento legado intacto.
+        ...(data.status !== undefined && { status: data.status, isActive: data.status === CardStatus.ACTIVE }),
+        ...(data.status === undefined && data.isActive !== undefined && { isActive: data.isActive }),
       },
     });
   });

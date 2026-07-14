@@ -1,4 +1,4 @@
-import type { CardType } from "@/modules/cards/types";
+import type { CardStatus, CardType } from "@/modules/cards/types";
 
 /**
  * Tipos "view" do módulo Cartões — versões serializáveis (Decimal → string,
@@ -27,6 +27,8 @@ export type CardSummaryView = {
   /** Validade impressa "MM/AA" — só exibição (ver `prisma/schema.prisma` `Card.expiry`). */
   expiry: string | null;
   isActive: boolean;
+  /** Status operacional (ACTIVE/BLOCKED/CANCELLED) — `isActive` acima é derivado/sincronizado a partir daqui (ver `prisma/schema.prisma` `Card.status`). */
+  status: CardStatus;
   createdAt: string;
   currentInvoiceTotal: string;
   outstandingBalance: string;
