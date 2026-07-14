@@ -93,8 +93,20 @@ export function TransferFormModal({ open, onOpenChange, referenceData, onSaved }
       onOpenChange={onOpenChange}
       title="Nova transferência"
       description="Move dinheiro entre duas contas — gera as duas pernas automaticamente."
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="transfer-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Transferir
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="transfer-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField
           label="Conta de origem"
           htmlFor="transfer-tx-from-account"
@@ -171,16 +183,6 @@ export function TransferFormModal({ open, onOpenChange, referenceData, onSaved }
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Transferir
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

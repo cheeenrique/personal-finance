@@ -108,8 +108,20 @@ export function AccountFormModal({ open, onOpenChange, account }: AccountFormMod
       onOpenChange={onOpenChange}
       title={isEditing ? "Editar conta" : "Nova conta"}
       description="Contas representam o dinheiro real disponível — saldo é sempre calculado a partir das transações."
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="account-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Salvar
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="account-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField label="Nome" htmlFor="account-name" required error={fieldErrors.name}>
           <Input
             id="account-name"
@@ -213,16 +225,6 @@ export function AccountFormModal({ open, onOpenChange, account }: AccountFormMod
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

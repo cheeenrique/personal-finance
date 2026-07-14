@@ -153,8 +153,20 @@ export function InstallmentFormModal({ open, onOpenChange }: InstallmentFormModa
       onOpenChange={onOpenChange}
       title="Nova compra parcelada"
       description="Compra parcelada no cartão — as parcelas são criadas automaticamente."
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="installment-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Salvar
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="installment-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField label="Descrição" htmlFor="installment-description" required error={fieldErrors.description}>
           <Input
             id="installment-description"
@@ -250,16 +262,6 @@ export function InstallmentFormModal({ open, onOpenChange }: InstallmentFormModa
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

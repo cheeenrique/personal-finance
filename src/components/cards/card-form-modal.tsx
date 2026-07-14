@@ -165,8 +165,20 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
           ? "Nome, bandeira e demais dados do cartão."
           : "Tipo, nome, bandeira e demais dados do cartão."
       }
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="card-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Salvar
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <form id="card-form" onSubmit={handleSubmit} className="flex flex-col gap-6">
         {/* preview ao vivo — cartão no topo, campos distribuídos abaixo */}
         <div className="mx-auto w-full max-w-[260px]">
           <CardFace
@@ -199,16 +211,6 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
               {formError}
             </p>
           )}
-
-          <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-              Salvar
-            </Button>
-          </div>
         </div>
       </form>
     </FormModal>

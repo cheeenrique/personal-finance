@@ -310,8 +310,20 @@ export function NewTransactionForm() {
       }}
       title="Nova transação"
       description="Registre uma receita ou despesa em poucos campos."
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={closeTransactionModal} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="new-transaction-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Salvar
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="new-transaction-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-2">
           {QUICK_TYPES.map((option) => (
             <button
@@ -451,21 +463,6 @@ export function NewTransactionForm() {
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={closeTransactionModal}
-            disabled={isPending}
-          >
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

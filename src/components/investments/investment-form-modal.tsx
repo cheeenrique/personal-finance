@@ -200,8 +200,20 @@ export function InvestmentFormModal({
           ? "Atualize o nome e o % do CDI deste investimento."
           : "Produto com % do CDI. O aporte inicial debita o saldo da conta escolhida."
       }
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="investment-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {isEdit ? "Salvar" : "Criar"}
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="investment-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField label="Nome" htmlFor="investment-name" required error={fieldErrors.name}>
           <Input
             id="investment-name"
@@ -318,16 +330,6 @@ export function InvestmentFormModal({
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            {isEdit ? "Salvar" : "Criar"}
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

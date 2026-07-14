@@ -142,8 +142,20 @@ export function GoalFormModal({ open, onOpenChange, goal, accountOptions, assetO
       onOpenChange={onOpenChange}
       title={isEditing ? "Editar meta" : "Nova meta"}
       description="Defina quanto quer guardar — o progresso é sempre calculado a partir da origem escolhida."
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="goal-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Salvar
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="goal-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField label="Nome" htmlFor="goal-name" required error={fieldErrors.name}>
           <Input
             id="goal-name"
@@ -293,16 +305,6 @@ export function GoalFormModal({ open, onOpenChange, goal, accountOptions, assetO
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

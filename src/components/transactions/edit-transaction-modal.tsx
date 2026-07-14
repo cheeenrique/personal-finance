@@ -178,8 +178,20 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
       onOpenChange={onOpenChange}
       title="Editar transação"
       description="Altere os dados e salve — a listagem atualiza na hora."
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="edit-transaction-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Salvar
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="edit-transaction-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         {isCardPayment ? (
           <p className="rounded-[10px] border border-border bg-muted/50 px-3 py-2 text-sm font-semibold text-muted-foreground">
             Pagamento de fatura — tipo e categoria não são editáveis.
@@ -349,16 +361,6 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

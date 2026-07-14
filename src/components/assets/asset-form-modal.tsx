@@ -116,8 +116,20 @@ export function AssetFormModal({ open, onOpenChange, asset }: AssetFormModalProp
       onOpenChange={onOpenChange}
       title={isEditing ? "Editar ativo" : "Novo ativo"}
       description="Assets representam bens acumulados — não impactam saldo de conta nem fluxo de caixa."
+      size="tall"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="asset-form" disabled={isPending}>
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Salvar
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="asset-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField label="Nome" htmlFor="asset-name" required error={fieldErrors.name}>
           <Input
             id="asset-name"
@@ -195,16 +207,6 @@ export function AssetFormModal({ open, onOpenChange, asset }: AssetFormModalProp
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </div>
       </form>
     </FormModal>
   );
