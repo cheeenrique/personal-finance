@@ -20,7 +20,7 @@ export function useMediaQuery(query: string): boolean {
   );
 }
 
-/** Breakpoint desktop travado em `04-DESIGN_SYSTEM.md`/handoff: sidebar aparece só a partir de 1280px. */
+/** Breakpoint desktop casa com o `lg:` do Tailwind (1024px), usado por Sidebar/BottomNav — mesma fronteira Dialog(desktop)/Sheet(mobile). */
 export function useIsDesktop(): boolean {
-  return useMediaQuery("(min-width: 1280px)");
+  return useMediaQuery("(min-width: 1024px)");
 }
