@@ -12,7 +12,7 @@ import { CardType } from "@/generated/prisma/enums";
 import { CardLimitProgress, computeUsagePercent, usageToneTextClass } from "./card-limit-progress";
 import { cardGradient } from "./card-color";
 import { CardFace } from "./card-face";
-import { CardStatusPill, CardStatusStamp, getCardStatusMeta } from "./card-status";
+import { CardStatusStamp, getCardStatusMeta } from "./card-status";
 import type { CardSummaryView } from "./types";
 
 type CardTileProps = {
@@ -94,7 +94,6 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
       </div>
 
       <div className={cn("flex flex-col gap-3 rounded-xl border border-border bg-card p-4", CARD_SHADOW_CLASS)}>
-        {statusMeta && <CardStatusPill meta={statusMeta} />}
         <div className="space-y-1.5">
           <CardLimitProgress percent={percent} />
           <div className="flex items-baseline justify-between gap-2">
