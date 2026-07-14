@@ -14,7 +14,7 @@ function SegmentButton({ active, onClick, children }: { active: boolean; onClick
       type="button"
       onClick={onClick}
       className={cn(
-        "h-full rounded-[7px] px-3 text-[12.5px] font-bold transition-colors",
+        "h-full rounded-[7px] px-2 text-[11px] font-bold transition-colors sm:px-3 sm:text-[12.5px]",
         active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >

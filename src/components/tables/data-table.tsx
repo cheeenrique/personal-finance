@@ -307,7 +307,7 @@ export function DataTable<T>({
                                 <MoreHorizontal className="size-[15px]" aria-hidden="true" />
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <div className="flex items-center gap-1.5 p-1">{rowActions(row)}</div>
+                                <div className="flex items-center gap-2.5 p-1">{rowActions(row)}</div>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>

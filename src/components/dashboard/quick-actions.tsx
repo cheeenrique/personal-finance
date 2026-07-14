@@ -134,14 +134,14 @@ export function QuickActions() {
 
   return (
     <>
-      <div className="flex flex-wrap gap-[10px]">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-[10px]">
         {ACTIONS.map((action) => (
           <button
             key={action.label}
             type="button"
             onClick={() => handleClick(action)}
             className={cn(
-              "inline-flex h-9 items-center gap-[7px] rounded-[10px] border px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors duration-100 ease-pf-out",
+              "inline-flex h-11 items-center justify-center gap-[7px] rounded-[10px] border px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors duration-100 ease-pf-out sm:h-9 sm:justify-start",
               action.className,
               FOCUS_RING_CLASS,
             )}

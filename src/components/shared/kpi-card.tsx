@@ -57,7 +57,7 @@ export function KPICard({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-xl border border-border bg-card p-[18px]",
+        "flex min-w-0 flex-col rounded-xl border border-border bg-card p-[18px]",
         CARD_SHADOW_CLASS,
         className,
       )}
@@ -81,7 +81,12 @@ export function KPICard({
         </div>
       ) : (
         <>
-          <p className={cn("mt-3 font-mono text-[25px] font-semibold", VALUE_TONE_CLASSES[tone])}>
+          <p
+            className={cn(
+              "mt-3 font-mono text-[18px] font-semibold tabular-nums sm:text-[22px] lg:text-[25px]",
+              VALUE_TONE_CLASSES[tone],
+            )}
+          >
             {value}
           </p>
           {variation && (
