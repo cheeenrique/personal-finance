@@ -60,8 +60,13 @@ type DataTableProps<T> = {
    * `h-full`) com a paginação fixada na base. No mobile capa em ~10 linhas
    * (`max-h-[560px]`) com scroll vertical interno, em vez de esticar pro
    * viewport inteiro. Só usado em `/transactions` (única tela full-page com
-   * `DataTable`); as demais (embutidas em cards/modais) ficam com o
-   * comportamento padrão de altura por conteúdo.
+   * `DataTable`).
+   *
+   * Sem esse flag (modo padrão, usado nas tabelas embutidas em cards/modais),
+   * o desktop mantém altura por conteúdo (sem cap); o mobile também capa em
+   * `max-h-[560px]` com scroll vertical interno (thead sticky só nesse
+   * breakpoint) — decisão do dono: tabela no mobile nunca cresce
+   * indefinidamente empurrando a página, ver memória `mobile-audit-standardization`.
    */
   fillHeight?: boolean;
 };
@@ -178,11 +183,16 @@ export function DataTable<T>({
           className={cn(
             fillHeight
               ? "max-h-[560px] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
-              : "overflow-x-auto",
+              : "max-h-[560px] overflow-auto lg:max-h-none lg:overflow-x-auto lg:overflow-y-visible",
           )}
         >
           <table className="w-full border-collapse text-left">
-            <thead className={cn("bg-background", fillHeight && "sticky top-0 z-10")}>
+            <thead
+              className={cn(
+                "bg-background",
+                fillHeight ? "sticky top-0 z-10" : "sticky top-0 z-10 lg:static",
+              )}
+            >
               <tr>
                 {hasSelection && (
                   <th scope="col" className="w-10 px-4 py-[11px]">
