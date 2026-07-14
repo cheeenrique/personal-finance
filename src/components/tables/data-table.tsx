@@ -54,10 +54,11 @@ type DataTableProps<T> = {
   /** Paginação server-side — usada em `/transactions` e no histórico de transações do detalhe de conta (`AccountTransactionsHistory`), as duas listas sem limite de itens (docs/04-DESIGN_SYSTEM.md). */
   pagination?: PaginationState & { onPageChange: (page: number) => void };
   /**
-   * Opt-in: estica a tabela pra altura disponível do container pai (que
-   * precisa ter altura definida, ex.: `flex-1` num pai `h-full`) com a
-   * paginação fixada na base — em vez do card encolher pro tamanho do
-   * conteúdo. Só usado em `/transactions` (única tela full-page com
+   * Opt-in: no desktop (`lg:`) estica a tabela pra altura disponível do
+   * container pai (que precisa ter altura definida, ex.: `flex-1` num pai
+   * `h-full`) com a paginação fixada na base. No mobile capa em ~10 linhas
+   * (`max-h-[560px]`) com scroll vertical interno, em vez de esticar pro
+   * viewport inteiro. Só usado em `/transactions` (única tela full-page com
    * `DataTable`); as demais (embutidas em cards/modais) ficam com o
    * comportamento padrão de altura por conteúdo.
    */
@@ -138,7 +139,7 @@ export function DataTable<T>({
   const columnCount = columns.length + (hasSelection ? 1 : 0) + (rowActions ? 1 : 0);
 
   return (
-    <div className={cn("flex flex-col gap-3", fillHeight && "h-full min-h-0")}>
+    <div className={cn("flex flex-col gap-3", fillHeight && "lg:h-full lg:min-h-0")}>
       {search && (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <div className="relative min-w-[220px] max-w-[340px] flex-1">
@@ -169,10 +170,16 @@ export function DataTable<T>({
       <div
         className={cn(
           "flex flex-col overflow-hidden rounded-xl border border-border bg-card",
-          fillHeight && "min-h-0 flex-1",
+          fillHeight && "lg:min-h-0 lg:flex-1",
         )}
       >
-        <div className={cn(fillHeight ? "min-h-0 flex-1 overflow-auto" : "overflow-x-auto")}>
+        <div
+          className={cn(
+            fillHeight
+              ? "max-h-[560px] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
+              : "overflow-x-auto",
+          )}
+        >
           <table className="w-full border-collapse text-left">
             <thead className={cn("bg-background", fillHeight && "sticky top-0 z-10")}>
               <tr>
