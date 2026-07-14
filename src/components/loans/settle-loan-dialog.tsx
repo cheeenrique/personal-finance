@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormModal } from "@/components/shared/form-modal";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/forms/currency-input";
 import { FormField } from "@/components/forms/form-field";
@@ -63,17 +63,15 @@ export function SettleLoanDialog({ open, onOpenChange, loanId, description, rema
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Quitar &ldquo;{description}&rdquo;?</DialogTitle>
-          <DialogDescription>
-            Isso vai marcar as {remainingCount} parcela{remainingCount === 1 ? "" : "s"} restante
-            {remainingCount === 1 ? "" : "s"} como paga{remainingCount === 1 ? "" : "s"} hoje, aplicando desconto de
-            antecipação se o empréstimo tiver juros configurado.
-          </DialogDescription>
-        </DialogHeader>
-
+    <FormModal
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Quitar “${description}”?`}
+      description={`Isso vai marcar as ${remainingCount} parcela${remainingCount === 1 ? "" : "s"} restante${
+        remainingCount === 1 ? "" : "s"
+      } como paga${remainingCount === 1 ? "" : "s"} hoje, aplicando desconto de antecipação se o empréstimo tiver juros configurado.`}
+    >
+      <div className="flex flex-col gap-4">
         <FormField label="Valor total (opcional)" htmlFor="settle-total-paid" error={formError}>
           <CurrencyInput
             id="settle-total-paid"
@@ -87,7 +85,7 @@ export function SettleLoanDialog({ open, onOpenChange, loanId, description, rema
           Deixe em branco para usar o valor sugerido automaticamente (soma do valor presente das parcelas).
         </p>
 
-        <DialogFooter>
+        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancelar
           </Button>
@@ -95,8 +93,8 @@ export function SettleLoanDialog({ open, onOpenChange, loanId, description, rema
             {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
             Quitar empréstimo
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </FormModal>
   );
 }
