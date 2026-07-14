@@ -287,3 +287,10 @@
     }
   }
 }
+
+/* Toast acima da BottomNav (fixa < lg/1024px) — evita sobreposição com nav e FAB. */
+@media (max-width: 1023.98px) {
+  [data-sonner-toaster][data-y-position="bottom"] {
+    bottom: calc(4.5rem + env(safe-area-inset-bottom)) !important;
+  }
+}
