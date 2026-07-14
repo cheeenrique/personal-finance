@@ -1,8 +1,13 @@
 "use client";
 
+import { useState } from "react";
+import { SlidersHorizontal } from "lucide-react";
+
 import { DateField } from "@/components/forms/date-field";
 import { EntitySelect } from "@/components/forms/entity-select";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { CARD_SHADOW_CLASS, cn } from "@/lib/utils";
 import { PERIOD_OPTIONS, type PeriodPreset } from "./period-presets";
 import { ALL_VALUE, TYPE_OPTIONS, PERIOD_SELECT_OPTIONS } from "./transaction-filter-options";
@@ -76,6 +81,7 @@ export function TransactionFiltersBar(props: TransactionFiltersBarProps) {
     summaryLoading,
   } = props;
 
+  const [mobileOpen, setMobileOpen] = useState(false);
   const chips = buildActiveFilterChips(props);
 
   return (
@@ -85,74 +91,60 @@ export function TransactionFiltersBar(props: TransactionFiltersBarProps) {
         <TransactionIsPaidSegment value={isPaid} onChange={onIsPaidChange} />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <EntitySelect
-          options={TYPE_OPTIONS}
-          value={type ?? ALL_VALUE}
-          onValueChange={(value) => onTypeChange(value === ALL_VALUE ? undefined : (value as TypeFilterValue))}
-          className="h-[38px] w-auto min-w-[160px]"
+      <div className="hidden flex-wrap items-center gap-2 lg:flex">
+        <FilterSelects
+          type={type}
+          onTypeChange={onTypeChange}
+          categoryId={categoryId}
+          onCategoryIdChange={onCategoryIdChange}
+          origin={origin}
+          onOriginChange={onOriginChange}
+          period={period}
+          onPeriodChange={onPeriodChange}
+          customFrom={customFrom}
+          onCustomFromChange={onCustomFromChange}
+          customTo={customTo}
+          onCustomToChange={onCustomToChange}
+          tagId={tagId}
+          onTagIdChange={onTagIdChange}
+          referenceData={referenceData}
         />
+      </div>
 
-        <EntitySelect
-          options={[{ value: ALL_VALUE, label: "Todas as categorias" }, ...referenceData.categoryOptions]}
-          value={categoryId ?? ALL_VALUE}
-          onValueChange={(value) => onCategoryIdChange(value === ALL_VALUE ? undefined : value)}
-          className="h-[38px] w-auto min-w-[170px]"
-          disabled={referenceData.loading}
-        />
+      <div className="lg:hidden">
+        <Button type="button" variant="outline" onClick={() => setMobileOpen(true)} className="gap-1.5">
+          <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+          Filtros
+          {hasActiveFilters && <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />}
+        </Button>
 
-        <EntitySelect
-          options={[{ value: ALL_VALUE, label: "Todas as contas/cartões" }, ...referenceData.originOptions]}
-          value={origin ?? ALL_VALUE}
-          onValueChange={(value) => onOriginChange(value === ALL_VALUE ? undefined : (value as OriginValue))}
-          className="h-[38px] w-auto min-w-[180px]"
-          disabled={referenceData.loading}
-        />
-
-        <EntitySelect
-          options={PERIOD_SELECT_OPTIONS}
-          value={period}
-          onValueChange={(value) => onPeriodChange(value as PeriodPreset)}
-          className="h-[38px] w-auto min-w-[160px]"
-        />
-
-        {period === "custom" && (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <Label htmlFor="tx-period-from" className="text-[12.5px] text-muted-foreground">
-                De
-              </Label>
-              <DateField
-                id="tx-period-from"
-                value={customFrom ?? ""}
-                onValueChange={onCustomFromChange}
-                className="h-[38px] w-[150px]"
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+            <SheetHeader>
+              <SheetTitle>Filtros</SheetTitle>
+            </SheetHeader>
+            <div className="flex flex-col gap-2 px-4 pb-4">
+              <FilterSelects
+                stacked
+                type={type}
+                onTypeChange={onTypeChange}
+                categoryId={categoryId}
+                onCategoryIdChange={onCategoryIdChange}
+                origin={origin}
+                onOriginChange={onOriginChange}
+                period={period}
+                onPeriodChange={onPeriodChange}
+                customFrom={customFrom}
+                onCustomFromChange={onCustomFromChange}
+                customTo={customTo}
+                onCustomToChange={onCustomToChange}
+                tagId={tagId}
+                onTagIdChange={onTagIdChange}
+                referenceData={referenceData}
               />
             </div>
-            <div className="flex items-center gap-1.5">
-              <Label htmlFor="tx-period-to" className="text-[12.5px] text-muted-foreground">
-                Até
-              </Label>
-              <DateField
-                id="tx-period-to"
-                value={customTo ?? ""}
-                onValueChange={onCustomToChange}
-                className="h-[38px] w-[150px]"
-              />
-            </div>
-          </div>
-        )}
-
-        <EntitySelect
-          options={[
-            { value: ALL_VALUE, label: "Todas as tags" },
-            ...referenceData.tags.map((tag) => ({ value: tag.id, label: tag.name })),
-          ]}
-          value={tagId ?? ALL_VALUE}
-          onValueChange={(value) => onTagIdChange(value === ALL_VALUE ? undefined : value)}
-          className="h-[38px] w-auto min-w-[140px]"
-          disabled={referenceData.loading}
-        />
+          </SheetContent>
+        </Sheet>
       </div>
 
       <TransactionFiltersSummaryRow
@@ -163,6 +155,120 @@ export function TransactionFiltersBar(props: TransactionFiltersBarProps) {
         loading={summaryLoading}
       />
     </div>
+  );
+}
+
+type FilterSelectsProps = {
+  stacked?: boolean;
+  type: TypeFilterValue | undefined;
+  onTypeChange: (value: TypeFilterValue | undefined) => void;
+  categoryId: string | undefined;
+  onCategoryIdChange: (value: string | undefined) => void;
+  origin: OriginValue | undefined;
+  onOriginChange: (value: OriginValue | undefined) => void;
+  period: PeriodPreset;
+  onPeriodChange: (value: PeriodPreset) => void;
+  customFrom: string | undefined;
+  onCustomFromChange: (value: string) => void;
+  customTo: string | undefined;
+  onCustomToChange: (value: string) => void;
+  tagId: string | undefined;
+  onTagIdChange: (value: string | undefined) => void;
+  referenceData: TransactionsReferenceData;
+};
+
+/** Faixa 2 (selects) — desktop inline (`w-auto`), mobile empilhada no Sheet (`stacked`, `w-full`). */
+function FilterSelects({
+  stacked,
+  type,
+  onTypeChange,
+  categoryId,
+  onCategoryIdChange,
+  origin,
+  onOriginChange,
+  period,
+  onPeriodChange,
+  customFrom,
+  onCustomFromChange,
+  customTo,
+  onCustomToChange,
+  tagId,
+  onTagIdChange,
+  referenceData,
+}: FilterSelectsProps) {
+  const selectClassName = stacked ? "h-[38px] w-full" : "h-[38px] w-auto min-w-[160px]";
+  const dateFieldClassName = stacked ? "h-[38px] w-full" : "h-[38px] w-[150px]";
+
+  return (
+    <>
+      <EntitySelect
+        options={TYPE_OPTIONS}
+        value={type ?? ALL_VALUE}
+        onValueChange={(value) => onTypeChange(value === ALL_VALUE ? undefined : (value as TypeFilterValue))}
+        className={selectClassName}
+      />
+
+      <EntitySelect
+        options={[{ value: ALL_VALUE, label: "Todas as categorias" }, ...referenceData.categoryOptions]}
+        value={categoryId ?? ALL_VALUE}
+        onValueChange={(value) => onCategoryIdChange(value === ALL_VALUE ? undefined : value)}
+        className={stacked ? selectClassName : "h-[38px] w-auto min-w-[170px]"}
+        disabled={referenceData.loading}
+      />
+
+      <EntitySelect
+        options={[{ value: ALL_VALUE, label: "Todas as contas/cartões" }, ...referenceData.originOptions]}
+        value={origin ?? ALL_VALUE}
+        onValueChange={(value) => onOriginChange(value === ALL_VALUE ? undefined : (value as OriginValue))}
+        className={stacked ? selectClassName : "h-[38px] w-auto min-w-[180px]"}
+        disabled={referenceData.loading}
+      />
+
+      <EntitySelect
+        options={PERIOD_SELECT_OPTIONS}
+        value={period}
+        onValueChange={(value) => onPeriodChange(value as PeriodPreset)}
+        className={selectClassName}
+      />
+
+      {period === "custom" && (
+        <div className={stacked ? "flex flex-col gap-2" : "flex flex-wrap items-center gap-2"}>
+          <div className={stacked ? "flex flex-col gap-1.5" : "flex items-center gap-1.5"}>
+            <Label htmlFor="tx-period-from" className="text-[12.5px] text-muted-foreground">
+              De
+            </Label>
+            <DateField
+              id="tx-period-from"
+              value={customFrom ?? ""}
+              onValueChange={onCustomFromChange}
+              className={dateFieldClassName}
+            />
+          </div>
+          <div className={stacked ? "flex flex-col gap-1.5" : "flex items-center gap-1.5"}>
+            <Label htmlFor="tx-period-to" className="text-[12.5px] text-muted-foreground">
+              Até
+            </Label>
+            <DateField
+              id="tx-period-to"
+              value={customTo ?? ""}
+              onValueChange={onCustomToChange}
+              className={dateFieldClassName}
+            />
+          </div>
+        </div>
+      )}
+
+      <EntitySelect
+        options={[
+          { value: ALL_VALUE, label: "Todas as tags" },
+          ...referenceData.tags.map((tag) => ({ value: tag.id, label: tag.name })),
+        ]}
+        value={tagId ?? ALL_VALUE}
+        onValueChange={(value) => onTagIdChange(value === ALL_VALUE ? undefined : value)}
+        className={stacked ? selectClassName : "h-[38px] w-auto min-w-[140px]"}
+        disabled={referenceData.loading}
+      />
+    </>
   );
 }
 
