@@ -306,8 +306,15 @@ export function DataTable<T>({
                               >
                                 <MoreHorizontal className="size-[15px]" aria-hidden="true" />
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <div className="flex items-center gap-2.5 p-1">{rowActions(row)}</div>
+                              {/* Popup padrão é pensado pra menu vertical (w-(--anchor-width) +
+                                  min-w-32 + overflow-x-hidden), o que capava/cortava a fileira
+                                  horizontal de ícones. Aqui: largura por conteúdo com teto na
+                                  viewport, overflow visível e wrap — todas as ações aparecem. */}
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-auto min-w-0 max-w-[calc(100vw-1.5rem)] overflow-x-visible overflow-y-visible"
+                              >
+                                <div className="flex flex-wrap items-center justify-end gap-2">{rowActions(row)}</div>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
