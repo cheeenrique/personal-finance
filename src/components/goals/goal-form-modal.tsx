@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,15 +145,12 @@ export function GoalFormModal({ open, onOpenChange, goal, accountOptions, assetO
       description="Defina quanto quer guardar — o progresso é sempre calculado a partir da origem escolhida."
       size="tall"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="goal-form" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </>
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="goal-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
       }
     >
       <form id="goal-form" onSubmit={handleSubmit} className="flex flex-col gap-4">

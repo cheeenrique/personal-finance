@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { type EntitySelectOption } from "@/components/forms/entity-select";
 import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
@@ -381,15 +380,12 @@ export function FinancingFormModal({ open, onOpenChange, financing = null, onSav
       }
       size="tall"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="financing-form" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </>
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="financing-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
       }
     >
       <form id="financing-form" onSubmit={handleSubmit} className="flex flex-col gap-4">

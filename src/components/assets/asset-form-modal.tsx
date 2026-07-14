@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -118,15 +117,12 @@ export function AssetFormModal({ open, onOpenChange, asset }: AssetFormModalProp
       description="Assets representam bens acumulados — não impactam saldo de conta nem fluxo de caixa."
       size="tall"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="asset-form" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </>
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="asset-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
       }
     >
       <form id="asset-form" onSubmit={handleSubmit} className="flex flex-col gap-4">

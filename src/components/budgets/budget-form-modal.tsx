@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Label } from "@/components/ui/label";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
 import { CurrencyInput } from "@/components/forms/currency-input";
@@ -159,8 +158,16 @@ export function BudgetFormModal({
       onOpenChange={onOpenChange}
       title={isEditing ? "Editar orçamento" : "Novo orçamento"}
       description="Defina quanto pode gastar por categoria em um mês — o realizado é sempre calculado a partir das transações."
+      footer={
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="budget-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="budget-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField label="Categoria" htmlFor="budget-category" required error={fieldErrors.categoryId}>
           <EntitySelect
             id="budget-category"
@@ -226,16 +233,6 @@ export function BudgetFormModal({
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EntitySelect, type EntitySelectOption } from "@/components/forms/entity-select";
@@ -130,8 +130,16 @@ export function CategoryFormModal({
       onOpenChange={onOpenChange}
       title={isEditing ? "Editar categoria" : "Nova categoria"}
       description="Categorias organizam as transações e alimentam relatórios e gráficos."
+      footer={
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="category-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="category-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField label="Nome" htmlFor="category-name" required error={fieldErrors.name}>
           <Input
             id="category-name"
@@ -254,16 +262,6 @@ export function CategoryFormModal({
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

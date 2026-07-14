@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EntitySelect } from "@/components/forms/entity-select";
@@ -110,15 +110,12 @@ export function AccountFormModal({ open, onOpenChange, account }: AccountFormMod
       description="Contas representam o dinheiro real disponível — saldo é sempre calculado a partir das transações."
       size="tall"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="account-form" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </>
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="account-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
       }
     >
       <form id="account-form" onSubmit={handleSubmit} className="flex flex-col gap-4">

@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/forms/currency-input";
 import { DateField } from "@/components/forms/date-field";
@@ -324,15 +323,12 @@ export function LoanFormModal({ open, onOpenChange, loan = null, onSaved }: Loan
       }
       size="tall"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="loan-form" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </>
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="loan-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
       }
     >
       <form id="loan-form" onSubmit={handleSubmit} className="flex flex-col gap-4">

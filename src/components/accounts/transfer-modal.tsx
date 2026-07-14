@@ -1,10 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CurrencyInput } from "@/components/forms/currency-input";
@@ -104,8 +103,16 @@ export function TransferModal({ open, onOpenChange, accounts }: TransferModalPro
       onOpenChange={handleOpenChange}
       title="Transferir entre contas"
       description="Move dinheiro entre duas contas suas — não entra em receita nem despesa."
+      footer={
+        <FormModalActions
+          onCancel={() => handleOpenChange(false)}
+          submitForm="transfer-form"
+          submitLabel="Transferir"
+          isPending={isPending}
+        />
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="transfer-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormField
           label="Conta de origem"
           htmlFor="transfer-from-account"
@@ -179,21 +186,6 @@ export function TransferModal({ open, onOpenChange, accounts }: TransferModalPro
             {formError}
           </p>
         )}
-
-        <div className="-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 sm:flex-row sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => handleOpenChange(false)}
-            disabled={isPending}
-          >
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Transferir
-          </Button>
-        </div>
       </form>
     </FormModal>
   );

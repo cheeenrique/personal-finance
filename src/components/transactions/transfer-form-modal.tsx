@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CurrencyInput } from "@/components/forms/currency-input";
@@ -95,15 +94,12 @@ export function TransferFormModal({ open, onOpenChange, referenceData, onSaved }
       description="Move dinheiro entre duas contas — gera as duas pernas automaticamente."
       size="tall"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="transfer-form" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Transferir
-          </Button>
-        </>
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="transfer-form"
+          submitLabel="Transferir"
+          isPending={isPending}
+        />
       }
     >
       <form id="transfer-form" onSubmit={handleSubmit} className="flex flex-col gap-4">

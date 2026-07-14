@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CurrencyInput } from "@/components/forms/currency-input";
@@ -113,15 +112,12 @@ export function NewInstallmentModal({ open, onOpenChange, referenceData, onSaved
       description="Compra parcelada no cartão — as parcelas são criadas automaticamente."
       size="tall"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="new-installment-form" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </>
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="new-installment-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
       }
     >
       <form id="new-installment-form" onSubmit={handleSubmit} className="flex flex-col gap-4">

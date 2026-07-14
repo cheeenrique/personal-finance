@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -312,15 +312,12 @@ export function NewTransactionForm() {
       description="Registre uma receita ou despesa em poucos campos."
       size="tall"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={closeTransactionModal} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="new-transaction-form" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </>
+        <FormModalActions
+          onCancel={closeTransactionModal}
+          submitForm="new-transaction-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
       }
     >
       <form id="new-transaction-form" onSubmit={handleSubmit} className="flex flex-col gap-4">

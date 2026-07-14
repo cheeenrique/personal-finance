@@ -36,7 +36,12 @@ type FormModalProps = {
    * pra conteúdo extenso (ex.: import de fatura/contrato).
    */
   size?: "default" | "wide" | "tall";
-  /** Só usado com `size="tall"` — ações fixas no rodapé, fora da área scrollável. */
+  /**
+   * Ações fixas no rodapé, fora da área scrollável — funciona em TODOS os
+   * `size`. Formulário curto fica compacto (footer logo abaixo do conteúdo,
+   * sem esticar até `max-h`); formulário longo rola só o corpo com o footer
+   * preso na base. Ver `FormModalActions` pro padrão de botões.
+   */
   footer?: ReactNode;
 };
 
@@ -92,7 +97,7 @@ export function FormModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           className={cn(
-            "max-h-[85vh] overflow-y-auto sm:max-w-[500px]",
+            "flex max-h-[85vh] flex-col overflow-hidden sm:max-w-[500px]",
             size === "wide" && "sm:max-w-[600px]",
           )}
         >
@@ -100,7 +105,8 @@ export function FormModal({
             <DialogTitle>{title}</DialogTitle>
             {description && <DialogDescription>{description}</DialogDescription>}
           </DialogHeader>
-          {children}
+          <DialogBody>{children}</DialogBody>
+          {footer && <DialogFooter>{footer}</DialogFooter>}
         </DialogContent>
       </Dialog>
     );
@@ -108,12 +114,13 @@ export function FormModal({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-2xl">
-        <SheetHeader>
+      <SheetContent side="bottom" className="flex max-h-[90vh] flex-col overflow-hidden rounded-t-2xl">
+        <SheetHeader className="shrink-0">
           <SheetTitle>{title}</SheetTitle>
           {description && <SheetDescription>{description}</SheetDescription>}
         </SheetHeader>
-        <div className="px-4 pb-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4">{children}</div>
+        {footer && <SheetFooter className="shrink-0">{footer}</SheetFooter>}
       </SheetContent>
     </Sheet>
   );

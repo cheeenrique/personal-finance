@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp } from "lucide-react";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -180,15 +180,12 @@ export function EditTransactionModal({ transaction, onOpenChange, referenceData,
       description="Altere os dados e salve — a listagem atualiza na hora."
       size="tall"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="edit-transaction-form" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </>
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="edit-transaction-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
       }
     >
       <form id="edit-transaction-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
