@@ -296,9 +296,9 @@ function buildActiveFilterChips(props: TransactionFiltersBarProps): ActiveFilter
       onRemove: () => props.onOriginChange(undefined),
     });
   }
-  if (props.period !== "all") {
+  if (props.period !== "this_month") {
     const label = PERIOD_OPTIONS.find((option) => option.value === props.period)?.label ?? props.period;
-    chips.push({ key: "period", label, onRemove: () => props.onPeriodChange("all") });
+    chips.push({ key: "period", label, onRemove: () => props.onPeriodChange("this_month") });
   }
   if (props.tagId) {
     const label = props.referenceData.tags.find((tag) => tag.id === props.tagId)?.name;

@@ -55,7 +55,7 @@ function parseState(params: URLSearchParams): TransactionFiltersState {
     type: (params.get("type") as TypeFilterValue) ?? undefined,
     categoryId: params.get("categoryId") ?? undefined,
     origin: (params.get("origin") as OriginValue) ?? undefined,
-    period: (params.get("period") as PeriodPreset) ?? "all",
+    period: (params.get("period") as PeriodPreset) ?? "this_month",
     customFrom: params.get("dateFrom") ?? undefined,
     customTo: params.get("dateTo") ?? undefined,
     tagId: params.get("tagId") ?? undefined,
@@ -91,7 +91,7 @@ export function useTransactionFilters() {
         ["type", merged.type],
         ["categoryId", merged.categoryId],
         ["origin", merged.origin],
-        ["period", merged.period === "all" ? undefined : merged.period],
+        ["period", merged.period === "this_month" ? undefined : merged.period],
         ["dateFrom", merged.period === "custom" ? merged.customFrom : undefined],
         ["dateTo", merged.period === "custom" ? merged.customTo : undefined],
         ["tagId", merged.tagId],
@@ -127,7 +127,7 @@ export function useTransactionFilters() {
   }, [pathname, router]);
 
   const hasActiveFilters = Boolean(
-    state.q || state.type || state.categoryId || state.origin || state.period !== "all" || state.tagId || state.isPaid !== "all",
+    state.q || state.type || state.categoryId || state.origin || state.period !== "this_month" || state.tagId || state.isPaid !== "all",
   );
 
   return {

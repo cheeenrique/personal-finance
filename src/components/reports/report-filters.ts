@@ -26,7 +26,7 @@ type ParamGetter = (key: string) => string | null;
 /** Getter único usado tanto por `URLSearchParams` (client) quanto pelo `searchParams` do App Router (server) — ver `use-report-filters.ts` e `page.tsx`. */
 export function parseReportFilters(get: ParamGetter): ReportFiltersState {
   return {
-    period: (get("period") as PeriodPreset | null) ?? "all",
+    period: (get("period") as PeriodPreset | null) ?? "this_month",
     customFrom: get("dateFrom") ?? undefined,
     customTo: get("dateTo") ?? undefined,
     categoryId: get("categoryId") ?? undefined,
@@ -39,7 +39,7 @@ export function parseReportFilters(get: ParamGetter): ReportFiltersState {
 /** Entradas `[chave, valor]` pra montar a URL — `undefined`/vazio remove o parâmetro (ver `use-report-filters.ts`). */
 export function reportFilterEntries(state: ReportFiltersState): [string, string | undefined][] {
   return [
-    ["period", state.period === "all" ? undefined : state.period],
+    ["period", state.period === "this_month" ? undefined : state.period],
     ["dateFrom", state.period === "custom" ? state.customFrom : undefined],
     ["dateTo", state.period === "custom" ? state.customTo : undefined],
     ["categoryId", state.categoryId],
@@ -51,7 +51,7 @@ export function reportFilterEntries(state: ReportFiltersState): [string, string 
 
 export function hasActiveReportFilters(state: ReportFiltersState): boolean {
   return Boolean(
-    state.period !== "all" || state.categoryId || state.accountId || state.cardId || state.type,
+    state.period !== "this_month" || state.categoryId || state.accountId || state.cardId || state.type,
   );
 }
 
