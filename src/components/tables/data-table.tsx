@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, RefreshCw, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal, RefreshCw, Search } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DataTablePagination, type PaginationState } from "./data-table-pagination";
 import { cn, FOCUS_RING_CLASS } from "@/lib/utils";
@@ -275,7 +276,31 @@ export function DataTable<T>({
                       ))}
                       {rowActions && (
                         <td className="px-4 py-3.5 text-right">
-                          <div className="flex justify-end gap-1.5">{rowActions(row)}</div>
+                          {/* Desktop: ações inline. Mobile (abaixo de sm:): colapsadas num menu
+                              kebab pra não forçar scroll horizontal só pra alcançar os botões
+                              (docs/50-AUDITORIA-BACKLOG.md, "Fase 3 — coluna de ações kebab"). */}
+                          <div className="hidden justify-end gap-1.5 sm:flex">{rowActions(row)}</div>
+                          <div className="flex justify-end sm:hidden">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                render={
+                                  <button
+                                    type="button"
+                                    aria-label="Ações"
+                                    className={cn(
+                                      "relative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[7px] border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary",
+                                      FOCUS_RING_CLASS,
+                                    )}
+                                  />
+                                }
+                              >
+                                <MoreHorizontal className="size-[15px]" aria-hidden="true" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <div className="flex items-center gap-1.5 p-1">{rowActions(row)}</div>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </td>
                       )}
                     </tr>
