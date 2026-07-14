@@ -160,19 +160,32 @@ async function handleUndo(userId: string, transactionId: string): Promise<Callba
   };
 }
 
-async function handleMenuCategory(userId: string, transactionId: string): Promise<CallbackResult> {
+/**
+ * `mc:{transactionId}` (entrada, "Trocar categoria") ou `mc:{transactionId}:{page}`
+ * (navegação Anterior/Próxima, `buildCategoryPickKeyboard`) — mesmo prefixo,
+ * página opcional. Página ausente/inválida cai em 0.
+ */
+function parseMenuCategoryData(raw: string): { transactionId: string; page: number } {
+  const [transactionId, pageRaw] = raw.split(":");
+  const parsedPage = pageRaw !== undefined ? Number(pageRaw) : 0;
+  const page = Number.isInteger(parsedPage) && parsedPage >= 0 ? parsedPage : 0;
+  return { transactionId, page };
+}
+
+async function handleMenuCategory(userId: string, raw: string): Promise<CallbackResult> {
+  const { transactionId, page } = parseMenuCategoryData(raw);
   const tx = await transactionService.getTransaction(userId, transactionId);
   const type = tx.type as TelegramTransactionType;
   if (type !== "EXPENSE" && type !== "INCOME") {
     return { text: buildErrorReply("Tipo não editável por aqui."), resultCode: "callback_bad_type" };
   }
 
-  const categories = await listCategoriesForButtons(userId, type);
+  const categoryPage = await listCategoriesForButtons(userId, type, page);
   const confirmation = await buildConfirmationFromTransaction(userId, transactionId);
   return {
     text: `${confirmation.text}\n\nEscolha a categoria:`,
     resultCode: "menu_category",
-    replyMarkup: buildCategoryPickKeyboard(transactionId, categories),
+    replyMarkup: buildCategoryPickKeyboard(transactionId, categoryPage),
     answerText: "Categorias",
   };
 }

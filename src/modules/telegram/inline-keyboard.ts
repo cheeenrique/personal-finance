@@ -21,14 +21,36 @@ export function buildPostSaveKeyboard(transactionId: string): InlineKeyboardMark
   };
 }
 
-/** Lista de categorias (1 por linha) + Voltar ao teclado médio. */
+/**
+ * Lista de categorias (1 por linha) + linha de navegação (Anterior/Próxima,
+ * só quando existe página adjacente) + Voltar ao teclado médio. Navegação
+ * reusa o MESMO prefixo `mc:` do botão "Trocar categoria" (`buildPostSaveKeyboard`)
+ * com a página alvo anexada (`mc:{transactionId}:{page}`) — o handler em
+ * `callback.ts` já recebe transactionId sozinho (entrada) ou com página
+ * (navegação) sem precisar de um prefixo novo.
+ */
 export function buildCategoryPickKeyboard(
   transactionId: string,
-  categories: Array<{ id: string; name: string }>,
+  categoryPage: {
+    items: Array<{ id: string; name: string }>;
+    page: number;
+    hasPrev: boolean;
+    hasNext: boolean;
+  },
 ): InlineKeyboardMarkup {
-  const rows: InlineKeyboardButton[][] = categories.map((category) => [
+  const rows: InlineKeyboardButton[][] = categoryPage.items.map((category) => [
     { text: truncateLabel(category.name), callback_data: `sc:${transactionId}:${category.id}` },
   ]);
+
+  const navRow: InlineKeyboardButton[] = [];
+  if (categoryPage.hasPrev) {
+    navRow.push({ text: "‹ Anterior", callback_data: `mc:${transactionId}:${categoryPage.page - 1}` });
+  }
+  if (categoryPage.hasNext) {
+    navRow.push({ text: "Próxima ›", callback_data: `mc:${transactionId}:${categoryPage.page + 1}` });
+  }
+  if (navRow.length > 0) rows.push(navRow);
+
   rows.push([{ text: "« Voltar", callback_data: `vb:${transactionId}` }]);
   return { inline_keyboard: rows };
 }

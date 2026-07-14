@@ -385,18 +385,32 @@ export async function listCategoryNamesForAI(userId: string): Promise<string[]> 
   return flattenTree(tree).map((category) => category.name);
 }
 
-/** Cap de botões de categoria no teclado inline (Telegram fica ilegível com dezenas). */
+/** Categorias por página do teclado "Trocar categoria" (Telegram fica ilegível com dezenas por tela). */
 const CATEGORY_BUTTONS_LIMIT = 16;
+
+/** Página de categorias pro teclado "Trocar categoria" + metadados de paginação pro caller montar Anterior/Próxima. */
+export type CategoryButtonsPage = {
+  items: Array<{ id: string; name: string }>;
+  page: number;
+  hasPrev: boolean;
+  hasNext: boolean;
+  totalPages: number;
+};
 
 /**
  * Categorias do tipo pedido pra teclado "Trocar categoria" (docs/30-TELEGRAM.md —
  * fluxo híbrido médio). Árvore achatada, filhas primeiro quando possível
- * (mais específicas), limitada a `CATEGORY_BUTTONS_LIMIT`.
+ * (mais específicas), paginada em fatias de `CATEGORY_BUTTONS_LIMIT` — usuário
+ * com mais categorias que cabem numa tela navega via Anterior/Próxima
+ * (`inline-keyboard.ts`, `buildCategoryPickKeyboard`) em vez de perder acesso
+ * às categorias que ficariam de fora do corte fixo antigo. `page` fora do
+ * intervalo válido é clampado (nunca lança).
  */
 export async function listCategoriesForButtons(
   userId: string,
   type: TelegramTransactionType,
-): Promise<Array<{ id: string; name: string }>> {
+  page = 0,
+): Promise<CategoryButtonsPage> {
   const expectedType = type === "INCOME" ? CategoryType.INCOME : CategoryType.EXPENSE;
   const tree = await categoryService.listTree(userId);
   const categories = flattenTree(tree).filter((category) => category.type === expectedType);
@@ -409,10 +423,20 @@ export async function listCategoriesForButtons(
     return a.name.localeCompare(b.name, "pt-BR");
   });
 
-  return sorted.slice(0, CATEGORY_BUTTONS_LIMIT).map((category) => ({
-    id: category.id,
-    name: category.name,
-  }));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / CATEGORY_BUTTONS_LIMIT));
+  const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+  const start = safePage * CATEGORY_BUTTONS_LIMIT;
+
+  return {
+    items: sorted.slice(start, start + CATEGORY_BUTTONS_LIMIT).map((category) => ({
+      id: category.id,
+      name: category.name,
+    })),
+    page: safePage,
+    hasPrev: safePage > 0,
+    hasNext: safePage < totalPages - 1,
+    totalPages,
+  };
 }
 
 /**
