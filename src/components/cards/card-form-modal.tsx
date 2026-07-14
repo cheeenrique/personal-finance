@@ -1,18 +1,19 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
-import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { FormModal } from "@/components/shared/form-modal";
-import { Button } from "@/components/ui/button";
+import { FormModalActions } from "@/components/shared/form-modal-actions";
 import { useFieldErrors } from "@/components/forms/use-field-errors";
 import { isBlank } from "@/components/forms/validation";
 import { useIsDesktop } from "@/hooks/use-media-query";
 import { notifySuccess } from "@/lib/toast";
-import { CardType } from "@/generated/prisma/enums";
+import { CardStatus, CardType } from "@/generated/prisma/enums";
 import { cardGradient } from "./card-color";
 import { CardFace } from "./card-face";
 import { CardFormFields } from "./card-form-fields";
+import { CardStatusControl } from "./card-status-control";
 import { createCardForClient, updateCardForClient } from "./ui-actions";
 import type { CardSummaryView } from "./types";
 
@@ -77,12 +78,21 @@ function formStateFromCard(card: CardSummaryView): CardFormState {
  * `CardFormFields` — este arquivo só orquestra estado/validação/submit.
  */
 export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) {
+  const router = useRouter();
   const isEditing = Boolean(card);
   const isDesktop = useIsDesktop();
   const [form, setForm] = useState<CardFormState>(() => (card ? formStateFromCard(card) : emptyFormState()));
   const [formError, setFormError] = useState<string | null>(null);
   const { fieldErrors, setFieldErrors, clearFieldError } = useFieldErrors();
   const [isPending, startTransition] = useTransition();
+  /**
+   * Status atual do cartão (ACTIVE/BLOCKED/CANCELLED) — espelhado localmente
+   * porque `CardStatusControl` troca via `setCardStatusAction` (server action
+   * própria, fora do submit deste form); `revalidatePath` sozinho não
+   * atualiza o `card` já em memória neste client component (`router.refresh()`
+   * cuida do resto da página, mas os tabs precisam reagir na hora).
+   */
+  const [cardStatus, setCardStatus] = useState<CardStatus>(card?.status ?? CardStatus.ACTIVE);
 
   /**
    * Reset ao abrir (criar ou trocar de cartão editado) — "adjusting state
@@ -95,6 +105,7 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
     setLastSyncKey(syncKey);
     if (syncKey) {
       setForm(card ? formStateFromCard(card) : emptyFormState());
+      setCardStatus(card?.status ?? CardStatus.ACTIVE);
       setFormError(null);
       setFieldErrors({});
     }
@@ -167,15 +178,12 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
       }
       size="tall"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="card-form" disabled={isPending}>
-            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Salvar
-          </Button>
-        </>
+        <FormModalActions
+          onCancel={() => onOpenChange(false)}
+          submitForm="card-form"
+          submitLabel="Salvar"
+          isPending={isPending}
+        />
       }
     >
       <form id="card-form" onSubmit={handleSubmit} className="flex flex-col gap-6">
@@ -205,6 +213,22 @@ export function CardFormModal({ open, onOpenChange, card }: CardFormModalProps) 
             fieldErrors={fieldErrors}
             clearFieldError={clearFieldError}
           />
+
+          {/* Status só em edição — criação sempre nasce ACTIVE (schema não aceita o campo). */}
+          {isEditing && card && (
+            <div className="border-t border-border pt-4">
+              <CardStatusControl
+                cardId={card.id}
+                cardName={card.name}
+                status={cardStatus}
+                disabled={isPending}
+                onChanged={(next) => {
+                  setCardStatus(next);
+                  router.refresh();
+                }}
+              />
+            </div>
+          )}
 
           {formError && (
             <p role="alert" className="text-sm font-medium text-destructive">

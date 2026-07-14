@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Clock, Receipt } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatBRL } from "@/lib/money/format";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
 import { PayInvoiceModal } from "./pay-invoice-modal";
@@ -17,6 +18,8 @@ type InvoiceSummaryCardProps = {
   /** Dia de fechamento/vencimento (`CardSummaryView.closingDay`/`dueDay`) — dia fixo do ciclo, não a data ISO de `invoice` (fonte visual: `Personal Finance - Cartoes.dc.html`, "fecha dia {{ sel.closingDay }}"/"vence dia {{ sel.dueDay }}"). */
   closingDay: number;
   dueDay: number;
+  /** Presente = "Pagar fatura" desabilitado com `Tooltip` explicando (cartão CANCELLED, docs da tarefa de status). `undefined` = pagamento liberado. */
+  payDisabledReason?: string;
 };
 
 /** Faixa "fatura atual" + CTA "Pagar fatura" (docs/22-CREDIT_CARDS.md, "Detalhe do Cartão") — tile de ícone (Receipt, tint accent) + chip "vence dia Y" (ícone relógio, tint warning), mesmo padrão dos demais KPIs/faixas do detalhe. */
@@ -27,6 +30,7 @@ export function InvoiceSummaryCard({
   outstandingBalance,
   closingDay,
   dueDay,
+  payDisabledReason,
 }: InvoiceSummaryCardProps) {
   const [payOpen, setPayOpen] = useState(false);
 
@@ -52,15 +56,24 @@ export function InvoiceSummaryCard({
           <Clock className="size-[13px]" aria-hidden="true" />
           vence dia {dueDay}
         </span>
-        <Button
-          type="button"
-          variant="accent"
-          onClick={() => setPayOpen(true)}
-          disabled={Number(outstandingBalance) <= 0}
-          className="shrink-0"
-        >
-          Pagar fatura
-        </Button>
+        {payDisabledReason ? (
+          <Tooltip>
+            <TooltipTrigger render={<Button type="button" variant="neutral" disabled className="shrink-0" />}>
+              Pagar fatura
+            </TooltipTrigger>
+            <TooltipContent>{payDisabledReason}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            type="button"
+            variant="accent"
+            onClick={() => setPayOpen(true)}
+            disabled={Number(outstandingBalance) <= 0}
+            className="shrink-0"
+          >
+            Pagar fatura
+          </Button>
+        )}
       </div>
 
       <PayInvoiceModal

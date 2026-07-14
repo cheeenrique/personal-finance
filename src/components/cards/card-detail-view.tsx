@@ -2,17 +2,30 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { ArrowLeft, Clock, CreditCard, Layers3, Plus, Receipt, ShoppingBag, Wallet } from "lucide-react";
+import { useState, useTransition } from "react";
+import {
+  ArrowLeft,
+  Clock,
+  CreditCard,
+  Layers3,
+  Loader2,
+  Lock,
+  Plus,
+  Receipt,
+  ShoppingBag,
+  Wallet,
+  XCircle,
+} from "lucide-react";
 
 import { KPICard } from "@/components/shared/kpi-card";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatBRL } from "@/lib/money/format";
-import { notifySuccess } from "@/lib/toast";
+import { notifyError, notifySuccess } from "@/lib/toast";
 import { cn, CARD_SHADOW_CLASS } from "@/lib/utils";
-import { deleteCardAction } from "@/modules/cards/actions";
-import { TransactionType } from "@/generated/prisma/enums";
+import { deleteCardAction, setCardStatusAction } from "@/modules/cards/actions";
+import { CardStatus, TransactionType } from "@/generated/prisma/enums";
 import { useShell } from "@/components/providers/shell-provider";
 import { CardLimitProgress, computeUsagePercent, usageToneTextClass } from "./card-limit-progress";
 import { CardDetailFacePanel } from "./card-detail-face-panel";
@@ -45,12 +58,28 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
   const [deleteOpen, setDeleteOpen] = useState(false);
   const percent = computeUsagePercent(card.outstandingBalance, card.limit);
   const periodFilter = useCardPeriodFilter();
+  const [isUnblocking, startUnblockTransition] = useTransition();
+
+  const isBlocked = card.status === CardStatus.BLOCKED;
+  const isCancelled = card.status === CardStatus.CANCELLED;
 
   async function handleDelete() {
     const result = await deleteCardAction(card.id);
     if (!result.success) throw new Error(result.error.message);
     notifySuccess("Cartão excluído");
     router.push("/cards");
+  }
+
+  function handleUnblock() {
+    startUnblockTransition(async () => {
+      const result = await setCardStatusAction(card.id, CardStatus.ACTIVE);
+      if (!result.success) {
+        notifyError(result.error.message);
+        return;
+      }
+      notifySuccess("Cartão desbloqueado");
+      router.refresh();
+    });
   }
 
   return (
@@ -63,8 +92,40 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
         Cartões
       </Link>
 
+      {isBlocked && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/8 p-4">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-warning">
+            <Lock className="size-4 shrink-0" aria-hidden="true" />
+            Cartão bloqueado — novas compras estão desativadas.
+          </p>
+          <Button
+            type="button"
+            variant="neutral"
+            size="sm"
+            className="shrink-0 gap-1.5"
+            onClick={handleUnblock}
+            disabled={isUnblocking}
+          >
+            {isUnblocking && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Desbloquear
+          </Button>
+        </div>
+      )}
+
+      {isCancelled && (
+        <p className="inline-flex w-fit items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm font-semibold text-on-danger">
+          <XCircle className="size-4 shrink-0" aria-hidden="true" />
+          Cartão cancelado.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr] lg:items-start">
-        <CardDetailFacePanel card={card} onEdit={() => setEditOpen(true)} onDelete={() => setDeleteOpen(true)} />
+        <CardDetailFacePanel
+          card={card}
+          onEdit={() => setEditOpen(true)}
+          onDelete={() => setDeleteOpen(true)}
+          editDisabledReason={isCancelled ? "Cartão cancelado — edição desabilitada." : undefined}
+        />
 
         <div className="flex flex-col gap-4">
           <div>
@@ -95,6 +156,7 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
             outstandingBalance={card.outstandingBalance}
             closingDay={card.closingDay}
             dueDay={card.dueDay}
+            payDisabledReason={isCancelled ? "Cartão cancelado — não é possível pagar fatura por aqui." : undefined}
           />
         </div>
       </div>
@@ -107,16 +169,30 @@ export function CardDetailView({ card, invoice, pastInvoices }: CardDetailViewPr
           </h3>
           <div className="flex shrink-0 items-center gap-2">
             <CardImportButton cardId={card.id} />
-            <Button
-              type="button"
-              variant="accent"
-              size="lg"
-              className="gap-2"
-              onClick={() => openTransactionModal(TransactionType.EXPENSE, card.id)}
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              Compra
-            </Button>
+            {isBlocked || isCancelled ? (
+              <Tooltip>
+                <TooltipTrigger render={<Button type="button" variant="neutral" size="lg" className="gap-2" disabled />}>
+                  <Plus className="size-4" aria-hidden="true" />
+                  Compra
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isCancelled
+                    ? "Cartão cancelado — não é possível lançar novas compras."
+                    : "Cartão bloqueado — desbloqueie para lançar novas compras."}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                type="button"
+                variant="accent"
+                size="lg"
+                className="gap-2"
+                onClick={() => openTransactionModal(TransactionType.EXPENSE, card.id)}
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                Compra
+              </Button>
+            )}
           </div>
         </div>
 

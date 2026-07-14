@@ -12,6 +12,7 @@ import { CardType } from "@/generated/prisma/enums";
 import { CardLimitProgress, computeUsagePercent, usageToneTextClass } from "./card-limit-progress";
 import { cardGradient } from "./card-color";
 import { CardFace } from "./card-face";
+import { CardStatusPill, CardStatusStamp, getCardStatusMeta } from "./card-status";
 import type { CardSummaryView } from "./types";
 
 type CardTileProps = {
@@ -68,26 +69,32 @@ export function CardTile({ card, onEdit, onDelete }: CardTileProps) {
   const footerRightValue = isMeal ? (card.mealBalance ?? "0") : card.availableLimit;
   const invoiceStatusBadge = resolveInvoiceStatusBadge(card);
   const InvoiceStatusIcon = invoiceStatusBadge?.icon;
+  const statusMeta = getCardStatusMeta(card.status);
 
   return (
     <div className="flex flex-col gap-3.5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
-      <Link
-        href={`/cards/${card.id}`}
-        aria-label={`Ver detalhes de ${card.name}`}
-        className="block rounded-xl transition-transform duration-150 ease-out hover:-translate-y-1"
-      >
-        <CardFace
-          gradient={cardGradient(card.color)}
-          cardName={card.name}
-          brand={card.brand}
-          lastFour={card.lastFour}
-          holder={card.holderName}
-          expiry={card.expiry}
-          type={card.type}
-        />
-      </Link>
+      <div className="relative">
+        <Link
+          href={`/cards/${card.id}`}
+          aria-label={`Ver detalhes de ${card.name}`}
+          className="block rounded-xl transition-transform duration-150 ease-out hover:-translate-y-1"
+        >
+          <CardFace
+            gradient={cardGradient(card.color)}
+            cardName={card.name}
+            brand={card.brand}
+            lastFour={card.lastFour}
+            holder={card.holderName}
+            expiry={card.expiry}
+            type={card.type}
+            className={statusMeta?.faceFilterClass}
+          />
+        </Link>
+        {statusMeta && <CardStatusStamp meta={statusMeta} />}
+      </div>
 
       <div className={cn("flex flex-col gap-3 rounded-xl border border-border bg-card p-4", CARD_SHADOW_CLASS)}>
+        {statusMeta && <CardStatusPill meta={statusMeta} />}
         <div className="space-y-1.5">
           <CardLimitProgress percent={percent} />
           <div className="flex items-baseline justify-between gap-2">
