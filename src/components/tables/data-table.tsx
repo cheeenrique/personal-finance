@@ -224,7 +224,7 @@ export function DataTable<T>({
             </thead>
             <tbody>
               {loading ? (
-                <SkeletonRows columnCount={columnCount} />
+                <SkeletonRows columnCount={columnCount} rows={Math.min(pagination?.pageSize ?? 5, 10)} />
               ) : error ? (
                 <tr>
                   <td colSpan={columnCount} className="px-4 py-10">
@@ -305,10 +305,10 @@ function SortIcon({ active, direction }: { active?: boolean; direction?: "asc" |
   );
 }
 
-function SkeletonRows({ columnCount }: { columnCount: number }) {
+function SkeletonRows({ columnCount, rows }: { columnCount: number; rows: number }) {
   return (
     <>
-      {Array.from({ length: 5 }).map((_, rowIndex) => (
+      {Array.from({ length: rows }).map((_, rowIndex) => (
         <tr key={rowIndex} className="border-t border-border">
           {Array.from({ length: columnCount }).map((_, cellIndex) => (
             <td key={cellIndex} className="px-4 py-3.5">

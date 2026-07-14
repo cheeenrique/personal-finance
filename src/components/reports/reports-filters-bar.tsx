@@ -40,18 +40,16 @@ export function ReportsFiltersBar({ categoryOptions, accountOptions, cardOptions
   const [mobileOpen, setMobileOpen] = useState(false);
   const filters = useReportFilters();
 
-  const controls = (
-    <FilterControls
-      filters={filters}
-      categoryOptions={categoryOptions}
-      accountOptions={accountOptions}
-      cardOptions={cardOptions}
-    />
-  );
-
   return (
     <>
-      <div className="hidden flex-wrap items-center gap-2 lg:flex">{controls}</div>
+      <div className="hidden flex-wrap items-center gap-2 lg:flex">
+        <FilterControls
+          filters={filters}
+          categoryOptions={categoryOptions}
+          accountOptions={accountOptions}
+          cardOptions={cardOptions}
+        />
+      </div>
 
       <div className="lg:hidden">
         <Button type="button" variant="outline" onClick={() => setMobileOpen(true)} className="gap-1.5">
@@ -65,7 +63,15 @@ export function ReportsFiltersBar({ categoryOptions, accountOptions, cardOptions
             <SheetHeader>
               <SheetTitle>Filtros</SheetTitle>
             </SheetHeader>
-            <div className="flex flex-col gap-2 px-4 pb-4">{controls}</div>
+            <div className="flex flex-col gap-2 px-4 pb-4">
+              <FilterControls
+                stacked
+                filters={filters}
+                categoryOptions={categoryOptions}
+                accountOptions={accountOptions}
+                cardOptions={cardOptions}
+              />
+            </div>
           </SheetContent>
         </Sheet>
       </div>
@@ -74,25 +80,30 @@ export function ReportsFiltersBar({ categoryOptions, accountOptions, cardOptions
 }
 
 type FilterControlsProps = {
+  stacked?: boolean;
   filters: ReturnType<typeof useReportFilters>;
   categoryOptions: EntitySelectOption[];
   accountOptions: EntitySelectOption[];
   cardOptions: EntitySelectOption[];
 };
 
-function FilterControls({ filters, categoryOptions, accountOptions, cardOptions }: FilterControlsProps) {
+/** Selects — desktop inline (`w-auto`), mobile empilhados no Sheet (`stacked`, `w-full`), mesmo padrão de `TransactionFiltersBar`. */
+function FilterControls({ stacked, filters, categoryOptions, accountOptions, cardOptions }: FilterControlsProps) {
+  const selectClassName = stacked ? "h-[38px] w-full" : "h-[38px] w-auto min-w-[160px]";
+  const dateFieldClassName = stacked ? "h-[38px] w-full" : "h-[38px] w-[150px]";
+
   return (
     <>
       <EntitySelect
         options={PERIOD_OPTIONS}
         value={filters.state.period}
         onValueChange={(value) => filters.setPeriod(value as (typeof PERIOD_OPTIONS)[number]["value"])}
-        className="h-[38px] w-auto min-w-[160px]"
+        className={selectClassName}
       />
 
       {filters.state.period === "custom" && (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5">
+        <div className={stacked ? "flex flex-col gap-2" : "flex flex-wrap items-center gap-2"}>
+          <div className={stacked ? "flex flex-col gap-1.5" : "flex items-center gap-1.5"}>
             <Label htmlFor="report-period-from" className="text-[12.5px] text-muted-foreground">
               De
             </Label>
@@ -100,10 +111,10 @@ function FilterControls({ filters, categoryOptions, accountOptions, cardOptions 
               id="report-period-from"
               value={filters.state.customFrom ?? ""}
               onValueChange={filters.setCustomFrom}
-              className="h-[38px] w-[150px]"
+              className={dateFieldClassName}
             />
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className={stacked ? "flex flex-col gap-1.5" : "flex items-center gap-1.5"}>
             <Label htmlFor="report-period-to" className="text-[12.5px] text-muted-foreground">
               Até
             </Label>
@@ -111,7 +122,7 @@ function FilterControls({ filters, categoryOptions, accountOptions, cardOptions 
               id="report-period-to"
               value={filters.state.customTo ?? ""}
               onValueChange={filters.setCustomTo}
-              className="h-[38px] w-[150px]"
+              className={dateFieldClassName}
             />
           </div>
         </div>
@@ -121,28 +132,28 @@ function FilterControls({ filters, categoryOptions, accountOptions, cardOptions 
         options={[{ value: ALL_VALUE, label: "Todas as categorias" }, ...categoryOptions]}
         value={filters.state.categoryId ?? ALL_VALUE}
         onValueChange={(value) => filters.setCategoryId(value === ALL_VALUE ? undefined : value)}
-        className="h-[38px] w-auto min-w-[170px]"
+        className={stacked ? selectClassName : "h-[38px] w-auto min-w-[170px]"}
       />
 
       <EntitySelect
         options={[{ value: ALL_VALUE, label: "Todas as contas" }, ...accountOptions]}
         value={filters.state.accountId ?? ALL_VALUE}
         onValueChange={(value) => filters.setAccountId(value === ALL_VALUE ? undefined : value)}
-        className="h-[38px] w-auto min-w-[160px]"
+        className={selectClassName}
       />
 
       <EntitySelect
         options={[{ value: ALL_VALUE, label: "Todos os cartões" }, ...cardOptions]}
         value={filters.state.cardId ?? ALL_VALUE}
         onValueChange={(value) => filters.setCardId(value === ALL_VALUE ? undefined : value)}
-        className="h-[38px] w-auto min-w-[160px]"
+        className={selectClassName}
       />
 
       <EntitySelect
         options={TYPE_OPTIONS}
         value={filters.state.type ?? ALL_VALUE}
         onValueChange={(value) => filters.setType(value === ALL_VALUE ? undefined : (value as ReportTypeFilter))}
-        className="h-[38px] w-auto min-w-[150px]"
+        className={stacked ? selectClassName : "h-[38px] w-auto min-w-[150px]"}
       />
 
       {filters.hasActiveFilters && (
